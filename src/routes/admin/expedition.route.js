@@ -1,0 +1,11 @@
+﻿// routes/admin/expedition.route.js   — /api/admin/expeditions
+// GET    /                          [auth, admin]
+// POST   /                          [auth, admin]
+// POST   /calculer-tarif            [auth, admin]
+// GET    /:id                       [auth, admin]
+// PATCH  /:id/confirmer             [auth, admin]
+// PATCH  /:id/en-transit            [auth, admin]
+// PATCH  /:id/en-douane             [auth, admin]
+// PATCH  /:id/livraison-locale      [auth, admin]
+// PATCH  /:id/livree                [auth, admin]
+// PATCH  /:id/annuler               [auth, admin]
