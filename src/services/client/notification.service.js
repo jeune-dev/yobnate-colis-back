@@ -1,18 +1,37 @@
-﻿// services/client/notification.service.js
+const { Notification } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
 
-// TODO: getMesNotifications(userId, pagination)
-//   - Notifications du client triées par date décroissante
+const getMesNotifications = async (userId, pagination) => {
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Notification.findAndCountAll({
+    where: { userId },
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  return {
+    message: 'Liste des notifications',
+    notifications: rows,
+    pagination: paginateResult(count, pagination.page, pagination.limit)
+  };
+};
 
-// TODO: marquerLue(userId, notificationId)
-//   - Vérifier appartenance, isRead=true
+const getNbNonLues = async (userId) => {
+  const total = await Notification.count({ where: { userId, isRead: false } });
+  return { message: 'Nombre de notifications non lues', total };
+};
 
-// TODO: marquerToutesLues(userId)
-//   - isRead=true pour toutes les notifications du client
+const marquerLue = async (userId, notificationId) => {
+  const notification = await Notification.findOne({ where: { id: notificationId, userId } });
+  if (!notification) throw ApiError.notFound('Notification introuvable');
+  await notification.update({ isRead: true });
+  return { message: 'Notification marquée comme lue.', notification };
+};
 
-// TODO: getNbNonLues(userId)
-//   - COUNT WHERE isRead=false
-//   - Retourner { count }
+const marquerToutesLues = async (userId) => {
+  await Notification.update({ isRead: true }, { where: { userId, isRead: false } });
+  return { message: 'Toutes les notifications ont été marquées comme lues.' };
+};
 
-// TODO: createNotification(userId, { titre, message, type, lienCible })
-//   - Créer une notification en base
-//   - Envoyer push notification si token FCM disponible (optionnel)
+module.exports = { getMesNotifications, getNbNonLues, marquerLue, marquerToutesLues };

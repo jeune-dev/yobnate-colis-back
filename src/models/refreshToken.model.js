@@ -1,2 +1,39 @@
-﻿// models/refreshToken.model.js
-// Colonnes : id, userId (FK), token (TEXT hashé), expiresAt, createdAt
+const { DataTypes, Model } = require('sequelize');
+const sequelize = require('../config/db');
+
+class RefreshToken extends Model {}
+
+RefreshToken.init(
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true
+    },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false
+    },
+    tokenHash: {
+      type: DataTypes.STRING(64),
+      allowNull: false,
+      unique: true
+    },
+    expiresAt: {
+      type: DataTypes.DATE,
+      allowNull: false
+    }
+  },
+  {
+    sequelize,
+    modelName: 'RefreshToken',
+    tableName: 'refresh_tokens',
+    updatedAt: false,
+    indexes: [
+      { fields: ['userId'] },
+      { unique: true, fields: ['tokenHash'] }
+    ]
+  }
+);
+
+module.exports = RefreshToken;

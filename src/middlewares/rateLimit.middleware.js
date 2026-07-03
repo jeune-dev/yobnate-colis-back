@@ -1,4 +1,7 @@
-﻿// rateLimit.middleware.js
-// TODO: rateLimit global 100req/15min
-// TODO: rateLimitAuth 5req/15min
-// module.exports = { rateLimit, rateLimitAuth }
+const rateLimit = require('express-rate-limit');
+const { rateLimitConfig, authRateLimitConfig } = require('../config/security');
+
+const globalRateLimit = rateLimit(rateLimitConfig);
+const authRateLimit = rateLimit(authRateLimitConfig);
+
+module.exports = { globalRateLimit, authRateLimit };

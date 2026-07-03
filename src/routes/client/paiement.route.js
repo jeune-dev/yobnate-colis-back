@@ -1,6 +1,10 @@
-﻿// routes/client/paiement.route.js   — /api/client/paiements
-// GET    /factures                   [auth]
-// GET    /factures/:id               [auth]
-// POST   /factures/:id/payer         [auth, validate]
-// GET    /factures/:id/pdf           [auth]
-// POST   /webhook                    [pas de auth - vérification signature]
+const router = require('express').Router();
+const paiementController = require('../../controllers/client/paiement.controller');
+const auth = require('../../middlewares/auth.middleware');
+
+router.use(auth);
+
+router.get('/factures', paiementController.getMesFactures);
+router.get('/factures/:id', paiementController.getFacture);
+
+module.exports = router;

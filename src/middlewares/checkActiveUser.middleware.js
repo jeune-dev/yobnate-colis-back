@@ -1,2 +1,10 @@
-﻿// checkActiveUser.middleware.js
-// TODO: vérifier req.user.isActive, sinon 403
+const ApiError = require('../utils/ApiError');
+
+const checkActiveUser = (req, res, next) => {
+  if (!req.user.isActive) {
+    return next(ApiError.forbidden('Ce compte a été désactivé'));
+  }
+  next();
+};
+
+module.exports = checkActiveUser;

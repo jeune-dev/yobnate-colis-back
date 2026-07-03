@@ -1,24 +1,49 @@
-﻿// services/admin/facture.service.js
+const { Op } = require('sequelize');
+const { Facture, Colis, User, Paiement } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
+const { logActivity } = require('../activityLog.service');
 
-// TODO: getAllFactures(filters, pagination)
-//   - Filtres : userId, statut, dateDebut, dateFin
-//   - Include User, Expedition, Paiement
+const INCLUDE_DETAIL = [
+  { model: Colis, attributes: ['id', 'reference', 'statut'] },
+  { model: User, attributes: ['id', 'nom', 'prenom', 'email'] },
+  { model: Paiement }
+];
 
-// TODO: getFactureById(id)
-//   - Détail complet avec tous les includes
+const getAllFactures = async (filters, pagination) => {
+  const where = {};
+  if (filters.userId) where.userId = filters.userId;
+  if (filters.statut) where.statut = filters.statut;
+  if (filters.dateDebut || filters.dateFin) {
+    where.createdAt = {};
+    if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
+    if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+  }
 
-// TODO: genererFacture(expeditionId)
-//   - Calculer montantFret + fraisDouane + fraisLivraison
-//   - Générer référence unique (YBC-FAC-ANNEE-XXXXX)
-//   - Définir dateLimitePaiement (ex: J+7)
-//   - Créer la facture et notifier le client
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Facture.findAndCountAll({
+    where,
+    include: INCLUDE_DETAIL,
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  return { message: 'Liste des factures', factures: rows, pagination: paginateResult(count, pagination.page, pagination.limit) };
+};
 
-// TODO: annulerFacture(id, raison)
-//   - Passer à 'annulee' si non encore payée
+const getFactureById = async (id) => {
+  const facture = await Facture.findByPk(id, { include: INCLUDE_DETAIL });
+  if (!facture) throw ApiError.notFound('Facture introuvable');
+  return { message: 'Détail de la facture', facture };
+};
 
-// TODO: genererPDF(id)
-//   - Générer le PDF de la facture avec les détails
-//   - Retourner le buffer PDF
+const annulerFacture = async (id, adminId) => {
+  const { facture } = await getFactureById(id);
+  if (facture.statut === 'payee') throw ApiError.badRequest('Une facture déjà payée ne peut pas être annulée');
 
-// TODO: exportFactures(filters, format)
-//   - Export CSV/Excel
+  await facture.update({ statut: 'annulee' });
+  await logActivity({ userId: adminId, action: 'admin.facture.cancel', entite: 'Facture', entiteId: facture.id });
+  return { message: 'Facture annulée.', facture };
+};
+
+module.exports = { getAllFactures, getFactureById, annulerFacture };

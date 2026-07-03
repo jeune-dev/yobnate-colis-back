@@ -1,20 +1,72 @@
-﻿// services/admin/paiement.service.js
+const { Op } = require('sequelize');
+const { Paiement, Facture, User } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
+const { sendPaiementConfirmeEmail } = require('../../utils/mailer');
+const { logActivity } = require('../activityLog.service');
 
-// TODO: getAllPaiements(filters, pagination)
-//   - Filtres : userId, statut, methode, dateDebut, dateFin
-//   - Include User, Facture
+const INCLUDE_DETAIL = [{ model: Facture }, { model: User, attributes: ['id', 'nom', 'prenom', 'email'] }];
 
-// TODO: getPaiementById(id)
-//   - Détail avec Facture et User
+const getAllPaiements = async (filters, pagination) => {
+  const where = {};
+  if (filters.userId) where.userId = filters.userId;
+  if (filters.statut) where.statut = filters.statut;
+  if (filters.methode) where.methode = filters.methode;
+  if (filters.dateDebut || filters.dateFin) {
+    where.createdAt = {};
+    if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
+    if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+  }
 
-// TODO: confirmerPaiement(id, transactionId)
-//   - Valider un paiement manuel (virement, cash)
-//   - Passer statut à 'succes', mettre la facture à 'payee'
-//   - Déclencher la préparation de l'expédition
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Paiement.findAndCountAll({
+    where,
+    include: INCLUDE_DETAIL,
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  return { message: 'Liste des paiements', paiements: rows, pagination: paginateResult(count, pagination.page, pagination.limit) };
+};
 
-// TODO: rembourserPaiement(id, raison)
-//   - Appeler l'API opérateur pour remboursement
-//   - Passer à 'rembourse'
+const getPaiementById = async (id) => {
+  const paiement = await Paiement.findByPk(id, { include: INCLUDE_DETAIL });
+  if (!paiement) throw ApiError.notFound('Paiement introuvable');
+  return { message: 'Détail du paiement', paiement };
+};
 
-// TODO: getRevenusTotal(periode)
-//   - SUM des paiements 'succes' sur la période
+const enregistrerPaiement = async (factureId, { methode, reference, montant }, adminId) => {
+  const facture = await Facture.findByPk(factureId, { include: [{ model: Paiement }, { model: User }] });
+  if (!facture) throw ApiError.notFound('Facture introuvable');
+  if (facture.statut !== 'en_attente') throw ApiError.badRequest('Cette facture n\'est pas en attente de paiement');
+  if (facture.Paiement) throw ApiError.conflict('Un paiement existe déjà pour cette facture');
+
+  const paiement = await Paiement.create({
+    factureId,
+    userId: facture.userId,
+    montant,
+    methode,
+    reference,
+    statut: 'succes',
+    recordedBy: adminId,
+    payeAt: new Date()
+  });
+
+  await facture.update({ statut: 'payee' });
+  await logActivity({ userId: adminId, action: 'admin.paiement.record', entite: 'Paiement', entiteId: paiement.id });
+
+  if (facture.User) await sendPaiementConfirmeEmail(facture.User, paiement, facture);
+  return { message: 'Paiement enregistré.', paiement };
+};
+
+const rembourserPaiement = async (id, adminId) => {
+  const { paiement } = await getPaiementById(id);
+  if (paiement.statut !== 'succes') throw ApiError.badRequest('Seul un paiement réussi peut être remboursé');
+
+  await paiement.update({ statut: 'rembourse' });
+  await Facture.update({ statut: 'en_attente' }, { where: { id: paiement.factureId } });
+  await logActivity({ userId: adminId, action: 'admin.paiement.refund', entite: 'Paiement', entiteId: paiement.id });
+  return { message: 'Paiement remboursé.', paiement };
+};
+
+module.exports = { getAllPaiements, getPaiementById, enregistrerPaiement, rembourserPaiement };

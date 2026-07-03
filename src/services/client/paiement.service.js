@@ -1,26 +1,30 @@
-﻿// services/client/paiement.service.js
+const { Facture, Paiement, Colis } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
 
-// TODO: getMesFactures(userId, pagination)
-//   - Factures du client avec Expedition et Paiement
-//   - Retourner { rows, count, totalPages }
+const getMesFactures = async (userId, pagination) => {
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Facture.findAndCountAll({
+    where: { userId },
+    include: [{ model: Colis, attributes: ['id', 'reference'] }, { model: Paiement }],
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  return {
+    message: 'Liste de vos factures',
+    factures: rows,
+    pagination: paginateResult(count, pagination.page, pagination.limit)
+  };
+};
 
-// TODO: getFactureById(userId, factureId)
-//   - Vérifier appartenance au userId
-//   - Include Expedition(ColisExpedition), Paiement
+const getFactureById = async (userId, factureId) => {
+  const facture = await Facture.findOne({
+    where: { id: factureId, userId },
+    include: [{ model: Colis }, { model: Paiement }]
+  });
+  if (!facture) throw ApiError.notFound('Facture introuvable');
+  return { message: 'Détail de la facture', facture };
+};
 
-// TODO: payerFacture(userId, factureId, data)
-//   - data : methode, details de paiement
-//   - Vérifier que la facture est en statut 'en_attente'
-//   - Initier le paiement selon la methode (Wave, Orange Money, carte)
-//   - Créer le Paiement en statut 'en_attente'
-//   - Retourner URL de redirection ou instructions
-
-// TODO: confirmerPaiementWebhook(data)
-//   - Callback de l'opérateur de paiement
-//   - Vérifier la signature du webhook
-//   - Passer le paiement à 'succes' et la facture à 'payee'
-//   - Déclencher la suite du processus
-
-// TODO: telechargerFacturePDF(userId, factureId)
-//   - Vérifier appartenance
-//   - Générer et retourner le PDF
+module.exports = { getMesFactures, getFactureById };

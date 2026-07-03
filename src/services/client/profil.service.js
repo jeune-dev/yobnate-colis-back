@@ -1,28 +1,28 @@
-﻿// services/client/profil.service.js
+const { User } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../../middlewares/uploadService');
 
-// TODO: getProfil(userId)
-//   - Include AdresseEntrepot
-//   - Retourner sans password
+const getProfil = async (userId) => {
+  const user = await User.findByPk(userId);
+  if (!user) throw ApiError.notFound('Utilisateur introuvable');
+  return { message: 'Profil récupéré', utilisateur: user.toSafeJSON() };
+};
 
-// TODO: updateProfil(userId, data)
-//   - data : nom, prenom, telephone, paysOrigine
+const updateProfil = async (userId, data) => {
+  const user = await User.findByPk(userId);
+  await user.update(data);
+  return { message: 'Profil mis à jour.', utilisateur: user.toSafeJSON() };
+};
 
-// TODO: updateAvatar(userId, file)
-//   - Upload Cloudinary, supprimer l'ancienne image
-//   - Mettre à jour avatar URL
+const updateAvatar = async (userId, file) => {
+  if (!file) throw ApiError.badRequest('Aucune image fournie');
+  const user = await User.findByPk(userId);
 
-// TODO: getAdresses(userId)
-//   - Liste des adresses de livraison du client
+  const uploaded = await uploadToCloudinary(file.buffer, { folder: 'yobnate-colis/avatars' });
+  if (user.avatarPublicId) await deleteFromCloudinary(user.avatarPublicId);
 
-// TODO: ajouterAdresse(userId, data)
-//   - Vérifier max 5 adresses
-//   - Si isDefault=true : désactiver l'ancienne
+  await user.update({ avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId });
+  return { message: 'Photo de profil mise à jour.', utilisateur: user.toSafeJSON() };
+};
 
-// TODO: updateAdresse(userId, adresseId, data)
-//   - Vérifier appartenance
-
-// TODO: supprimerAdresse(userId, adresseId)
-//   - Vérifier appartenance, pas d'expédition liée active
-
-// TODO: setAdresseDefault(userId, adresseId)
-//   - Désactiver toutes, activer celle-ci
+module.exports = { getProfil, updateProfil, updateAvatar };

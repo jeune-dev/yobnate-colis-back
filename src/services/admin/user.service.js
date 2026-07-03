@@ -1,28 +1,80 @@
-﻿// services/admin/user.service.js
+const { Op } = require('sequelize');
+const { User, Colis } = require('../../models');
+const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
+const { logActivity } = require('../activityLog.service');
 
-// TODO: getAllUsers(filters, pagination)
-//   - Filtres : nom, email, isActive, isVerified, paysOrigine
-//   - Include AdresseEntrepot
-//   - Retourner { rows, count, totalPages }
+const sortableFields = ['createdAt', 'nom', 'lastLoginAt'];
 
-// TODO: getUserById(id)
-//   - Include AdresseEntrepot, Colis (count), Expedition (count)
-//   - Retourner user sans password
+const getAllUsers = async (filters, pagination) => {
+  const where = { role: 'client' };
+  if (filters.search) {
+    where[Op.or] = [
+      { nom: { [Op.iLike]: `%${filters.search}%` } },
+      { prenom: { [Op.iLike]: `%${filters.search}%` } },
+      { email: { [Op.iLike]: `%${filters.search}%` } },
+      { telephone: { [Op.iLike]: `%${filters.search}%` } }
+    ];
+  }
+  if (filters.isActive !== undefined) where.isActive = filters.isActive === 'true' || filters.isActive === true;
 
-// TODO: getUserColis(userId, pagination)
-//   - Tous les colis d'un client avec pagination
+  const sortBy = sortableFields.includes(filters.sortBy) ? filters.sortBy : 'createdAt';
+  const sortOrder = filters.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
-// TODO: getUserExpeditions(userId, pagination)
-//   - Toutes les expéditions d'un client avec pagination
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await User.findAndCountAll({
+    where,
+    attributes: { exclude: ['password'] },
+    order: [[sortBy, sortOrder]],
+    limit,
+    offset
+  });
 
-// TODO: bloquerUser(id, raison)
-//   - isActive=false + email notification
+  return {
+    message: 'Liste des utilisateurs',
+    utilisateurs: rows,
+    pagination: paginateResult(count, pagination.page, pagination.limit)
+  };
+};
 
-// TODO: activerUser(id)
-//   - isActive=true
+const getUserById = async (id) => {
+  const user = await User.findOne({ where: { id, role: 'client' }, attributes: { exclude: ['password'] } });
+  if (!user) throw ApiError.notFound('Utilisateur introuvable');
 
-// TODO: deleteUser(id)
-//   - Suppression soft / anonymisation
+  const nbColisEnvoyes = await Colis.count({ where: { userId: id } });
+  const nbColisLivres = await Colis.count({ where: { userId: id, statut: 'livre' } });
 
-// TODO: exportUsers(format)
-//   - Export CSV/Excel liste clients
+  return {
+    message: 'Détail de l\'utilisateur',
+    utilisateur: { ...user.toJSON(), stats: { nbColisEnvoyes, nbColisLivres } }
+  };
+};
+
+const getUserColis = async (userId, pagination) => {
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Colis.findAndCountAll({
+    where: { userId },
+    order: [['createdAt', 'DESC']],
+    limit,
+    offset
+  });
+  return { message: 'Colis de l\'utilisateur', colis: rows, pagination: paginateResult(count, pagination.page, pagination.limit) };
+};
+
+const setActive = async (id, isActive, adminId) => {
+  const user = await User.findOne({ where: { id, role: 'client' } });
+  if (!user) throw ApiError.notFound('Utilisateur introuvable');
+  await user.update({ isActive });
+  await logActivity({
+    userId: adminId,
+    action: isActive ? 'admin.user.activate' : 'admin.user.deactivate',
+    entite: 'User',
+    entiteId: user.id
+  });
+  return {
+    message: isActive ? 'Utilisateur activé.' : 'Utilisateur désactivé.',
+    utilisateur: user.toSafeJSON()
+  };
+};
+
+module.exports = { getAllUsers, getUserById, getUserColis, setActive };

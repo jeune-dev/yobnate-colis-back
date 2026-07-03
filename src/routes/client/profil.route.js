@@ -1,9 +1,14 @@
-﻿// routes/client/profil.route.js   — /api/client/profil
-// GET    /                          [auth]
-// PUT    /                          [auth, validate]
-// PATCH  /avatar                    [auth, upload.single('avatar')]
-// GET    /adresses                  [auth]
-// POST   /adresses                  [auth, validate]
-// PUT    /adresses/:id              [auth, validate]
-// DELETE /adresses/:id              [auth]
-// PATCH  /adresses/:id/default      [auth]
+const router = require('express').Router();
+const profilController = require('../../controllers/client/profil.controller');
+const auth = require('../../middlewares/auth.middleware');
+const validate = require('../../middlewares/validate.middleware');
+const { upload } = require('../../middlewares/upload.middleware');
+const { updateProfilSchema } = require('../../validations/user.validation');
+
+router.use(auth);
+
+router.get('/', profilController.get);
+router.put('/', validate(updateProfilSchema), profilController.update);
+router.patch('/avatar', upload.single('avatar'), profilController.updateAvatar);
+
+module.exports = router;
