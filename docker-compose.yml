@@ -1,37 +1,85 @@
 services:
-  db:
+
+  # ─────────────────────────────────────────
+  # Base de données PostgreSQL
+  # ─────────────────────────────────────────
+  postgres:
     image: postgres:16-alpine
     container_name: yobnate_colis_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_NAME:-yobnate_colis}
-      POSTGRES_USER: ${DB_USER:-yobnate}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-change_me}
-    ports:
-      - "${DB_PORT:-5432}:5432"
+      POSTGRES_DB:        ${DB_NAME:-yobnate_colis}
+      POSTGRES_USER:      ${DB_USER:-yobnate}
+      POSTGRES_PASSWORD:  ${DB_PASSWORD:-yobante_password}
+
     volumes:
-      - yobnate_colis_pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-yobnate} -d ${DB_NAME:-yobnate_colis}"]
-      interval: 5s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 5
 
-  api:
-    build: .
-    container_name: yobnate_colis_api
+
+  # ─────────────────────────────────────────
+  # Backend Node.js
+  # ─────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yobnate_colis
     restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DB_HOST: db
-    ports:
-      - "${PORT:-5000}:5000"
+
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-    volumes:
-      - ./uploads:/app/uploads
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV:  ${NODE_ENV:-development}
+      PORT:      3000
+      HOST:      0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_PREFIX: ${API_PREFIX:-/api}
+
+      # Base de données — pointe vers le service postgres ci-dessus
+      DB_HOST:      postgres
+      DB_PORT:      5432
+      DB_NAME:      ${DB_NAME:-yobnate_colis}
+      DB_USER:      ${DB_USER:-yobnate}
+      DB_PASSWORD:  ${DB_PASSWORD:-yobante_password}
+
+      # JWT — les 3 secrets doivent être définis et différents (voir config/security.js)
+      JWT_SECRET:          ${JWT_SECRET}
+      JWT_EXPIRES_IN:      ${JWT_EXPIRES_IN:-1h}
+      JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
+      JWT_RESET_SECRET:    ${JWT_RESET_SECRET}
+
+      # CORS
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+
+      # Super admin (utilisé par npm run seed — PAS de fallback hardcodé)
+      SUPER_ADMIN_EMAIL:    ${SUPER_ADMIN_EMAIL}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
+      SUPER_ADMIN_NOM:      ${SUPER_ADMIN_NOM:-Admin}
+      SUPER_ADMIN_PRENOM:   ${SUPER_ADMIN_PRENOM:-Yobnate}
+
+      # Email — SMTP (nodemailer)
+      SMTP_HOST:     ${SMTP_HOST}
+      SMTP_PORT:     ${SMTP_PORT:-587}
+      SMTP_SECURE:   ${SMTP_SECURE:-false}
+      SMTP_USER:     ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      MAIL_FROM:     ${MAIL_FROM}
+
+      # Cloudinary (upload images)
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY:    ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
 
 volumes:
-  yobnate_colis_pgdata:
+  postgres_data:

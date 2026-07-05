@@ -15,12 +15,9 @@ const logger = winston.createLogger({
   format: combine(timestamp(), errors({ stack: true }), json()),
   transports: [
     new winston.transports.File({ filename: path.join('logs', 'error.log'), level: 'error' }),
-    new winston.transports.File({ filename: path.join('logs', 'combined.log') })
+    new winston.transports.File({ filename: path.join('logs', 'combined.log') }),
+    // Toujours actif : c'est la sortie que `docker logs` capture.
+    new winston.transports.Console({ format: consoleFormat })
   ]
 });
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({ format: consoleFormat }));
-}
-
 module.exports = logger;
