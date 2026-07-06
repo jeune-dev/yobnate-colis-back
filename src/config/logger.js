@@ -1,23 +1,24 @@
-const path = require('path');
+
 const winston = require('winston');
 
-const { combine, timestamp, errors, printf, colorize, json } = winston.format;
+const { combine, timestamp, json, colorize, printf } = winston.format;
 
-const consoleFormat = combine(
+const devFormat = combine(
   colorize(),
-  timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  errors({ stack: true }),
-  printf(({ level, message, timestamp: ts, stack }) => `[${ts}] ${level}: ${stack || message}`)
+  timestamp({ format: 'HH:mm:ss' }),
+  printf(({ level, message, timestamp: ts, ...meta }) => {
+    const extra = Object.keys(meta).length ? ' ' + JSON.stringify(meta) : '';
+    return `${ts} [${level}] ${message}${extra}`;
+  })
 );
+
+const prodFormat = combine(timestamp(), json());
 
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
-  format: combine(timestamp(), errors({ stack: true }), json()),
-  transports: [
-    new winston.transports.File({ filename: path.join('logs', 'error.log'), level: 'error' }),
-    new winston.transports.File({ filename: path.join('logs', 'combined.log') }),
-    // Toujours actif : c'est la sortie que `docker logs` capture.
-    new winston.transports.Console({ format: consoleFormat })
-  ]
+  format: process.env.NODE_ENV === 'production' ? prodFormat : devFormat,
+  transports: [new winston.transports.Console()],
+  exitOnError: false,
 });
+
 module.exports = logger;

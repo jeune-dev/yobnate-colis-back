@@ -1,5 +1,5 @@
 {
-  "name": "yobnate-colis-back",
+  "name": "yobante-colis-back",
   "version": "1.0.0",
   "description": "API backend de gestion et suivi de colis - Yobnate Colis",
   "main": "src/server.js",
@@ -24,13 +24,14 @@
     "helmet": "^8.0.0",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^7.0.0",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.5",
     "streamifier": "^0.1.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1",
     "winston": "^3.17.0",
     "xss": "^1.0.15"
   },

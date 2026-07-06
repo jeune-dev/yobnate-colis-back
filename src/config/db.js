@@ -10,7 +10,7 @@ const sequelize = new Sequelize(
     dialect: 'postgres',
     logging: false,
     dialectOptions: {
-      ssl: process.env.NODE_ENV === 'production' ? { require: true, rejectUnauthorized: true } : false
+      ssl: process.env.NODE_ENV === 'production' ? { require: true, rejectUnauthorized: false } : false
     },
     pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
     define: { freezeTableName: true 

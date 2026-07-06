@@ -11,11 +11,11 @@ const VILLE_INCLUDE = [
   { model: Ville, as: 'villeArrivee', attributes: ['id', 'nom'] }
 ];
 
-const createWithRetry = async (model, buildAttrs, referenceFactory, attempts = 3) => {
+const createWithRetry = async (model, buildAttrs, referenceFactory, attempts = 3, transaction = null) => {
   for (let i = 0; i < attempts; i += 1) {
     const reference = await referenceFactory();
     try {
-      return await model.create(buildAttrs(reference));
+      return await model.create(buildAttrs(reference), transaction ? { transaction } : {});
     } catch (err) {
       if (err instanceof UniqueConstraintError && i < attempts - 1) continue;
       throw err;
@@ -54,7 +54,9 @@ const declarerColis = async (userId, data, files = []) => {
         photos,
         dateLivraisonEstimee: new Date(Date.now() + tarif.delaiEstimeJours * 24 * 60 * 60 * 1000)
       }),
-      () => genererRefColis(Colis)
+      () => genererRefColis(Colis),
+      3,
+      t
     );
 
     await SuiviColis.create(
@@ -72,7 +74,9 @@ const declarerColis = async (userId, data, files = []) => {
         montantTotal: montant,
         dateLimitePaiement: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }),
-      () => genererRefFacture(Facture)
+      () => genererRefFacture(Facture),
+      3,
+      t
     );
 
     return { colis, facture };

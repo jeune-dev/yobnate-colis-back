@@ -56,14 +56,14 @@ const HOST = process.env.HOST || '0.0.0.0';
   }
 })();
 
-process.on('unhandledRejection', (reason) => {
-  logger.error(`Unhandled Rejection: ${reason}`);
-  process.exit(1);
-});
+// process.on('unhandledRejection', (reason) => {
+//   logger.error(`Unhandled Rejection: ${reason}`);
+//   process.exit(1);
+// });
 
-process.on('uncaughtException', (err) => {
-  logger.error(`Uncaught Exception: ${err.stack || err.message}`);
-  process.exit(1);
-});
+// process.on('uncaughtException', (err) => {
+//   logger.error(`Uncaught Exception: ${err.stack || err.message}`);
+//   process.exit(1);
+// });
 
 

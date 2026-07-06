@@ -16,8 +16,7 @@ RefreshToken.init(
     },
     tokenHash: {
       type: DataTypes.STRING(64),
-      allowNull: false,
-      unique: true
+      allowNull: false
     },
     expiresAt: {
       type: DataTypes.DATE,
@@ -30,8 +29,7 @@ RefreshToken.init(
     tableName: 'refresh_tokens',
     updatedAt: false,
     indexes: [
-      { fields: ['userId'] },
-      { unique: true, fields: ['tokenHash'] }
+      { fields: ['userId'] }
     ]
   }
 );

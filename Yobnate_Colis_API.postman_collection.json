@@ -1,0 +1,948 @@
+{
+  "info": {
+    "_postman_id": "yobnate-colis-api-v1",
+    "name": "Yobnate Colis API",
+    "description": "Collection complète de l'API Yobnate Colis — Auth, Admin, Client",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",      "value": "http://localhost:5000",  "type": "string" },
+    { "key": "accessToken",  "value": "",                       "type": "string" },
+    { "key": "refreshToken", "value": "",                       "type": "string" },
+    { "key": "userId",       "value": "",                       "type": "string" },
+    { "key": "colisId",      "value": "",                       "type": "string" },
+    { "key": "villeId",      "value": "",                       "type": "string" },
+    { "key": "tarifId",      "value": "",                       "type": "string" },
+    { "key": "factureId",    "value": "",                       "type": "string" },
+    { "key": "paiementId",   "value": "",                       "type": "string" },
+    { "key": "adminId",      "value": "",                       "type": "string" },
+    { "key": "notifId",      "value": "",                       "type": "string" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": { "type": "text/javascript", "exec": [""] }
+    }
+  ],
+  "item": [
+
+    {
+      "name": "🔐 Auth",
+      "item": [
+        {
+          "name": "Inscription (Register)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('userId', r.data?.utilisateur?.id || '');",
+                "  console.log('✅ Inscription OK — connectez-vous maintenant pour obtenir le token');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Diallo\",\n  \"prenom\": \"Mamadou\",\n  \"email\": \"mamadou.diallo@test.com\",\n  \"telephone\": \"771234567\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Connexion (Login)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 200) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('accessToken',  r.data?.accessToken  || '');",
+                "  pm.collectionVariables.set('refreshToken', r.data?.refreshToken || '');",
+                "  pm.collectionVariables.set('userId',       r.data?.utilisateur?.id     || '');",
+                "  console.log('✅ Login OK — token sauvegardé');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mamadou.diallo@test.com\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Connexion Admin (Super Admin)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 200) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('accessToken',  r.data?.accessToken  || '');",
+                "  pm.collectionVariables.set('refreshToken', r.data?.refreshToken || '');",
+                "  pm.collectionVariables.set('userId',       r.data?.utilisateur?.id     || '');",
+                "  console.log('✅ Login Admin OK');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@yobante.com\",\n  \"password\": \"Admin@2024!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Rafraîchir le token (Refresh Token)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 200) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('accessToken',  r.data?.accessToken  || '');",
+                "  pm.collectionVariables.set('refreshToken', r.data?.refreshToken || '');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/refresh-token", "host": ["{{baseUrl}}"], "path": ["auth", "refresh-token"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Déconnexion (Logout)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] },
+            "body": { "mode": "raw", "raw": "" }
+          }
+        },
+        {
+          "name": "Mot de passe oublié",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["auth", "forgot-password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mamadou.diallo@test.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Réinitialiser le mot de passe",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["auth", "reset-password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"mamadou.diallo@test.com\",\n  \"code\": \"123456\",\n  \"newPassword\": \"NewPassword123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Changer le mot de passe",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/auth/change-password", "host": ["{{baseUrl}}"], "path": ["auth", "change-password"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👤 Client — Profil",
+      "item": [
+        {
+          "name": "Mon profil",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/profil", "host": ["{{baseUrl}}"], "path": ["client", "profil"] }
+          }
+        },
+        {
+          "name": "Modifier mon profil",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/client/profil", "host": ["{{baseUrl}}"], "path": ["client", "profil"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Diallo\",\n  \"prenom\": \"Ibrahima\",\n  \"telephone\": \"779876543\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Changer l'avatar",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/profil/avatar", "host": ["{{baseUrl}}"], "path": ["client", "profil", "avatar"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "avatar", "type": "file", "src": "" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📦 Client — Colis",
+      "item": [
+        {
+          "name": "Mes colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/client/colis?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["client", "colis"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Créer un colis",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('colisId', r.data?.id || r.data?.colis?.id || '');",
+                "  console.log('✅ Colis créé — ID sauvegardé');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/colis", "host": ["{{baseUrl}}"], "path": ["client", "colis"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "expediteurNom",        "value": "Mamadou Diallo",     "type": "text" },
+                { "key": "expediteurTelephone",   "value": "771234567",          "type": "text" },
+                { "key": "villeDepartId",          "value": "{{villeId}}",        "type": "text" },
+                { "key": "destinataireNom",        "value": "Fatoumata Balde",   "type": "text" },
+                { "key": "destinataireTelephone",  "value": "769876543",          "type": "text" },
+                { "key": "villeArriveeId",         "value": "{{villeId}}",        "type": "text" },
+                { "key": "adresseLivraison",       "value": "Quartier Almamya, Conakry", "type": "text" },
+                { "key": "typeColis",              "value": "standard",           "type": "text" },
+                { "key": "poids",                  "value": "2.5",               "type": "text" },
+                { "key": "valeurDeclaree",         "value": "50000",              "type": "text" },
+                { "key": "description",            "value": "Vêtements",          "type": "text" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'un colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/colis/{{colisId}}", "host": ["{{baseUrl}}"], "path": ["client", "colis", "{{colisId}}"] }
+          }
+        },
+        {
+          "name": "Suivi d'un colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/colis/{{colisId}}/suivi", "host": ["{{baseUrl}}"], "path": ["client", "colis", "{{colisId}}", "suivi"] }
+          }
+        },
+        {
+          "name": "Annuler un colis",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/client/colis/{{colisId}}/annuler", "host": ["{{baseUrl}}"], "path": ["client", "colis", "{{colisId}}", "annuler"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"motif\": \"Changement de plan\"\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🔔 Client — Notifications",
+      "item": [
+        {
+          "name": "Mes notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/client/notifications?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["client", "notifications"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Nombre de non-lues",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/notifications/non-lues", "host": ["{{baseUrl}}"], "path": ["client", "notifications", "non-lues"] }
+          }
+        },
+        {
+          "name": "Marquer une notification lue",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/notifications/{{notifId}}/lue", "host": ["{{baseUrl}}"], "path": ["client", "notifications", "{{notifId}}", "lue"] }
+          }
+        },
+        {
+          "name": "Marquer toutes les notifications lues",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/notifications/toutes-lues", "host": ["{{baseUrl}}"], "path": ["client", "notifications", "toutes-lues"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💳 Client — Paiements",
+      "item": [
+        {
+          "name": "Mes factures",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/client/paiements/factures?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["client", "paiements", "factures"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'une facture",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/client/paiements/factures/{{factureId}}", "host": ["{{baseUrl}}"], "path": ["client", "paiements", "factures", "{{factureId}}"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📊 Admin — Dashboard",
+      "item": [
+        {
+          "name": "Statistiques générales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/stats", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "stats"] }
+          }
+        },
+        {
+          "name": "Colis par statut",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/colis-par-statut", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "colis-par-statut"] }
+          }
+        },
+        {
+          "name": "Utilisateurs actifs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/utilisateurs-actifs", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "utilisateurs-actifs"] }
+          }
+        },
+        {
+          "name": "Villes fréquentes (départ)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/villes-frequentes", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "villes-frequentes"] }
+          }
+        },
+        {
+          "name": "Destinations fréquentes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/destinations-frequentes", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "destinations-frequentes"] }
+          }
+        },
+        {
+          "name": "Activités récentes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/activites-recentes", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "activites-recentes"] }
+          }
+        },
+        {
+          "name": "Derniers utilisateurs inscrits",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/derniers-utilisateurs", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "derniers-utilisateurs"] }
+          }
+        },
+        {
+          "name": "Derniers colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/dashboard/derniers-colis", "host": ["{{baseUrl}}"], "path": ["admin", "dashboard", "derniers-colis"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "👥 Admin — Utilisateurs",
+      "item": [
+        {
+          "name": "Liste des utilisateurs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/users?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "users"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'un utilisateur",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Colis d'un utilisateur",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/colis", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "colis"] }
+          }
+        },
+        {
+          "name": "Activer un utilisateur",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/activer", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "activer"] }
+          }
+        },
+        {
+          "name": "Désactiver un utilisateur",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/users/{{userId}}/desactiver", "host": ["{{baseUrl}}"], "path": ["admin", "users", "{{userId}}", "desactiver"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🛡️ Admin — Admins",
+      "item": [
+        {
+          "name": "Liste des admins",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/admins?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "admins"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'un admin",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/admins/{{adminId}}", "host": ["{{baseUrl}}"], "path": ["admin", "admins", "{{adminId}}"] }
+          }
+        },
+        {
+          "name": "Créer un admin (super_admin requis)",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('adminId', r.data?.id || '');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/admins", "host": ["{{baseUrl}}"], "path": ["admin", "admins"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Camara\",\n  \"prenom\": \"Souleymane\",\n  \"email\": \"souleymane.camara@yobante.com\",\n  \"telephone\": \"622334455\",\n  \"password\": \"Admin@2024!\",\n  \"role\": \"admin\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Modifier un admin (super_admin requis)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/admins/{{adminId}}", "host": ["{{baseUrl}}"], "path": ["admin", "admins", "{{adminId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Camara\",\n  \"prenom\": \"Souleymane\",\n  \"role\": \"admin\",\n  \"isActive\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏙️ Admin — Villes",
+      "item": [
+        {
+          "name": "Liste des villes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/villes?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "villes"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'une ville",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/villes/{{villeId}}", "host": ["{{baseUrl}}"], "path": ["admin", "villes", "{{villeId}}"] }
+          }
+        },
+        {
+          "name": "Créer une ville",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('villeId', r.data?.id || '');",
+                "  console.log('✅ Ville créée — ID sauvegardé');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/villes", "host": ["{{baseUrl}}"], "path": ["admin", "villes"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Conakry\",\n  \"region\": \"Conakry\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Modifier une ville",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/villes/{{villeId}}", "host": ["{{baseUrl}}"], "path": ["admin", "villes", "{{villeId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nom\": \"Conakry\",\n  \"region\": \"Conakry\",\n  \"isActive\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💰 Admin — Tarifs",
+      "item": [
+        {
+          "name": "Liste des tarifs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/tarifs?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "tarifs"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Calculer le prix d'un trajet",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/tarifs/calculer-prix", "host": ["{{baseUrl}}"], "path": ["admin", "tarifs", "calculer-prix"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"villeDepartId\": \"{{villeId}}\",\n  \"villeArriveeId\": \"{{villeId}}\",\n  \"typeColis\": \"standard\",\n  \"poids\": 2.5\n}"
+            }
+          }
+        },
+        {
+          "name": "Détail d'un tarif",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/tarifs/{{tarifId}}", "host": ["{{baseUrl}}"], "path": ["admin", "tarifs", "{{tarifId}}"] }
+          }
+        },
+        {
+          "name": "Créer un tarif",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('tarifId', r.data?.id || '');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/tarifs", "host": ["{{baseUrl}}"], "path": ["admin", "tarifs"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"villeDepartId\": \"{{villeId}}\",\n  \"villeArriveeId\": \"{{villeId}}\",\n  \"typeColis\": \"standard\",\n  \"prixParKg\": 5000,\n  \"prixFixe\": 2000,\n  \"delaiEstimeJours\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Modifier un tarif",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/tarifs/{{tarifId}}", "host": ["{{baseUrl}}"], "path": ["admin", "tarifs", "{{tarifId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prixParKg\": 6000,\n  \"prixFixe\": 2500,\n  \"delaiEstimeJours\": 1,\n  \"isActive\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📦 Admin — Colis",
+      "item": [
+        {
+          "name": "Liste de tous les colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/colis?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "colis"],
+              "query": [
+                { "key": "page",    "value": "1" },
+                { "key": "limit",   "value": "20" },
+                { "key": "statut",  "value": "en_attente", "disabled": true },
+                { "key": "search",  "value": "",           "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Statistiques des colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/colis/statistiques", "host": ["{{baseUrl}}"], "path": ["admin", "colis", "statistiques"] }
+          }
+        },
+        {
+          "name": "Détail d'un colis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/colis/{{colisId}}", "host": ["{{baseUrl}}"], "path": ["admin", "colis", "{{colisId}}"] }
+          }
+        },
+        {
+          "name": "Modifier un colis",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/colis/{{colisId}}", "host": ["{{baseUrl}}"], "path": ["admin", "colis", "{{colisId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"poids\": 3.0,\n  \"description\": \"Vêtements et accessoires\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Mettre à jour le statut",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/colis/{{colisId}}/statut", "host": ["{{baseUrl}}"], "path": ["admin", "colis", "{{colisId}}", "statut"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statut\": \"en_preparation\",\n  \"localisation\": \"Entrepôt Conakry\",\n  \"commentaire\": \"Colis reçu et en cours de traitement\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Ajouter des photos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/colis/{{colisId}}/photos", "host": ["{{baseUrl}}"], "path": ["admin", "colis", "{{colisId}}", "photos"] },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "photos", "type": "file", "src": "" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🧾 Admin — Factures",
+      "item": [
+        {
+          "name": "Liste des factures",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/factures?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "factures"],
+              "query": [
+                { "key": "page",   "value": "1" },
+                { "key": "limit",  "value": "20" },
+                { "key": "statut", "value": "en_attente", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'une facture",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/factures/{{factureId}}", "host": ["{{baseUrl}}"], "path": ["admin", "factures", "{{factureId}}"] }
+          }
+        },
+        {
+          "name": "Annuler une facture",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/factures/{{factureId}}/annuler", "host": ["{{baseUrl}}"], "path": ["admin", "factures", "{{factureId}}", "annuler"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "💵 Admin — Paiements",
+      "item": [
+        {
+          "name": "Liste des paiements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/paiements?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "paiements"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Détail d'un paiement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/paiements/{{paiementId}}", "host": ["{{baseUrl}}"], "path": ["admin", "paiements", "{{paiementId}}"] }
+          }
+        },
+        {
+          "name": "Enregistrer un paiement",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (pm.response.code === 201) {",
+                "  const r = pm.response.json();",
+                "  pm.collectionVariables.set('paiementId', r.data?.id || '');",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/admin/paiements/factures/{{factureId}}", "host": ["{{baseUrl}}"], "path": ["admin", "paiements", "factures", "{{factureId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"montant\": 15000,\n  \"methode\": \"orange_money\",\n  \"reference\": \"OM-2024-001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Rembourser un paiement",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/admin/paiements/{{paiementId}}/rembourser", "host": ["{{baseUrl}}"], "path": ["admin", "paiements", "{{paiementId}}", "rembourser"] }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "📋 Admin — Logs d'activité",
+      "item": [
+        {
+          "name": "Liste des logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/activity-logs?page=1&limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "activity-logs"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "50" },
+                { "key": "action", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    {
+      "name": "🏥 Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+
+  ]
+}

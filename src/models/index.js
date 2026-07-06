@@ -11,6 +11,7 @@ const Facture = require('./facture.model');
 const Paiement = require('./paiement.model');
 const Notification = require('./notification.model');
 const ActivityLog = require('./activityLog.model');
+const TokenBlacklist = require('./tokenBlacklist.model');
 
 // User <-> RefreshToken / UserOtp
 User.hasMany(RefreshToken, { foreignKey: 'userId', onDelete: 'CASCADE' });
@@ -65,6 +66,7 @@ module.exports = {
   sequelize,
   User,
   RefreshToken,
+  TokenBlacklist,
   UserOtp,
   Ville,
   Colis,
