@@ -1,5 +1,12 @@
 const Joi = require('joi');
 
+const calculerPrixSchema = Joi.object({
+  villeDepartId: Joi.string().uuid().required(),
+  villeArriveeId: Joi.string().uuid().required(),
+  typeColis: Joi.string().valid('standard', 'express', 'fragile').default('standard'),
+  poids: Joi.number().positive().precision(2).max(9999).required()
+});
+
 const createTarifSchema = Joi.object({
   villeDepartId: Joi.string().uuid().required(),
   villeArriveeId: Joi.string().uuid().required(),
@@ -17,4 +24,4 @@ const updateTarifSchema = Joi.object({
   isActive: Joi.boolean()
 }).min(1);
 
-module.exports = { createTarifSchema, updateTarifSchema };
+module.exports = { calculerPrixSchema, createTarifSchema, updateTarifSchema };

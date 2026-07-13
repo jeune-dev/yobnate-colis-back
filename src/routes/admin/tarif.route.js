@@ -4,12 +4,12 @@ const auth = require('../../middlewares/auth.middleware');
 const { admin } = require('../../middlewares/admin.middleware');
 const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 const validate = require('../../middlewares/validate.middleware');
-const { createTarifSchema, updateTarifSchema } = require('../../validations/tarif.validation');
+const { calculerPrixSchema, createTarifSchema, updateTarifSchema } = require('../../validations/tarif.validation');
 
 router.use(auth, checkActiveUser, admin);
 
 router.get('/', tarifController.getAll);
-router.post('/calculer-prix', tarifController.calculerPrix);
+router.post('/calculer-prix', validate(calculerPrixSchema), tarifController.calculerPrix);
 router.get('/:id', tarifController.getOne);
 router.post('/', validate(createTarifSchema), tarifController.create);
 router.put('/:id', validate(updateTarifSchema), tarifController.update);

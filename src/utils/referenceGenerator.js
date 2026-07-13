@@ -1,20 +1,18 @@
-const { Op } = require('sequelize');
+const sequelize = require('../config/db');
 
 const currentYear = () => new Date().getFullYear();
 
-const nextSequence = async (model, prefix) => {
+// Utilise une séquence PostgreSQL par préfixe+année — atomique, sans race condition
+const nextSequence = async (prefix) => {
   const year = currentYear();
-  const like = `${prefix}-${year}-%`;
-  const last = await model.findOne({
-    where: { reference: { [Op.like]: like } },
-    order: [['reference', 'DESC']]
-  });
-  const lastSeq = last ? parseInt(last.reference.split('-').pop(), 10) : 0;
-  const nextSeq = String(lastSeq + 1).padStart(5, '0');
-  return `${prefix}-${year}-${nextSeq}`;
+  const seqName = `${prefix.toLowerCase().replace(/-/g, '_')}_${year}_seq`;
+  await sequelize.query(`CREATE SEQUENCE IF NOT EXISTS "${seqName}" START 1`);
+  const [[{ nextval }]] = await sequelize.query(`SELECT nextval('"${seqName}"') AS nextval`);
+  return `${prefix}-${year}-${String(nextval).padStart(5, '0')}`;
 };
 
-const genererRefColis = (Colis) => nextSequence(Colis, 'YBC-COL');
-const genererRefFacture = (Facture) => nextSequence(Facture, 'YBC-FAC');
+// Les paramètres model sont conservés pour compatibilité avec les appelants existants
+const genererRefColis = (_Colis) => nextSequence('YBC-COL');
+const genererRefFacture = (_Facture) => nextSequence('YBC-FAC');
 
 module.exports = { genererRefColis, genererRefFacture };

@@ -34,8 +34,9 @@ const refreshTokenHandler = asyncHandler(async (req, res) => {
 });
 
 const logout = asyncHandler(async (req, res) => {
-  const token = req.cookies?.[REFRESH_COOKIE] || req.body.refreshToken;
-  const result = await authService.logout(token);
+  const refreshToken = req.cookies?.[REFRESH_COOKIE] || req.body.refreshToken;
+  const accessToken = req.headers.authorization?.split(' ')[1];
+  const result = await authService.logout(refreshToken, accessToken);
   res.clearCookie(REFRESH_COOKIE, cookieConfig);
   res.status(200).json({ success: true, message: result.message, data: null });
 });

@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { jwtConfig } = require('../config/security');
-const { User } = require('../models');
+const { User, TokenBlacklist } = require('../models');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -17,6 +17,9 @@ const auth = asyncHandler(async (req, res, next) => {
   } catch (err) {
     throw ApiError.unauthorized('Token invalide ou expiré');
   }
+
+  const blacklisted = await TokenBlacklist.findOne({ where: { token } });
+  if (blacklisted) throw ApiError.unauthorized('Token révoqué');
 
   const user = await User.findByPk(payload.sub);
   if (!user) {

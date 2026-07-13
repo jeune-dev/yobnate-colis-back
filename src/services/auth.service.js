@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
-const { User, UserOtp, RefreshToken } = require('../models');
+const { User, UserOtp, RefreshToken, TokenBlacklist } = require('../models');
 const { jwtConfig, bcryptConfig } = require('../config/security');
 const ApiError = require('../utils/ApiError');
 const { sendOtpEmail } = require('../utils/mailer');
@@ -90,8 +90,16 @@ const refreshToken = async (token) => {
   return { message: 'Token rafraîchi', ...tokens, utilisateur: user.toSafeJSON() };
 };
 
-const logout = async (token) => {
-  if (token) await RefreshToken.destroy({ where: { tokenHash: sha256(token) } });
+const logout = async (refreshToken, accessToken) => {
+  if (refreshToken) await RefreshToken.destroy({ where: { tokenHash: sha256(refreshToken) } });
+  if (accessToken) {
+    try {
+      const payload = jwt.decode(accessToken);
+      if (payload?.exp) {
+        await TokenBlacklist.create({ token: accessToken, expiresAt: new Date(payload.exp * 1000) });
+      }
+    } catch (_) { /* token malformé, on ignore */ }
+  }
   return { message: 'Déconnexion réussie' };
 };
 

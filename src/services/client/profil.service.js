@@ -10,6 +10,7 @@ const getProfil = async (userId) => {
 
 const updateProfil = async (userId, data) => {
   const user = await User.findByPk(userId);
+  if (!user) throw ApiError.notFound('Utilisateur introuvable');
   await user.update(data);
   return { message: 'Profil mis à jour.', utilisateur: user.toSafeJSON() };
 };

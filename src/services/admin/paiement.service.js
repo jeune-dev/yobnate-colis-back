@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Paiement, Facture, User } = require('../../models');
+const { Paiement, Facture, User, Notification } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { sendPaiementConfirmeEmail } = require('../../utils/mailer');
@@ -55,7 +55,16 @@ const enregistrerPaiement = async (factureId, { methode, reference, montant }, a
   await facture.update({ statut: 'payee' });
   await logActivity({ userId: adminId, action: 'admin.paiement.record', entite: 'Paiement', entiteId: paiement.id });
 
-  if (facture.User) await sendPaiementConfirmeEmail(facture.User, paiement, facture);
+  if (facture.User) {
+    await sendPaiementConfirmeEmail(facture.User, paiement, facture);
+    await Notification.create({
+      userId: facture.userId,
+      titre: `Paiement confirmé — Facture ${facture.reference}`,
+      message: `Votre paiement de ${montant} FCFA a été enregistré avec succès.`,
+      type: 'paiement',
+      lienCible: `/factures/${facture.id}`
+    }).catch(() => {});
+  }
   return { message: 'Paiement enregistré.', paiement };
 };
 

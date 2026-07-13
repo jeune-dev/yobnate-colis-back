@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Colis, SuiviColis, Ville, User, Facture, Paiement } = require('../../models');
+const { Colis, SuiviColis, Ville, User, Facture, Paiement, Tarif, Notification } = require('../../models');
 const ApiError = require('../../utils/ApiError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { sendColisStatutEmail } = require('../../utils/mailer');
@@ -68,6 +68,26 @@ const getColisById = async (id) => {
 const updateColis = async (id, data, adminId) => {
   const colis = await Colis.findByPk(id);
   if (!colis) throw ApiError.notFound('Colis introuvable');
+
+  const affectePrix = data.poids !== undefined || data.typeColis !== undefined ||
+    data.villeDepartId !== undefined || data.villeArriveeId !== undefined;
+
+  if (affectePrix) {
+    const tarif = await Tarif.findOne({
+      where: {
+        villeDepartId: data.villeDepartId || colis.villeDepartId,
+        villeArriveeId: data.villeArriveeId || colis.villeArriveeId,
+        typeColis: data.typeColis || colis.typeColis,
+        isActive: true
+      }
+    });
+    if (tarif) {
+      const poids = data.poids !== undefined ? Number(data.poids) : Number(colis.poids);
+      data.montant = Number(tarif.prixFixe) + Number(tarif.prixParKg) * poids;
+      await Facture.update({ montantTransport: data.montant, montantTotal: data.montant }, { where: { colisId: id } });
+    }
+  }
+
   await colis.update(data);
   await logActivity({ userId: adminId, action: 'admin.colis.update', entite: 'Colis', entiteId: colis.id });
   return { message: 'Colis mis à jour.', colis };
@@ -90,7 +110,16 @@ const updateStatutColis = async (id, { statut, localisation, commentaire, annule
   await SuiviColis.create({ colisId: colis.id, statut, localisation, commentaire, createdBy: adminId });
   await logActivity({ userId: adminId, action: 'admin.colis.statut', entite: 'Colis', entiteId: colis.id, details: { statut } });
 
-  if (colis.client) await sendColisStatutEmail(colis.client, colis);
+  if (colis.client) {
+    await sendColisStatutEmail(colis.client, colis);
+    await Notification.create({
+      userId: colis.client.id,
+      titre: `Colis ${colis.reference} — statut mis à jour`,
+      message: `Votre colis est maintenant : ${statut.replace(/_/g, ' ')}`,
+      type: 'colis',
+      lienCible: `/colis/${colis.id}`
+    }).catch(() => {});
+  }
 
   return { message: 'Statut du colis mis à jour.', colis };
 };
