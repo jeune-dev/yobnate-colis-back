@@ -35,7 +35,7 @@ const seedSuperAdmin = async () => {
     prenom: process.env.SUPER_ADMIN_PRENOM || 'Yobnate',
     email,
     password: hashed,
-    telephone: '+221000000000',
+    telephone: '+221000000001',
     role: 'super_admin',
     isActive: true
   });
