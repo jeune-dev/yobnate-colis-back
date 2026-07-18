@@ -6,7 +6,7 @@ const notFoundHandler = (req, res, next) => {
   next(ApiError.notFound(`Route introuvable : ${req.method} ${req.originalUrl}`));
 };
 
-const errorMiddleware = (err, req, res, next) => {
+const errorMiddleware = (err, req, res, _next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'Erreur interne du serveur';
   let errors = err.errors || null;

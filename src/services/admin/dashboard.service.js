@@ -1,5 +1,8 @@
 const { Op } = require('sequelize');
 const { sequelize, User, Colis, Ville, ActivityLog } = require('../../models');
+const cache = require('../../utils/memCache');
+
+const STATS_TTL = 60 * 1000; // 1 minute
 
 const startOfToday = () => new Date(new Date().setHours(0, 0, 0, 0));
 const startOfWeek = () => {
@@ -23,6 +26,8 @@ const computeColisParStatut = async () => {
 };
 
 const getStatsGlobales = async () => {
+  const cached = cache.get('dashboard:stats');
+  if (cached) return cached;
   const [
     totalUsers,
     activeUsers,
@@ -64,7 +69,7 @@ const getStatsGlobales = async () => {
   const recuperes = statutCount('recupere');
   const annules = statutCount('annule');
 
-  return {
+  const result = {
     message: 'Statistiques globales du tableau de bord',
     stats: {
       utilisateurs: {
@@ -89,6 +94,8 @@ const getStatsGlobales = async () => {
       }
     }
   };
+  cache.set('dashboard:stats', result, STATS_TTL);
+  return result;
 };
 
 const getColisParStatut = async () => ({

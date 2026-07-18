@@ -1,7 +1,7 @@
 const streamifier = require('streamifier');
 const cloudinary = require('../config/cloudinary');
-const { isAllowedFile } = require('./upload.middleware');
-const ApiError = require('../utils/ApiError');
+const { isAllowedFile } = require('../middlewares/upload.middleware');
+const ApiError = require('./ApiError');
 
 const uploadToCloudinary = (buffer, { folder = 'yobnate-colis', resourceType = 'image' } = {}) => {
   if (!isAllowedFile(buffer)) {

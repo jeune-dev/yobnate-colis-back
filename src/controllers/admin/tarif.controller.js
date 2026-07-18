@@ -2,8 +2,8 @@ const tarifService = require('../../services/admin/tarif.service');
 const asyncHandler = require('../../utils/asyncHandler');
 
 const getAll = asyncHandler(async (req, res) => {
-  const result = await tarifService.getAllTarifs(req.query);
-  res.status(200).json({ success: true, message: result.message, data: { tarifs: result.tarifs } });
+  const result = await tarifService.getAllTarifs(req.query, req.query);
+  res.status(200).json({ success: true, message: result.message, data: { tarifs: result.tarifs, pagination: result.pagination } });
 });
 
 const getOne = asyncHandler(async (req, res) => {

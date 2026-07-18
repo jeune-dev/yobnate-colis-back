@@ -1,37 +1,118 @@
-PORT=9000
-JWT_SECRET=ab094ea24da1713b3fc827094fefa59e559bb94b2bd6a65701d9e6332ab7d33b3342b7614b74370caa89266e6166d798e907e63c577979f95a2700d9bb9600e9b
-JWT_EXPIRES_IN=1h
-JWT_REFRESH_SECRET=ab094ea24da1713b3fc827094fefa59e559bb94b2bd6a65701d9e6332ab7d33b3342b7614b74370caa89266e6166d798e907e63c577979f95a2700d9bb9600e9b
-CORS_ORIGIN=http://localhost:5173/login,http://localhost:5173
-NODE_ENV=development
+# Yobnate Colis — Backend API
 
-DB_HOST=localhost
-DB_USER=postgres
-DB_PASSWORD=Passer
-DB_NAME=yobante_colis_db
+API REST de gestion et suivi de colis pour la plateforme Yobnate Colis.
 
-FRONTEND_URL=http://localhost:3000
-HELLOSIGN_API_KEY=0dd3b823a682527788c4e40cb7b6f7e9
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_SECURE=true
-SMTP_USER=beyeballa04@gmail.com
-SMTP_PASS=pwwegorournmxqyc
+## Stack technique
 
-CLOUDINARY_CLOUD_NAME=dmvf35g5o
-CLOUDINARY_API_KEY=128872757973953
-CLOUDINARY_API_SECRET=9GBSsjlf5niMIUqijtsnLxdGTdg
+- **Runtime :** Node.js 22
+- **Framework :** Express 4
+- **ORM :** Sequelize 6
+- **Base de données :** PostgreSQL 16
+- **Auth :** JWT (access + refresh token) + blacklist
+- **Upload :** Cloudinary (via Multer mémoire)
+- **Email :** Nodemailer (SMTP)
+- **Documentation :** Swagger UI (désactivée en production)
+- **Conteneurisation :** Docker + Docker Compose
 
+## Prérequis
 
+- Node.js >= 18
+- PostgreSQL 16
+- Compte Cloudinary
+- Compte SMTP (Gmail ou autre)
 
-RESEND_API_KEY=re_THBThLEV_NaixyJ8xeQ6FFUUbtnMSrQv1
+## Installation
 
+```bash
+# 1. Cloner le dépôt
+git clone <url-du-repo>
+cd yobnate-colis-back
 
-# ORANGE MONEY
-ORANGE_CLIENT_ID=NTZGFaE1r0O4MiUs        # Depuis developer.orange.com → ton app → Client ID
-ORANGE_CLIENT_SECRET=    # Depuis developer.orange.com → ton app → Client Secret
-ORANGE_MERCHANT_KEY=     # Depuis ton compte Orange Business / tableau de bord marchand
-ORANGE_RETURN_URL=       # URL front quand paiement réussi  ex: http://localhost:5173/succes
-ORANGE_CANCEL_URL=       # URL front quand client annule    ex: http://localhost:5173/annule
-ORANGE_NOTIF_URL=        # URL webhook backend              ex: https://xxxx.ngrok.io/api/paiement/webhook/orange
+# 2. Installer les dépendances
+npm install
 
+# 3. Configurer les variables d'environnement
+cp .env.example .env
+# Remplir toutes les variables dans .env
+
+# 4. Démarrer PostgreSQL, puis lancer l'application
+npm run dev
+```
+
+## Variables d'environnement
+
+Copier `.env.example` en `.env` et renseigner toutes les valeurs. Voir `.env.example` pour la liste complète et les contraintes (secrets JWT min. 32 caractères, distincts).
+
+> **Important :** Ne jamais commiter le fichier `.env` ni aucun secret dans le dépôt Git.
+
+## Scripts
+
+| Commande | Description |
+|---|---|
+| `npm start` | Démarrage production |
+| `npm run dev` | Démarrage développement (nodemon) |
+| `npm run seed` | Création du super admin et des données initiales |
+| `npm run migrate` | Exécuter les migrations Sequelize |
+| `npm run migrate:undo` | Annuler la dernière migration |
+| `npm test` | Lancer les tests |
+| `npm run lint` | Vérification ESLint |
+
+## Démarrage avec Docker
+
+```bash
+# Copier et remplir les variables d'environnement
+cp .env.example .env
+
+# Démarrer la stack complète
+docker compose up -d
+
+# Initialiser les données
+docker compose exec backend npm run seed
+```
+
+## Structure du projet
+
+```
+src/
+├── app.js              # Configuration Express et middlewares
+├── server.js           # Point d'entrée, démarrage et graceful shutdown
+├── config/             # Configuration (DB, JWT, Cloudinary, Swagger…)
+├── controllers/        # Handlers HTTP (admin/, client/)
+├── middlewares/        # Auth, validation, rate limit, upload, erreurs
+├── models/             # Models Sequelize et associations
+├── routes/             # Définition des routes (admin/, client/)
+├── services/           # Logique métier (admin/, client/)
+├── utils/              # ApiError, asyncHandler, mailer, paginate…
+├── validations/        # Schémas Joi
+└── seeders/            # Données initiales
+deploy/
+├── nginx.conf          # Configuration Nginx (reverse proxy TLS)
+└── init.sql            # Extensions PostgreSQL initiales
+```
+
+## Routes principales
+
+| Préfixe | Accès | Description |
+|---|---|---|
+| `/auth` | Public | Inscription, connexion, refresh, logout, reset mot de passe |
+| `/client/colis` | Client authentifié | Déclarer, suivre, annuler ses colis |
+| `/client/profil` | Client authentifié | Profil et avatar |
+| `/client/notifications` | Client authentifié | Notifications |
+| `/client/paiements` | Client authentifié | Factures |
+| `/admin/dashboard` | Admin | Statistiques |
+| `/admin/users` | Admin | Gestion des clients |
+| `/admin/admins` | Admin / Super Admin | Gestion des administrateurs |
+| `/admin/colis` | Admin | Gestion et suivi des colis |
+| `/admin/villes` | Admin | Référentiel des villes |
+| `/admin/tarifs` | Admin | Grille tarifaire |
+| `/admin/factures` | Admin | Factures |
+| `/admin/paiements` | Admin | Enregistrement et remboursement des paiements |
+| `/admin/activity-logs` | Admin | Journal d'activité |
+
+## Documentation API
+
+Disponible en développement sur : `http://localhost:<PORT>/api-docs`
+
+## Licence
+
+Propriétaire — tous droits réservés.

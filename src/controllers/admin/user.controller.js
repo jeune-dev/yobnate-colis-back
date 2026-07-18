@@ -18,14 +18,12 @@ const getColis = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: result.message, data: { colis: result.colis, pagination: result.pagination } });
 });
 
-const activer = asyncHandler(async (req, res) => {
-  const result = await userService.setActive(req.params.id, true, req.user.id);
+const setActive = (isActive) => asyncHandler(async (req, res) => {
+  const result = await userService.setActive(req.params.id, isActive, req.user.id);
   res.status(200).json({ success: true, message: result.message, data: { utilisateur: result.utilisateur } });
 });
 
-const desactiver = asyncHandler(async (req, res) => {
-  const result = await userService.setActive(req.params.id, false, req.user.id);
-  res.status(200).json({ success: true, message: result.message, data: { utilisateur: result.utilisateur } });
-});
+const activer = setActive(true);
+const desactiver = setActive(false);
 
 module.exports = { getAll, getOne, getColis, activer, desactiver };

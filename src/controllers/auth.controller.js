@@ -1,9 +1,10 @@
 const authService = require('../services/auth.service');
 const { requestMeta } = require('../services/activityLog.service');
-const { cookieConfig, jwtConfig } = require('../config/security');
+const { cookieConfig } = require('../config/security');
 const asyncHandler = require('../utils/asyncHandler');
 
 const REFRESH_COOKIE = 'refreshToken';
+const EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h';
 const refreshCookieOptions = { ...cookieConfig, maxAge: 7 * 24 * 60 * 60 * 1000 };
 
 const register = asyncHandler(async (req, res) => {
@@ -18,7 +19,7 @@ const login = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: result.message,
-    data: { accessToken: result.accessToken, expiresIn: jwtConfig.expiresIn, utilisateur: result.utilisateur }
+    data: { accessToken: result.accessToken, expiresIn: EXPIRES_IN, utilisateur: result.utilisateur }
   });
 });
 
@@ -29,7 +30,7 @@ const refreshTokenHandler = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: result.message,
-    data: { accessToken: result.accessToken, expiresIn: jwtConfig.expiresIn, utilisateur: result.utilisateur }
+    data: { accessToken: result.accessToken, expiresIn: EXPIRES_IN, utilisateur: result.utilisateur }
   });
 });
 

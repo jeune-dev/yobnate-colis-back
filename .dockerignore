@@ -8,5 +8,15 @@ npm-debug.log
 *.md
 uploads/
 logs/
+
+# Tests et couverture — inutiles en prod
+tests/
+coverage/
+.eslintcache
+
+# OS / IDE
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+.claude/

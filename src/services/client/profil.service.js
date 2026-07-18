@@ -1,6 +1,6 @@
 const { User } = require('../../models');
 const ApiError = require('../../utils/ApiError');
-const { uploadToCloudinary, deleteFromCloudinary } = require('../../middlewares/uploadService');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../../utils/uploadService');
 
 const getProfil = async (userId) => {
   const user = await User.findByPk(userId);

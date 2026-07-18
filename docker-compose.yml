@@ -14,9 +14,6 @@ services:
 
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-yobnate} -d ${DB_NAME:-yobnate_colis}"]
       interval: 10s
@@ -44,7 +41,6 @@ services:
       PORT:      3000
       HOST:      0.0.0.0
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      API_PREFIX: ${API_PREFIX:-/api}
 
       # Base de données — pointe vers le service postgres ci-dessus
       DB_HOST:      postgres

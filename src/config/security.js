@@ -84,14 +84,6 @@ const uploadConfig = {
   allowedMimeTypes: ['application/pdf', 'image/png', 'image/jpeg']
 };
 
-/**
- * Chiffrement & Hash
- */
-const cryptoConfig = {
-  hashAlgorithm: 'sha256',
-  encoding: 'hex'
-};
-
 module.exports = {
   jwtConfig,
   bcryptConfig,
@@ -100,6 +92,5 @@ module.exports = {
   authRateLimitConfig,
   corsConfig,
   cookieConfig,
-  uploadConfig,
-  cryptoConfig
+  uploadConfig
 };

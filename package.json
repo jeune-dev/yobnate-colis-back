@@ -10,7 +10,9 @@
     "migrate": "sequelize-cli db:migrate",
     "migrate:undo": "sequelize-cli db:migrate:undo",
     "migrate:undo:all": "sequelize-cli db:migrate:undo:all",
-    "seed": "node src/seeders/adminSeeder.js"
+    "seed": "node src/seeders/adminSeeder.js",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -32,10 +34,11 @@
     "streamifier": "^0.1.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
-    "winston": "^3.17.0",
-    "xss": "^1.0.15"
+    "winston": "^3.17.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.7.0",
     "nodemon": "^3.1.9",
     "sequelize-cli": "^6.6.2"
   },

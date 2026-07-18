@@ -29,7 +29,8 @@ RefreshToken.init(
     tableName: 'refresh_tokens',
     updatedAt: false,
     indexes: [
-      { fields: ['userId'] }
+      { fields: ['userId'] },
+      { unique: true, fields: ['tokenHash'] }
     ]
   }
 );

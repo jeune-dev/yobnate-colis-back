@@ -4,7 +4,7 @@ const ApiError = require('../../utils/ApiError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { sendColisStatutEmail } = require('../../utils/mailer');
 const { logActivity } = require('../activityLog.service');
-const { uploadToCloudinary } = require('../../middlewares/uploadService');
+const { uploadToCloudinary } = require('../../utils/uploadService');
 
 const ALLOWED_TRANSITIONS = {
   en_attente: ['en_preparation', 'annule'],
@@ -128,10 +128,9 @@ const ajouterPhotos = async (id, files = []) => {
   const colis = await Colis.findByPk(id);
   if (!colis) throw ApiError.notFound('Colis introuvable');
 
-  const uploaded = [];
-  for (const file of files) {
-    uploaded.push(await uploadToCloudinary(file.buffer, { folder: 'yobnate-colis/colis' }));
-  }
+  const uploaded = await Promise.all(
+    files.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-colis/colis' }))
+  );
 
   await colis.update({ photos: [...colis.photos, ...uploaded] });
   return { message: 'Photos ajoutées.', colis };

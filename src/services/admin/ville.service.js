@@ -1,13 +1,16 @@
 const { Op } = require('sequelize');
 const { Ville } = require('../../models');
 const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
 
-const getAllVilles = async (filters) => {
+const getAllVilles = async (filters, pagination) => {
   const where = {};
   if (filters.isActive !== undefined) where.isActive = filters.isActive === 'true' || filters.isActive === true;
   if (filters.search) where.nom = { [Op.iLike]: `%${filters.search}%` };
-  const villes = await Ville.findAll({ where, order: [['nom', 'ASC']] });
-  return { message: 'Liste des villes', villes };
+
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Ville.findAndCountAll({ where, order: [['nom', 'ASC']], limit, offset });
+  return { message: 'Liste des villes', villes: rows, pagination: paginateResult(count, pagination?.page, pagination?.limit) };
 };
 
 const getVilleById = async (id) => {

@@ -29,13 +29,16 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+const isProd = process.env.NODE_ENV === 'production';
+
 // F-02 : Helmet avec CSP personnalisée + HSTS explicite
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],   // requis pour Swagger UI en dev
-      styleSrc:  ["'self'", "'unsafe-inline'"],
+      // unsafe-inline restreint à dev (Swagger UI) ; en prod on n'expose pas l'UI Swagger
+      scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
+      styleSrc:  isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
       imgSrc:    ["'self'", 'data:', 'https://res.cloudinary.com'],
       connectSrc:["'self'"],
       fontSrc:   ["'self'"],

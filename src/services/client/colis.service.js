@@ -3,7 +3,7 @@ const { sequelize, Colis, SuiviColis, Tarif, Facture, Ville } = require('../../m
 const ApiError = require('../../utils/ApiError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { genererRefColis, genererRefFacture } = require('../../utils/referenceGenerator');
-const { uploadToCloudinary } = require('../../middlewares/uploadService');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../../utils/uploadService');
 const { logActivity } = require('../activityLog.service');
 
 const VILLE_INCLUDE = [
@@ -37,50 +37,58 @@ const declarerColis = async (userId, data, files = []) => {
 
   const montant = Number(tarif.prixFixe) + Number(tarif.prixParKg) * Number(data.poids);
 
-  const photos = [];
-  for (const file of files) {
-    const uploaded = await uploadToCloudinary(file.buffer, { folder: 'yobnate-colis/colis' });
-    photos.push(uploaded);
+  // Upload en parallèle avant la transaction (évite de garder la connexion DB ouverte pendant l'I/O réseau)
+  const photos = await Promise.all(
+    files.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-colis/colis' }))
+  );
+
+  let result;
+  try {
+    result = await sequelize.transaction(async (t) => {
+      const colis = await createWithRetry(
+        Colis,
+        (reference) => ({
+          ...data,
+          reference,
+          userId,
+          montant,
+          photos,
+          dateLivraisonEstimee: new Date(Date.now() + tarif.delaiEstimeJours * 24 * 60 * 60 * 1000)
+        }),
+        () => genererRefColis(Colis),
+        3,
+        t
+      );
+
+      await SuiviColis.create(
+        { colisId: colis.id, statut: 'en_attente', commentaire: 'Colis enregistré', createdBy: userId },
+        { transaction: t }
+      );
+
+      const facture = await createWithRetry(
+        Facture,
+        (reference) => ({
+          reference,
+          colisId: colis.id,
+          userId,
+          montantTransport: montant,
+          montantTotal: montant,
+          dateLimitePaiement: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+        }),
+        () => genererRefFacture(Facture),
+        3,
+        t
+      );
+
+      return { colis, facture };
+    });
+  } catch (err) {
+    // Nettoyer les fichiers Cloudinary si la transaction DB a échoué
+    if (photos.length) {
+      await Promise.allSettled(photos.map((p) => deleteFromCloudinary(p.publicId)));
+    }
+    throw err;
   }
-
-  const result = await sequelize.transaction(async (t) => {
-    const colis = await createWithRetry(
-      Colis,
-      (reference) => ({
-        ...data,
-        reference,
-        userId,
-        montant,
-        photos,
-        dateLivraisonEstimee: new Date(Date.now() + tarif.delaiEstimeJours * 24 * 60 * 60 * 1000)
-      }),
-      () => genererRefColis(Colis),
-      3,
-      t
-    );
-
-    await SuiviColis.create(
-      { colisId: colis.id, statut: 'en_attente', commentaire: 'Colis enregistré', createdBy: userId },
-      { transaction: t }
-    );
-
-    const facture = await createWithRetry(
-      Facture,
-      (reference) => ({
-        reference,
-        colisId: colis.id,
-        userId,
-        montantTransport: montant,
-        montantTotal: montant,
-        dateLimitePaiement: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      }),
-      () => genererRefFacture(Facture),
-      3,
-      t
-    );
-
-    return { colis, facture };
-  });
 
   await logActivity({ userId, action: 'colis.create', entite: 'Colis', entiteId: result.colis.id });
   return { message: 'Colis enregistré avec succès.', colis: result.colis, facture: result.facture };
@@ -121,8 +129,13 @@ const getColisById = async (userId, colisId) => {
 };
 
 const getSuiviColis = async (userId, colisId) => {
-  const { colis } = await getColisById(userId, colisId);
-  return { message: 'Historique de suivi du colis', historique: colis.historique };
+  const colis = await Colis.findOne({ where: { id: colisId, userId }, attributes: ['id'] });
+  if (!colis) throw ApiError.notFound('Colis introuvable');
+  const historique = await SuiviColis.findAll({
+    where: { colisId },
+    order: [['createdAt', 'ASC']]
+  });
+  return { message: 'Historique de suivi du colis', historique };
 };
 
 const annulerColis = async (userId, colisId, motif) => {
@@ -132,9 +145,14 @@ const annulerColis = async (userId, colisId, motif) => {
     throw ApiError.badRequest('Ce colis ne peut plus être annulé à ce stade');
   }
 
-  await colis.update({ statut: 'annule', annuleMotif: motif || null });
-  await SuiviColis.create({ colisId: colis.id, statut: 'annule', commentaire: motif || 'Annulé par le client', createdBy: userId });
-  await Facture.update({ statut: 'annulee' }, { where: { colisId: colis.id } });
+  await sequelize.transaction(async (t) => {
+    await colis.update({ statut: 'annule', annuleMotif: motif || null }, { transaction: t });
+    await SuiviColis.create(
+      { colisId: colis.id, statut: 'annule', commentaire: motif || 'Annulé par le client', createdBy: userId },
+      { transaction: t }
+    );
+    await Facture.update({ statut: 'annulee' }, { where: { colisId: colis.id }, transaction: t });
+  });
 
   await logActivity({ userId, action: 'colis.cancel', entite: 'Colis', entiteId: colis.id });
   return { message: 'Colis annulé.', colis };

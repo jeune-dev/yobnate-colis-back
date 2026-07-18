@@ -7,9 +7,10 @@ const TokenBlacklist = sequelize.define('TokenBlacklist', {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
-  token: {
-    type: DataTypes.TEXT,
+  tokenHash: {
+    type: DataTypes.STRING(64),
     allowNull: false,
+    unique: true,
   },
   expiresAt: {
     type: DataTypes.DATE,
@@ -20,8 +21,8 @@ const TokenBlacklist = sequelize.define('TokenBlacklist', {
   timestamps: true,
   underscored: true,
   indexes: [
-    { fields: ['token'] },       // H-04 : recherche O(log n) pour les lookups blacklist
-    { fields: ['expires_at'] },  // accélère le nettoyage par cron
+    { unique: true, fields: ['token_hash'] },
+    { fields: ['expires_at'] },
   ],
 });
 

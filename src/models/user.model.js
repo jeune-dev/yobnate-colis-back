@@ -3,7 +3,7 @@ const sequelize = require('../config/db');
 
 class User extends Model {
   toSafeJSON() {
-    const { password, ...safe } = this.toJSON();
+    const { password: _password, ...safe } = this.toJSON();
     return safe;
   }
 }
@@ -68,8 +68,6 @@ User.init(
     modelName: 'User',
     tableName: 'users',
     indexes: [
-      { unique: true, fields: ['email'] },
-      { unique: true, fields: ['telephone'] },
       { fields: ['role'] },
       { fields: ['isActive'] }
     ]

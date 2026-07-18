@@ -1,15 +1,5 @@
 const Joi = require('joi');
-
-const phone = Joi.string().pattern(/^\+?[0-9]{8,15}$/).message('Numéro de téléphone invalide');
-const password = Joi.string()
-  .min(8)
-  .max(72)
-  .pattern(/^(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9])/)
-  .messages({
-    'string.min': 'Le mot de passe doit contenir au moins 8 caractères',
-    'string.max': 'Le mot de passe ne peut pas dépasser 72 caractères',
-    'string.pattern.base': 'Le mot de passe doit contenir au moins une majuscule, un chiffre et un caractère spécial'
-  });
+const { phone, password } = require('./shared');
 
 const registerSchema = Joi.object({
   nom: Joi.string().min(2).max(50).required(),

@@ -1,19 +1,24 @@
 const { Tarif, Ville } = require('../../models');
 const ApiError = require('../../utils/ApiError');
+const { paginate, paginateResult } = require('../../utils/paginate');
 
 const INCLUDE_VILLES = [
   { model: Ville, as: 'villeDepart', attributes: ['id', 'nom'] },
   { model: Ville, as: 'villeArrivee', attributes: ['id', 'nom'] }
 ];
 
-const getAllTarifs = async (filters) => {
+const getAllTarifs = async (filters, pagination) => {
   const where = {};
   if (filters.villeDepartId) where.villeDepartId = filters.villeDepartId;
   if (filters.villeArriveeId) where.villeArriveeId = filters.villeArriveeId;
   if (filters.typeColis) where.typeColis = filters.typeColis;
   if (filters.isActive !== undefined) where.isActive = filters.isActive === 'true' || filters.isActive === true;
-  const tarifs = await Tarif.findAll({ where, include: INCLUDE_VILLES, order: [['createdAt', 'DESC']] });
-  return { message: 'Liste des tarifs', tarifs };
+
+  const { limit, offset } = paginate(pagination);
+  const { rows, count } = await Tarif.findAndCountAll({
+    where, include: INCLUDE_VILLES, order: [['createdAt', 'DESC']], limit, offset, distinct: true
+  });
+  return { message: 'Liste des tarifs', tarifs: rows, pagination: paginateResult(count, pagination?.page, pagination?.limit) };
 };
 
 const getTarifById = async (id) => {

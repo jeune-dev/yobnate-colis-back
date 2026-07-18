@@ -2,8 +2,8 @@ const villeService = require('../../services/admin/ville.service');
 const asyncHandler = require('../../utils/asyncHandler');
 
 const getAll = asyncHandler(async (req, res) => {
-  const result = await villeService.getAllVilles(req.query);
-  res.status(200).json({ success: true, message: result.message, data: { villes: result.villes } });
+  const result = await villeService.getAllVilles(req.query, req.query);
+  res.status(200).json({ success: true, message: result.message, data: { villes: result.villes, pagination: result.pagination } });
 });
 
 const getOne = asyncHandler(async (req, res) => {

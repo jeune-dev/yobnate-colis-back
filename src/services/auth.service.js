@@ -74,7 +74,7 @@ const refreshToken = async (token) => {
   let payload;
   try {
     payload = jwt.verify(token, jwtConfig.refreshSecret);
-  } catch (err) {
+  } catch (_err) {
     throw ApiError.unauthorized('Token de rafraîchissement invalide ou expiré');
   }
 
@@ -96,9 +96,9 @@ const logout = async (refreshToken, accessToken) => {
     try {
       const payload = jwt.decode(accessToken);
       if (payload?.exp) {
-        await TokenBlacklist.create({ token: accessToken, expiresAt: new Date(payload.exp * 1000) });
+        await TokenBlacklist.create({ tokenHash: sha256(accessToken), expiresAt: new Date(payload.exp * 1000) });
       }
-    } catch (_) { /* token malformé, on ignore */ }
+    } catch (_err) { /* token malformé, on ignore */ }
   }
   return { message: 'Déconnexion réussie' };
 };
