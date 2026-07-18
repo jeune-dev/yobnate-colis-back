@@ -21,7 +21,6 @@ const TokenBlacklist = sequelize.define('TokenBlacklist', {
   timestamps: true,
   underscored: true,
   indexes: [
-    { unique: true, fields: ['token_hash'] },
     { fields: ['expires_at'] },
   ],
 });
