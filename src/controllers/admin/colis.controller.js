@@ -1,5 +1,7 @@
 const colisService = require('../../services/admin/colis.service');
-const asyncHandler = require('../../utils/asyncHandler');
+const asyncHandler = require('../../middlewares/asyncHandler');
+const { ok } = require('../../utils/response');
+const { BadRequestError, NotFoundError, ConflictError, UnauthorizedError, ForbiddenError } = require('../../errors/AppError');
 
 const getAll = asyncHandler(async (req, res) => {
   const { statut, villeDepartId, villeArriveeId, reference, expediteur, destinataire, dateDebut, dateFin, sortBy, sortOrder, page, limit } = req.query;
@@ -7,32 +9,32 @@ const getAll = asyncHandler(async (req, res) => {
     { statut, villeDepartId, villeArriveeId, reference, expediteur, destinataire, dateDebut, dateFin, sortBy, sortOrder },
     { page, limit }
   );
-  res.status(200).json({ success: true, message: result.message, data: { colis: result.colis, pagination: result.pagination } });
+  return ok(res, { colis: result.colis, pagination: result.pagination }, result.message);
 });
 
 const getOne = asyncHandler(async (req, res) => {
   const result = await colisService.getColisById(req.params.id);
-  res.status(200).json({ success: true, message: result.message, data: { colis: result.colis } });
+  return ok(res, { colis: result.colis }, result.message);
 });
 
 const update = asyncHandler(async (req, res) => {
   const result = await colisService.updateColis(req.params.id, req.body, req.user.id);
-  res.status(200).json({ success: true, message: result.message, data: { colis: result.colis } });
+  return ok(res, { colis: result.colis }, result.message);
 });
 
 const updateStatut = asyncHandler(async (req, res) => {
   const result = await colisService.updateStatutColis(req.params.id, req.body, req.user.id);
-  res.status(200).json({ success: true, message: result.message, data: { colis: result.colis } });
+  return ok(res, { colis: result.colis }, result.message);
 });
 
 const ajouterPhotos = asyncHandler(async (req, res) => {
   const result = await colisService.ajouterPhotos(req.params.id, req.files || []);
-  res.status(200).json({ success: true, message: result.message, data: { colis: result.colis } });
+  return ok(res, { colis: result.colis }, result.message);
 });
 
 const getStatistiques = asyncHandler(async (req, res) => {
   const result = await colisService.getStatistiques();
-  res.status(200).json({ success: true, message: result.message, data: { statistiques: result.statistiques } });
+  return ok(res, { statistiques: result.statistiques }, result.message);
 });
 
 module.exports = { getAll, getOne, update, updateStatut, ajouterPhotos, getStatistiques };

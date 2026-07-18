@@ -8,7 +8,7 @@ const { randomUUID } = require('crypto');
 const { corsConfig } = require('./config/security');
 const logger = require('./config/logger');
 const { globalRateLimit } = require('./middlewares/rateLimit.middleware');
-const { errorMiddleware, notFoundHandler } = require('./middlewares/error.middleware');
+const errorMiddleware = require('./middlewares/error.middleware');
 
 const authRoutes = require('./routes/auth.route');
 const clientColisRoutes = require('./routes/client/colis.route');
@@ -113,7 +113,7 @@ app.use('/admin/paiements', adminPaiementRoutes);
 app.use('/admin/activity-logs', adminActivityLogRoutes);
 
 // R-04 : Gestionnaire d'erreurs global — DERNIER middleware
-app.use(notFoundHandler);
+app.use((_req, res) => res.status(404).json({ success: false, message: 'Route introuvable' }));
 app.use(errorMiddleware);
 
 module.exports = app;

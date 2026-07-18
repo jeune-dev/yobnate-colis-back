@@ -46,4 +46,24 @@ const annulerFacture = async (id, adminId) => {
   return { message: 'Facture annulée.', facture };
 };
 
-module.exports = { getAllFactures, getFactureById, annulerFacture };
+/**
+ * Applique une remise (en FCFA) sur une facture en attente.
+ * Recalcule montantTotal = montantTransport - remise (min 0).
+ */
+const appliquerRemise = async (id, remise, adminId) => {
+  const { facture } = await getFactureById(id);
+  if (facture.statut !== 'en_attente') {
+    throw ApiError.badRequest('La remise ne peut être appliquée que sur une facture en attente');
+  }
+  if (remise < 0) throw ApiError.badRequest('La remise ne peut pas être négative');
+  if (remise > Number(facture.montantTransport)) {
+    throw ApiError.badRequest('La remise ne peut pas dépasser le montant de transport');
+  }
+
+  const montantTotal = Number(facture.montantTransport) - remise;
+  await facture.update({ remise, montantTotal });
+  await logActivity({ userId: adminId, action: 'admin.facture.remise', entite: 'Facture', entiteId: facture.id, details: { remise } });
+  return { message: `Remise de ${remise} FCFA appliquée.`, facture };
+};
+
+module.exports = { getAllFactures, getFactureById, annulerFacture, appliquerRemise };
