@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const notificationController = require('../../controllers/client/notification.controller');
 const auth = require('../../middlewares/auth.middleware');
+const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 const validate = require('../../middlewares/validate.middleware');
 const { uuidParam } = require('../../validations/shared');
 
@@ -11,7 +12,7 @@ const { uuidParam } = require('../../validations/shared');
  *   description: Notifications du client connecté
  */
 
-router.use(auth);
+router.use(auth, checkActiveUser);
 
 /**
  * @swagger

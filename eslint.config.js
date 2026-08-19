@@ -21,6 +21,7 @@ module.exports = [
         clearInterval: 'readonly',
         Promise: 'readonly',
         URL: 'readonly',
+        fetch: 'readonly',
       },
     },
     rules: {

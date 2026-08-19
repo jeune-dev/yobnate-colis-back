@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const profilController = require('../../controllers/client/profil.controller');
 const auth = require('../../middlewares/auth.middleware');
+const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 const validate = require('../../middlewares/validate.middleware');
 const { upload } = require('../../middlewares/upload.middleware');
 const { updateProfilSchema } = require('../../validations/user.validation');
@@ -12,7 +13,7 @@ const { updateProfilSchema } = require('../../validations/user.validation');
  *   description: Profil et avatar du client connecté
  */
 
-router.use(auth);
+router.use(auth, checkActiveUser);
 
 /**
  * @swagger

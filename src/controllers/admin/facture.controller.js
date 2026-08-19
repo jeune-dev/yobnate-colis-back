@@ -1,7 +1,6 @@
 const factureService = require('../../services/admin/facture.service');
-const asyncHandler = require('../../middlewares/asyncHandler');
+const asyncHandler = require('../../utils/asyncHandler');
 const { ok } = require('../../utils/response');
-const { BadRequestError, NotFoundError, ConflictError, UnauthorizedError, ForbiddenError } = require('../../errors/AppError');
 
 const getAll = asyncHandler(async (req, res) => {
   const { userId, statut, dateDebut, dateFin, page, limit } = req.query;
@@ -20,9 +19,7 @@ const annuler = asyncHandler(async (req, res) => {
 });
 
 const appliquerRemise = asyncHandler(async (req, res) => {
-  const remise = Number(req.body.remise);
-  if (isNaN(remise)) throw new BadRequestError('Le champ remise doit être un nombre.');
-  const result = await factureService.appliquerRemise(req.params.id, remise, req.user.id);
+  const result = await factureService.appliquerRemise(req.params.id, req.body.remise, req.user.id);
   return ok(res, { facture: result.facture }, result.message);
 });
 

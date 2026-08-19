@@ -5,6 +5,7 @@ const { paginate, paginateResult } = require('../../utils/paginate');
 
 const getAllVilles = async (filters, pagination) => {
   const where = {};
+  if (filters.pays) where.pays = filters.pays;
   if (filters.isActive !== undefined) where.isActive = filters.isActive === 'true' || filters.isActive === true;
   if (filters.search) where.nom = { [Op.iLike]: `%${filters.search}%` };
 
@@ -20,8 +21,8 @@ const getVilleById = async (id) => {
 };
 
 const createVille = async (data) => {
-  const existing = await Ville.findOne({ where: { nom: data.nom } });
-  if (existing) throw ApiError.conflict('Cette ville existe déjà');
+  const existing = await Ville.findOne({ where: { nom: data.nom, pays: data.pays } });
+  if (existing) throw ApiError.conflict('Cette ville existe déjà pour ce pays');
   const ville = await Ville.create(data);
   return { message: 'Ville créée.', ville };
 };

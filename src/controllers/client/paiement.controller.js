@@ -1,7 +1,6 @@
 const paiementService = require('../../services/client/paiement.service');
-const asyncHandler = require('../../middlewares/asyncHandler');
+const asyncHandler = require('../../utils/asyncHandler');
 const { ok } = require('../../utils/response');
-const { BadRequestError, NotFoundError, ConflictError, UnauthorizedError, ForbiddenError } = require('../../errors/AppError');
 
 const getMesFactures = asyncHandler(async (req, res) => {
   const { page, limit } = req.query;

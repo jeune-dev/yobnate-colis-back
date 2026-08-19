@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const paiementController = require('../../controllers/client/paiement.controller');
 const auth = require('../../middlewares/auth.middleware');
+const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 const validate = require('../../middlewares/validate.middleware');
 const { uuidParam } = require('../../validations/shared');
 
@@ -11,7 +12,7 @@ const { uuidParam } = require('../../validations/shared');
  *   description: Consultation des factures du client connecté
  */
 
-router.use(auth);
+router.use(auth, checkActiveUser);
 
 /**
  * @swagger

@@ -49,11 +49,10 @@ services:
       DB_USER:      ${DB_USER:-yobnate}
       DB_PASSWORD:  ${DB_PASSWORD:-yobante_password}
 
-      # JWT — les 3 secrets doivent être définis et différents (voir config/security.js)
+      # JWT — les 2 secrets doivent être définis et différents (voir config/security.js)
       JWT_SECRET:          ${JWT_SECRET}
       JWT_EXPIRES_IN:      ${JWT_EXPIRES_IN:-1h}
       JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
-      JWT_RESET_SECRET:    ${JWT_RESET_SECRET}
 
       # CORS
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}

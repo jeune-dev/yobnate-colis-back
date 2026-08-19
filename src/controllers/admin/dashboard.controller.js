@@ -1,7 +1,6 @@
 const dashboardService = require('../../services/admin/dashboard.service');
-const asyncHandler = require('../../middlewares/asyncHandler');
+const asyncHandler = require('../../utils/asyncHandler');
 const { ok } = require('../../utils/response');
-const { BadRequestError, NotFoundError, ConflictError, UnauthorizedError, ForbiddenError } = require('../../errors/AppError');
 
 const getStats = asyncHandler(async (req, res) => {
   const result = await dashboardService.getStatsGlobales();

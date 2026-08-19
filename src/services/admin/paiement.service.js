@@ -40,6 +40,9 @@ const enregistrerPaiement = async (factureId, { methode, reference, montant }, a
   if (!facture) throw ApiError.notFound('Facture introuvable');
   if (facture.statut !== 'en_attente') throw ApiError.badRequest('Cette facture n\'est pas en attente de paiement');
   if (facture.Paiement) throw ApiError.conflict('Un paiement existe déjà pour cette facture');
+  if (Number(montant) !== Number(facture.montantTotal)) {
+    throw ApiError.badRequest(`Le montant (${montant}) ne correspond pas au montant de la facture (${facture.montantTotal})`);
+  }
 
   const paiement = await Paiement.create({
     factureId,

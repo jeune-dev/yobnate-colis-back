@@ -13,8 +13,11 @@ Ville.init(
     nom: {
       type: DataTypes.STRING(80),
       allowNull: false,
-      unique: true,
       validate: { notEmpty: true }
+    },
+    pays: {
+      type: DataTypes.ENUM('FR', 'SN'),
+      allowNull: false
     },
     region: {
       type: DataTypes.STRING(80),
@@ -31,7 +34,9 @@ Ville.init(
     modelName: 'Ville',
     tableName: 'villes',
     indexes: [
-      { unique: true, fields: ['nom'] },
+      // Unicité du nom scopée par pays (ex: une ville homonyme FR/SN reste possible)
+      { unique: true, fields: ['nom', 'pays'] },
+      { fields: ['pays'] },
       { fields: ['isActive'] }
     ]
   }

@@ -1,6 +1,6 @@
 const Joi = require('joi');
+const { phone } = require('./shared');
 
-const phone = Joi.string().pattern(/^\+?[0-9]{8,15}$/).message('Numéro de téléphone invalide');
 const uuid = Joi.string().uuid();
 
 const createColisSchema = Joi.object({
@@ -20,8 +20,10 @@ const createColisSchema = Joi.object({
 const updateColisSchema = Joi.object({
   expediteurNom: Joi.string().min(2).max(100),
   expediteurTelephone: phone,
+  villeDepartId: uuid,
   destinataireNom: Joi.string().min(2).max(100),
   destinataireTelephone: phone,
+  villeArriveeId: uuid,
   adresseLivraison: Joi.string().min(5).max(255),
   description: Joi.string().max(255).allow('', null),
   typeColis: Joi.string().valid('standard', 'express', 'fragile'),

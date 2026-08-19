@@ -4,6 +4,7 @@ const auth = require('../../middlewares/auth.middleware');
 const { admin } = require('../../middlewares/admin.middleware');
 const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 const validate = require('../../middlewares/validate.middleware');
+const { appliquerRemiseSchema } = require('../../validations/facture.validation');
 const { uuidParam } = require('../../validations/shared');
 
 /**
@@ -74,5 +75,29 @@ router.get('/:id', validate(uuidParam, 'params'), factureController.getOne);
  *       404: { $ref: '#/components/responses/NotFound' }
  */
 router.patch('/:id/annuler', validate(uuidParam, 'params'), factureController.annuler);
+
+/**
+ * @swagger
+ * /admin/factures/{id}/remise:
+ *   patch:
+ *     tags: [Admin - Factures]
+ *     summary: Appliquer une remise à une facture (uniquement si statut en_attente)
+ *     parameters:
+ *       - $ref: '#/components/parameters/idParam'
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [remise]
+ *             properties:
+ *               remise: { type: number, minimum: 0, description: Montant de la remise en FCFA }
+ *     responses:
+ *       200: { description: Remise appliquée, montantTotal recalculé }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+router.patch('/:id/remise', validate(uuidParam, 'params'), validate(appliquerRemiseSchema), factureController.appliquerRemise);
 
 module.exports = router;

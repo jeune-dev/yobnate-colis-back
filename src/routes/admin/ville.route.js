@@ -14,7 +14,9 @@ const { uuidParam } = require('../../validations/shared');
  *   description: Gestion du référentiel des villes
  */
 
-router.use(auth, checkActiveUser, admin);
+// Lecture ouverte à tout utilisateur connecté (le client mobile en a besoin
+// pour le sélecteur de ville à la création d'un colis) ; écriture réservée aux admins.
+router.use(auth, checkActiveUser);
 
 /**
  * @swagger
@@ -24,6 +26,7 @@ router.use(auth, checkActiveUser, admin);
  *     summary: Lister toutes les villes
  *     parameters:
  *       - { name: search, in: query, schema: { type: string } }
+ *       - { name: pays, in: query, schema: { type: string, enum: [FR, SN] } }
  *       - { name: isActive, in: query, schema: { type: boolean } }
  *     responses:
  *       200:
@@ -71,14 +74,14 @@ router.get('/:id', validate(uuidParam, 'params'), villeController.getOne);
  *             required: [nom, pays]
  *             properties:
  *               nom: { type: string }
- *               pays: { type: string }
- *               code: { type: string }
+ *               pays: { type: string, enum: [FR, SN] }
+ *               region: { type: string }
  *               isActive: { type: boolean, default: true }
  *     responses:
  *       201: { description: Ville créée }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.post('/', validate(createVilleSchema), villeController.create);
+router.post('/', admin, validate(createVilleSchema), villeController.create);
 
 /**
  * @swagger
@@ -96,14 +99,14 @@ router.post('/', validate(createVilleSchema), villeController.create);
  *             type: object
  *             properties:
  *               nom: { type: string }
- *               pays: { type: string }
- *               code: { type: string }
+ *               pays: { type: string, enum: [FR, SN] }
+ *               region: { type: string }
  *               isActive: { type: boolean }
  *     responses:
  *       200: { description: Ville mise à jour }
  *       404: { $ref: '#/components/responses/NotFound' }
  *       409: { $ref: '#/components/responses/Conflict' }
  */
-router.put('/:id', validate(uuidParam, 'params'), validate(updateVilleSchema), villeController.update);
+router.put('/:id', admin, validate(uuidParam, 'params'), validate(updateVilleSchema), villeController.update);
 
 module.exports = router;

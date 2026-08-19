@@ -84,6 +84,8 @@ router.get('/:id', validate(uuidParam, 'params'), colisController.getOne);
  *             type: object
  *             properties:
  *               expediteurNom: { type: string }
+ *               villeDepartId: { type: string, format: uuid }
+ *               villeArriveeId: { type: string, format: uuid }
  *               poids: { type: number }
  *               typeColis: { type: string }
  *               adresseLivraison: { type: string }
