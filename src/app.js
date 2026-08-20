@@ -8,7 +8,7 @@ const { randomUUID } = require('crypto');
 const { corsConfig } = require('./config/security');
 const logger = require('./config/logger');
 const { globalRateLimit } = require('./middlewares/rateLimit.middleware');
-const errorMiddleware = require('./middlewares/error.middleware');
+const { errorMiddleware } = require('./middlewares/error.middleware');
 
 const authRoutes = require('./routes/auth.route');
 const clientColisRoutes = require('./routes/client/colis.route');
