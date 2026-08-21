@@ -21,3 +21,8 @@ exports.updatePreferences = asyncHandler(async (req, res) => {
   const result = await profilService.updatePreferences(req.user.id, req.body);
   return ok(res, { utilisateur: result.utilisateur }, result.message);
 });
+
+exports.updateDeviceToken = asyncHandler(async (req, res) => {
+  const result = await profilService.updateDeviceToken(req.user.id, req.body);
+  return ok(res, {}, result.message);
+});

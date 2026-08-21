@@ -49,6 +49,14 @@ class ProfilService {
     });
     return { message: 'Préférences de notification mises à jour.', utilisateur: user.toSafeJSON() };
   };
+
+  static updateDeviceToken = async (userId, { token, platform }) => {
+    const user = await User.findByPk(userId);
+    if (!user) throw new NotFoundError('Utilisateur introuvable');
+
+    await user.update({ deviceToken: token, devicePlatform: platform });
+    return { message: 'Token de notification enregistré.' };
+  };
 }
 
 module.exports = ProfilService;

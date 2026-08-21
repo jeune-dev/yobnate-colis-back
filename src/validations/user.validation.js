@@ -35,6 +35,11 @@ const updatePreferencesSchema = Joi.object({
   notificationsSms: Joi.boolean(),
 }).min(1);
 
+const updateDeviceTokenSchema = Joi.object({
+  token: Joi.string().max(255).required(),
+  platform: Joi.string().valid('ios', 'android').required(),
+});
+
 const conditionsCommercialesSchema = Joi.object({
   remiseContractuelle: Joi.number().min(0).max(100),
   paiementDiffereAutorise: Joi.boolean(),
@@ -66,6 +71,7 @@ module.exports = {
   updateAdminSchema,
   updateProfilSchema,
   updatePreferencesSchema,
+  updateDeviceTokenSchema,
   conditionsCommercialesSchema,
   createPersonnelSchema,
   updatePersonnelSchema,

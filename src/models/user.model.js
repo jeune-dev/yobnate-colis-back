@@ -85,6 +85,11 @@ User.init(
     avatarUrl: { type: DataTypes.STRING(255), allowNull: true },
     avatarPublicId: { type: DataTypes.STRING(150), allowNull: true },
     lastLoginAt: { type: DataTypes.DATE, allowNull: true },
+
+    // ── Notifications push (mobile) ────────────────────────────────────────
+    /** Dernier token FCM connu de l'appareil du client, pour l'envoi de push. */
+    deviceToken: { type: DataTypes.STRING(255), allowNull: true },
+    devicePlatform: { type: DataTypes.ENUM('ios', 'android'), allowNull: true },
   },
   {
     sequelize,
