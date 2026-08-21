@@ -6,7 +6,7 @@ const { uploadConfig } = require('../config/security');
 const MAGIC_BYTES = [
   { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
   { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47] },
-  { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46] }
+  { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46] },
 ];
 
 const isAllowedFile = (buffer) =>
@@ -24,7 +24,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   limits: { fileSize: uploadConfig.maxFileSize },
-  fileFilter
+  fileFilter,
 });
 
 module.exports = { upload, isAllowedFile };

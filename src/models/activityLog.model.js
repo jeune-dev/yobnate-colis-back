@@ -8,36 +8,36 @@ ActivityLog.init(
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
-      primaryKey: true
+      primaryKey: true,
     },
     userId: {
       type: DataTypes.UUID,
-      allowNull: true
+      allowNull: true,
     },
     action: {
       type: DataTypes.STRING(100),
-      allowNull: false
+      allowNull: false,
     },
     entite: {
       type: DataTypes.STRING(50),
-      allowNull: true
+      allowNull: true,
     },
     entiteId: {
       type: DataTypes.UUID,
-      allowNull: true
+      allowNull: true,
     },
     details: {
       type: DataTypes.JSONB,
-      allowNull: true
+      allowNull: true,
     },
     ipAddress: {
       type: DataTypes.STRING(45),
-      allowNull: true
+      allowNull: true,
     },
     userAgent: {
       type: DataTypes.STRING(255),
-      allowNull: true
-    }
+      allowNull: true,
+    },
   },
   {
     sequelize,
@@ -47,8 +47,8 @@ ActivityLog.init(
     indexes: [
       { fields: ['userId', 'createdAt'] },
       { fields: ['action'] },
-      { fields: ['entite', 'entiteId'] }
-    ]
+      { fields: ['entite', 'entiteId'] },
+    ],
   }
 );
 

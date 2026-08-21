@@ -1,29 +1,38 @@
-const tarifService = require('../../services/admin/tarif.service');
+const service = require('../../services/admin/tarif.service');
 const asyncHandler = require('../../utils/asyncHandler');
+const { ok, created } = require('../../utils/response');
 
-const getAll = asyncHandler(async (req, res) => {
-  const result = await tarifService.getAllTarifs(req.query, req.query);
-  res.status(200).json({ success: true, message: result.message, data: { tarifs: result.tarifs, pagination: result.pagination } });
+exports.getAll = asyncHandler(async (req, res) => {
+  const result = await service.getAllTarifs(req.query, req.query);
+  return ok(res, { tarifs: result.tarifs, pagination: result.pagination }, result.message);
 });
 
-const getOne = asyncHandler(async (req, res) => {
-  const result = await tarifService.getTarifById(req.params.id);
-  res.status(200).json({ success: true, message: result.message, data: { tarif: result.tarif } });
+exports.getOne = asyncHandler(async (req, res) => {
+  const result = await service.getTarifById(req.params.id);
+  return ok(res, { tarif: result.tarif }, result.message);
 });
 
-const create = asyncHandler(async (req, res) => {
-  const result = await tarifService.createTarif(req.body);
-  res.status(201).json({ success: true, message: result.message, data: { tarif: result.tarif } });
+exports.create = asyncHandler(async (req, res) => {
+  const result = await service.createTarif(req.body, req.user.id);
+  return created(res, { tarif: result.tarif }, result.message);
 });
 
-const update = asyncHandler(async (req, res) => {
-  const result = await tarifService.updateTarif(req.params.id, req.body);
-  res.status(200).json({ success: true, message: result.message, data: { tarif: result.tarif } });
+exports.update = asyncHandler(async (req, res) => {
+  const result = await service.updateTarif(req.params.id, req.body, req.user.id);
+  return ok(res, { tarif: result.tarif }, result.message);
 });
 
-const calculerPrix = asyncHandler(async (req, res) => {
-  const result = await tarifService.calculerPrix(req.body);
-  res.status(200).json({ success: true, message: result.message, data: result.simulation });
+exports.remove = asyncHandler(async (req, res) => {
+  const result = await service.deleteTarif(req.params.id, req.user.id);
+  return ok(res, null, result.message);
 });
 
-module.exports = { getAll, getOne, create, update, calculerPrix };
+exports.creerGrille = asyncHandler(async (req, res) => {
+  const result = await service.creerGrille(req.body, req.user.id);
+  return created(res, { tarifs: result.tarifs }, result.message);
+});
+
+exports.audit = asyncHandler(async (req, res) => {
+  const result = await service.auditerGrille();
+  return ok(res, { conforme: result.conforme, anomalies: result.anomalies }, result.message);
+});

@@ -4,7 +4,7 @@ const { rateLimitConfig, authRateLimitConfig } = require('../config/security');
 const _skipEnDev = () => process.env.NODE_ENV !== 'production';
 
 const globalRateLimit = rateLimit(rateLimitConfig);
-const authRateLimit   = rateLimit(authRateLimitConfig);
+const authRateLimit = rateLimit(authRateLimitConfig);
 
 // 3 envois d'OTP / 15 min par email — anti-spam emails de reset
 const otpEmailRateLimit = rateLimit({
@@ -13,8 +13,11 @@ const otpEmailRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: _skipEnDev,
-  keyGenerator: (req) => (req.body?.email || req.ip),
-  message: { success: false, message: 'Trop de codes envoyés à cet email. Réessayez dans 15 minutes.' },
+  keyGenerator: (req) => req.body?.email || req.ip,
+  message: {
+    success: false,
+    message: 'Trop de codes envoyés à cet email. Réessayez dans 15 minutes.',
+  },
 });
 
 // 300 req / 15 min par userId — endpoints authentifiés courants

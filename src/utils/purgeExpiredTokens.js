@@ -10,13 +10,16 @@ const purge = async () => {
     TokenBlacklist.destroy({ where: { expiresAt: { [Op.lt]: now } } }),
     RefreshToken.destroy({ where: { expiresAt: { [Op.lt]: now } } }),
   ]);
-  if (blacklistCount > 0) logger.info(`Purge tokens expirés : ${blacklistCount} entrée(s) supprimée(s)`);
+  if (blacklistCount > 0)
+    logger.info(`Purge tokens expirés : ${blacklistCount} entrée(s) supprimée(s)`);
 };
 
 const startPurgeJob = () => {
   purge().catch((err) => logger.error('Purge tokens : erreur initiale', { message: err.message }));
   setInterval(() => {
-    purge().catch((err) => logger.error('Purge tokens : erreur périodique', { message: err.message }));
+    purge().catch((err) =>
+      logger.error('Purge tokens : erreur périodique', { message: err.message })
+    );
   }, INTERVAL_MS);
 };
 

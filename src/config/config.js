@@ -7,7 +7,7 @@ const base = {
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 5432,
   dialect: 'postgres',
-  define: { freezeTableName: true }
+  define: { freezeTableName: true },
 };
 
 module.exports = {
@@ -16,7 +16,7 @@ module.exports = {
   production: {
     ...base,
     dialectOptions: {
-      ssl: { require: true, rejectUnauthorized: true }
-    }
-  }
+      ssl: { require: true, rejectUnauthorized: true },
+    },
+  },
 };

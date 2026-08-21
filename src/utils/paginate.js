@@ -14,7 +14,7 @@ const paginateResult = (count, page, limit) => {
     totalItems: count,
     totalPages: Math.ceil(count / perPage),
     currentPage,
-    pageSize: perPage
+    pageSize: perPage,
   };
 };
 

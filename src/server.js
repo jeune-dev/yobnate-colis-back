@@ -9,7 +9,10 @@ require('./models/index');
 const { startPurgeJob } = require('./utils/purgeExpiredTokens');
 
 process.on('unhandledRejection', (reason) => {
-  logger.error('unhandledRejection', { message: reason?.message ?? String(reason), stack: reason?.stack });
+  logger.error('unhandledRejection', {
+    message: reason?.message ?? String(reason),
+    stack: reason?.stack,
+  });
   process.exit(1);
 });
 
@@ -50,7 +53,9 @@ const HOST = process.env.HOST || '0.0.0.0';
         try {
           await sequelize.close();
           logger.info('Connexion DB fermée proprement');
-        } catch (_err) { /* ignore */ }
+        } catch (_err) {
+          /* ignore */
+        }
         process.exit(0);
       });
       // Forcer l'arrêt après 10s si le serveur ne se ferme pas
@@ -62,10 +67,8 @@ const HOST = process.env.HOST || '0.0.0.0';
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-
   } catch (err) {
     logger.error('Erreur lors du démarrage', { message: err.message, stack: err.stack });
     process.exit(1);
   }
 })();
-

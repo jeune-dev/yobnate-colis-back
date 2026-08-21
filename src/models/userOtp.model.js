@@ -8,36 +8,36 @@ UserOtp.init(
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
-      primaryKey: true
+      primaryKey: true,
     },
     userId: {
       type: DataTypes.UUID,
-      allowNull: false
+      allowNull: false,
     },
     codeHash: {
       type: DataTypes.STRING(64),
-      allowNull: false
+      allowNull: false,
     },
     type: {
       type: DataTypes.ENUM('reset_password'),
-      allowNull: false
+      allowNull: false,
     },
     expiresAt: {
       type: DataTypes.DATE,
-      allowNull: false
+      allowNull: false,
     },
     isUsed: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: false
-    }
+      defaultValue: false,
+    },
   },
   {
     sequelize,
     modelName: 'UserOtp',
     tableName: 'user_otps',
     updatedAt: false,
-    indexes: [{ fields: ['userId', 'type', 'isUsed'] }]
+    indexes: [{ fields: ['userId', 'type', 'isUsed'] }],
   }
 );
 

@@ -1,8 +1,8 @@
-const ApiError = require('../utils/ApiError');
+const { ForbiddenError } = require('../errors/AppError');
 
 const checkActiveUser = (req, res, next) => {
   if (!req.user.isActive) {
-    return next(ApiError.forbidden('Ce compte a été désactivé'));
+    return next(new ForbiddenError('Ce compte a été désactivé'));
   }
   next();
 };

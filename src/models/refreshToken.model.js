@@ -8,30 +8,27 @@ RefreshToken.init(
     id: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
-      primaryKey: true
+      primaryKey: true,
     },
     userId: {
       type: DataTypes.UUID,
-      allowNull: false
+      allowNull: false,
     },
     tokenHash: {
       type: DataTypes.STRING(64),
-      allowNull: false
+      allowNull: false,
     },
     expiresAt: {
       type: DataTypes.DATE,
-      allowNull: false
-    }
+      allowNull: false,
+    },
   },
   {
     sequelize,
     modelName: 'RefreshToken',
     tableName: 'refresh_tokens',
     updatedAt: false,
-    indexes: [
-      { fields: ['userId'] },
-      { unique: true, fields: ['tokenHash'] }
-    ]
+    indexes: [{ fields: ['userId'] }, { unique: true, fields: ['tokenHash'] }],
   }
 );
 

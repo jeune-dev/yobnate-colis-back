@@ -1,26 +1,44 @@
-const paiementService = require('../../services/admin/paiement.service');
+const service = require('../../services/admin/paiement.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { ok, created } = require('../../utils/response');
+const { envoyerCsv } = require('../../utils/csv');
 
-const getAll = asyncHandler(async (req, res) => {
-  const { userId, statut, methode, dateDebut, dateFin, page, limit } = req.query;
-  const result = await paiementService.getAllPaiements({ userId, statut, methode, dateDebut, dateFin }, { page, limit });
+exports.getAll = asyncHandler(async (req, res) => {
+  const result = await service.getAllPaiements(req.query, req.query);
   return ok(res, { paiements: result.paiements, pagination: result.pagination }, result.message);
 });
 
-const getOne = asyncHandler(async (req, res) => {
-  const result = await paiementService.getPaiementById(req.params.id);
+exports.getOne = asyncHandler(async (req, res) => {
+  const result = await service.getPaiementById(req.params.id);
   return ok(res, { paiement: result.paiement }, result.message);
 });
 
-const enregistrer = asyncHandler(async (req, res) => {
-  const result = await paiementService.enregistrerPaiement(req.params.factureId, req.body, req.user.id);
-  return created(res, { paiement: result.paiement }, result.message);
+exports.enregistrer = asyncHandler(async (req, res) => {
+  const result = await service.enregistrerPaiement(req.params.factureId, req.body, req.user.id);
+  return created(res, { paiement: result.paiement, facture: result.facture }, result.message);
 });
 
-const rembourser = asyncHandler(async (req, res) => {
-  const result = await paiementService.rembourserPaiement(req.params.id, req.user.id);
+exports.rembourser = asyncHandler(async (req, res) => {
+  const result = await service.rembourser(req.params.id, req.body, req.user.id);
   return ok(res, { paiement: result.paiement }, result.message);
 });
 
-module.exports = { getAll, getOne, enregistrer, rembourser };
+exports.marquerEchoue = asyncHandler(async (req, res) => {
+  const result = await service.marquerEchoue(req.params.id, req.body.motif, req.user.id);
+  return ok(res, { paiement: result.paiement }, result.message);
+});
+
+exports.caisse = asyncHandler(async (req, res) => {
+  const result = await service.getCaisseDuPoint(req.params.pointId, req.query.date);
+  return ok(res, { caisse: result.caisse }, result.message);
+});
+
+exports.exporter = asyncHandler(async (req, res) => {
+  const result = await service.exporterCsv(req.query);
+  return envoyerCsv(res, result.contenu, result.nomFichier);
+});
+
+exports.statistiques = asyncHandler(async (req, res) => {
+  const result = await service.getStatistiques(req.query);
+  return ok(res, { statistiques: result.statistiques }, result.message);
+});

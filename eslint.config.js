@@ -30,6 +30,8 @@ module.exports = [
       'eqeqeq': ['error', 'always'],
       'no-var': 'error',
       'prefer-const': 'error',
+      'no-duplicate-imports': 'error',
+      'require-await': 'error',
     },
   },
   {

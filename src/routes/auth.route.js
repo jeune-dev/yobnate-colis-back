@@ -9,7 +9,7 @@ const {
   refreshTokenSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
-  changePasswordSchema
+  changePasswordSchema,
 } = require('../validations/auth.validation');
 
 /**
@@ -134,7 +134,12 @@ router.post('/logout', auth, authController.logout);
  *     responses:
  *       200: { description: Email envoyé si le compte existe }
  */
-router.post('/forgot-password', authRateLimit, validate(forgotPasswordSchema), authController.forgotPassword);
+router.post(
+  '/forgot-password',
+  authRateLimit,
+  validate(forgotPasswordSchema),
+  authController.forgotPassword
+);
 
 /**
  * @swagger
@@ -182,6 +187,11 @@ router.post('/reset-password', validate(resetPasswordSchema), authController.res
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
 router.put('/change-password', auth, validate(changePasswordSchema), authController.changePassword);
-router.patch('/change-password', auth, validate(changePasswordSchema), authController.changePassword);
+router.patch(
+  '/change-password',
+  auth,
+  validate(changePasswordSchema),
+  authController.changePassword
+);
 
 module.exports = router;

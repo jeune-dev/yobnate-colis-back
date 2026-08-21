@@ -2,19 +2,22 @@ const profilService = require('../../services/client/profil.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { ok } = require('../../utils/response');
 
-const get = asyncHandler(async (req, res) => {
+exports.get = asyncHandler(async (req, res) => {
   const result = await profilService.getProfil(req.user.id);
   return ok(res, { utilisateur: result.utilisateur }, result.message);
 });
 
-const update = asyncHandler(async (req, res) => {
+exports.update = asyncHandler(async (req, res) => {
   const result = await profilService.updateProfil(req.user.id, req.body);
   return ok(res, { utilisateur: result.utilisateur }, result.message);
 });
 
-const updateAvatar = asyncHandler(async (req, res) => {
+exports.updateAvatar = asyncHandler(async (req, res) => {
   const result = await profilService.updateAvatar(req.user.id, req.file);
   return ok(res, { utilisateur: result.utilisateur }, result.message);
 });
 
-module.exports = { get, update, updateAvatar };
+exports.updatePreferences = asyncHandler(async (req, res) => {
+  const result = await profilService.updatePreferences(req.user.id, req.body);
+  return ok(res, { utilisateur: result.utilisateur }, result.message);
+});

@@ -4,14 +4,18 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'API Yobnate Colis',
-      version: '1.0.0',
-      description: 'API REST de gestion et suivi de colis — Yobnate Colis'
+      title: 'API Yobnate Express',
+      version: '2.0.0',
+      description:
+        'API REST de transport express de colis entre la France et le Sénégal — Yobnate Express. ' +
+        'Les schémas ci-dessous couvrent les routes historiques encore documentées en JSDoc ; ' +
+        'les nouveaux modules (réseau de points de collecte, tarification, douane, rotations, ' +
+        'réclamations…) sont fonctionnels mais pas encore tous annotés ici — voir le code des routes.',
     },
     servers: [{ url: '/', description: 'Serveur courant' }],
     components: {
       securitySchemes: {
-        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }
+        bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       },
       schemas: {
         // ── Réponses génériques ────────────────────────────────────────────
@@ -20,16 +24,16 @@ const options = {
           properties: {
             success: { type: 'boolean', example: true },
             message: { type: 'string' },
-            data: { type: 'object', nullable: true }
-          }
+            data: { type: 'object', nullable: true },
+          },
         },
         ApiError: {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: false },
             message: { type: 'string' },
-            errors: { type: 'array', items: { type: 'string' }, nullable: true }
-          }
+            errors: { type: 'array', items: { type: 'string' }, nullable: true },
+          },
         },
         Pagination: {
           type: 'object',
@@ -37,8 +41,8 @@ const options = {
             totalItems: { type: 'integer' },
             totalPages: { type: 'integer' },
             currentPage: { type: 'integer' },
-            pageSize: { type: 'integer' }
-          }
+            pageSize: { type: 'integer' },
+          },
         },
         // ── Entités ────────────────────────────────────────────────────────
         User: {
@@ -54,8 +58,8 @@ const options = {
             avatarUrl: { type: 'string', nullable: true },
             lastLoginAt: { type: 'string', format: 'date-time', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
-            updatedAt: { type: 'string', format: 'date-time' }
-          }
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
         },
         Ville: {
           type: 'object',
@@ -63,8 +67,8 @@ const options = {
             id: { type: 'string', format: 'uuid' },
             nom: { type: 'string' },
             region: { type: 'string', nullable: true },
-            isActive: { type: 'boolean' }
-          }
+            isActive: { type: 'boolean' },
+          },
         },
         Tarif: {
           type: 'object',
@@ -76,8 +80,8 @@ const options = {
             prixParKg: { type: 'number' },
             prixFixe: { type: 'number' },
             delaiEstimeJours: { type: 'integer' },
-            isActive: { type: 'boolean' }
-          }
+            isActive: { type: 'boolean' },
+          },
         },
         Colis: {
           type: 'object',
@@ -97,13 +101,24 @@ const options = {
             poids: { type: 'number' },
             valeurDeclaree: { type: 'number', nullable: true },
             montant: { type: 'number', nullable: true },
-            statut: { type: 'string', enum: ['en_attente', 'en_preparation', 'en_transit', 'arrive', 'recupere', 'livre', 'annule'] },
+            statut: {
+              type: 'string',
+              enum: [
+                'en_attente',
+                'en_preparation',
+                'en_transit',
+                'arrive',
+                'recupere',
+                'livre',
+                'annule',
+              ],
+            },
             photos: { type: 'array', items: { type: 'object' } },
             dateLivraisonEstimee: { type: 'string', format: 'date', nullable: true },
             dateLivraisonEffective: { type: 'string', format: 'date-time', nullable: true },
             annuleMotif: { type: 'string', nullable: true },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
+            createdAt: { type: 'string', format: 'date-time' },
+          },
         },
         SuiviColis: {
           type: 'object',
@@ -114,8 +129,8 @@ const options = {
             localisation: { type: 'string', nullable: true },
             commentaire: { type: 'string', nullable: true },
             createdBy: { type: 'string', format: 'uuid', nullable: true },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
+            createdAt: { type: 'string', format: 'date-time' },
+          },
         },
         Facture: {
           type: 'object',
@@ -129,8 +144,8 @@ const options = {
             montantTotal: { type: 'number' },
             statut: { type: 'string', enum: ['en_attente', 'payee', 'annulee'] },
             dateEmission: { type: 'string', format: 'date' },
-            dateLimitePaiement: { type: 'string', format: 'date', nullable: true }
-          }
+            dateLimitePaiement: { type: 'string', format: 'date', nullable: true },
+          },
         },
         Paiement: {
           type: 'object',
@@ -139,11 +154,14 @@ const options = {
             factureId: { type: 'string', format: 'uuid' },
             userId: { type: 'string', format: 'uuid' },
             montant: { type: 'number' },
-            methode: { type: 'string', enum: ['wave', 'orange_money', 'carte', 'virement', 'cash'] },
+            methode: {
+              type: 'string',
+              enum: ['wave', 'orange_money', 'carte', 'virement', 'cash'],
+            },
             statut: { type: 'string', enum: ['en_attente', 'succes', 'echoue', 'rembourse'] },
             reference: { type: 'string', nullable: true },
-            payeAt: { type: 'string', format: 'date-time', nullable: true }
-          }
+            payeAt: { type: 'string', format: 'date-time', nullable: true },
+          },
         },
         Notification: {
           type: 'object',
@@ -155,8 +173,8 @@ const options = {
             type: { type: 'string', enum: ['colis', 'paiement', 'systeme'] },
             isRead: { type: 'boolean' },
             lienCible: { type: 'string', nullable: true },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
+            createdAt: { type: 'string', format: 'date-time' },
+          },
         },
         ActivityLog: {
           type: 'object',
@@ -168,43 +186,52 @@ const options = {
             entiteId: { type: 'string', format: 'uuid', nullable: true },
             details: { type: 'object', nullable: true },
             ipAddress: { type: 'string', nullable: true },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
-        }
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
       },
       // ── Réponses réutilisables ─────────────────────────────────────────
       responses: {
         Unauthorized: {
           description: 'Token manquant, invalide ou expiré',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
         },
         Forbidden: {
           description: 'Permissions insuffisantes',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
         },
         NotFound: {
           description: 'Ressource introuvable',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
         },
         BadRequest: {
           description: 'Données invalides',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
         },
         Conflict: {
           description: 'Conflit de données',
-          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } }
-        }
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/ApiError' } } },
+        },
       },
       // ── Paramètres réutilisables ───────────────────────────────────────
       parameters: {
-        idParam: { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+        idParam: {
+          name: 'id',
+          in: 'path',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        },
         pageParam: { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
-        limitParam: { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } }
-      }
+        limitParam: {
+          name: 'limit',
+          in: 'query',
+          schema: { type: 'integer', default: 20, maximum: 100 },
+        },
+      },
     },
-    security: [{ bearerAuth: [] }]
+    security: [{ bearerAuth: [] }],
   },
-  apis: ['./src/routes/**/*.js']
+  apis: ['./src/routes/**/*.js'],
 };
 
 module.exports = swaggerJsdoc(options);

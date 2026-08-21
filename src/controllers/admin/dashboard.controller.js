@@ -1,54 +1,53 @@
-const dashboardService = require('../../services/admin/dashboard.service');
+const service = require('../../services/admin/dashboard.service');
 const asyncHandler = require('../../utils/asyncHandler');
 const { ok } = require('../../utils/response');
 
-const getStats = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getStatsGlobales();
-  return ok(res, result.stats, result.message);
+exports.stats = asyncHandler(async (req, res) => {
+  const result = await service.getStatsGlobales();
+  return ok(res, { stats: result.stats }, result.message);
 });
 
-const getColisParStatut = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getColisParStatut();
+exports.parStatut = asyncHandler(async (req, res) => {
+  const result = await service.getColisParStatut();
   return ok(res, { parStatut: result.parStatut }, result.message);
 });
 
-const getUtilisateursActifs = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getUtilisateursActifs(Number(req.query.limit) || 10);
+exports.parPays = asyncHandler(async (req, res) => {
+  const result = await service.getVueParPays();
+  return ok(res, { pays: result.pays }, result.message);
+});
+
+exports.utilisateursActifs = asyncHandler(async (req, res) => {
+  const result = await service.getUtilisateursActifs(Number(req.query.limit) || 10);
   return ok(res, { utilisateurs: result.utilisateurs }, result.message);
 });
 
-const getVillesFrequentes = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getVillesFrequentes('villeDepartId', Number(req.query.limit) || 10);
+exports.villesDepart = asyncHandler(async (req, res) => {
+  const result = await service.getVillesFrequentes('villeDepartId', Number(req.query.limit) || 10);
   return ok(res, { villes: result.villes }, result.message);
 });
 
-const getDestinationsFrequentes = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getVillesFrequentes('villeArriveeId', Number(req.query.limit) || 10);
+exports.villesArrivee = asyncHandler(async (req, res) => {
+  const result = await service.getVillesFrequentes('villeArriveeId', Number(req.query.limit) || 10);
   return ok(res, { villes: result.villes }, result.message);
 });
 
-const getActivitesRecentes = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getDernieresActivites(Number(req.query.limit) || 20);
+exports.activites = asyncHandler(async (req, res) => {
+  const result = await service.getDernieresActivites(Number(req.query.limit) || 20);
   return ok(res, { activites: result.activites }, result.message);
 });
 
-const getDerniersUtilisateurs = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getDerniersUtilisateurs(Number(req.query.limit) || 10);
+exports.derniersUtilisateurs = asyncHandler(async (req, res) => {
+  const result = await service.getDerniersUtilisateurs(Number(req.query.limit) || 10);
   return ok(res, { utilisateurs: result.utilisateurs }, result.message);
 });
 
-const getDerniersColis = asyncHandler(async (req, res) => {
-  const result = await dashboardService.getDerniersColis(Number(req.query.limit) || 10);
+exports.derniersColis = asyncHandler(async (req, res) => {
+  const result = await service.getDerniersColis(Number(req.query.limit) || 10);
   return ok(res, { colis: result.colis }, result.message);
 });
 
-module.exports = {
-  getStats,
-  getColisParStatut,
-  getUtilisateursActifs,
-  getVillesFrequentes,
-  getDestinationsFrequentes,
-  getActivitesRecentes,
-  getDerniersUtilisateurs,
-  getDerniersColis
-};
+exports.pointsAttention = asyncHandler(async (req, res) => {
+  const result = await service.getPointsAttention(Number(req.query.limit) || 20);
+  return ok(res, { pointsAttention: result.pointsAttention }, result.message);
+});

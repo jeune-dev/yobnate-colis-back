@@ -1,11 +1,11 @@
 const streamifier = require('streamifier');
 const cloudinary = require('../config/cloudinary');
 const { isAllowedFile } = require('../middlewares/upload.middleware');
-const ApiError = require('./ApiError');
+const { BadRequestError } = require('../errors/AppError');
 
 const uploadToCloudinary = (buffer, { folder = 'yobnate-colis', resourceType = 'image' } = {}) => {
   if (!isAllowedFile(buffer)) {
-    throw ApiError.badRequest('Fichier invalide ou corrompu');
+    throw new BadRequestError('Fichier invalide ou corrompu');
   }
 
   return new Promise((resolve, reject) => {

@@ -100,6 +100,12 @@ router.post('/', superAdmin, validate(createAdminSchema), adminController.create
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
  */
-router.put('/:id', superAdmin, validate(uuidParam, 'params'), validate(updateAdminSchema), adminController.update);
+router.put(
+  '/:id',
+  superAdmin,
+  validate(uuidParam, 'params'),
+  validate(updateAdminSchema),
+  adminController.update
+);
 
 module.exports = router;

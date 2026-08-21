@@ -1,18 +1,20 @@
-const ApiError = require('../utils/ApiError');
+// ─────────────────────────────────────────────────────────────
+// middlewares/validate.middleware.js — Validation Joi centralisée
+// Propage l'erreur Joi brute au gestionnaire d'erreurs global via next(err)
+// pour garantir un format de réponse uniforme (voir error.middleware.js).
+// ─────────────────────────────────────────────────────────────
+const validate =
+  (schema, source = 'body') =>
+  (req, res, next) => {
+    const { error, value } = schema.validate(req[source], {
+      abortEarly: false,
+      stripUnknown: true,
+    });
 
-const validate = (schema, target = 'body') => (req, res, next) => {
-  const { error, value } = schema.validate(req[target], {
-    abortEarly: false,
-    stripUnknown: true
-  });
+    if (error) return next(error);
 
-  if (error) {
-    const errors = error.details.map((d) => d.message.replace(/"/g, ''));
-    return next(ApiError.badRequest('Données invalides', errors));
-  }
-
-  req[target] = value;
-  next();
-};
+    req[source] = value;
+    next();
+  };
 
 module.exports = validate;
