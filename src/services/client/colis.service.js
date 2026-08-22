@@ -584,6 +584,36 @@ class ColisService {
     };
   };
 
+  /**
+   * Expéditions dont l'utilisateur connecté est le destinataire (rapprochement
+   * par numéro de téléphone, aucun lien `userId` n'existe côté destinataire).
+   */
+  static getMesReceptions = async (telephone, filters = {}, pagination = {}) => {
+    const where = { destinataireTelephone: telephone };
+    if (filters.statut) where.statut = filters.statut;
+    if (filters.dateDebut || filters.dateFin) {
+      where.createdAt = {};
+      if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
+      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+    }
+
+    const { limit, offset } = paginate(pagination);
+    const { rows, count } = await Colis.findAndCountAll({
+      where,
+      include: ColisService.INCLUDE_LISTE,
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true,
+    });
+
+    return {
+      message: 'Colis reçus',
+      colis: rows.map((c) => ({ ...c.toJSON(), enRetard: c.estEnRetard })),
+      pagination: paginateResult(count, pagination.page, pagination.limit),
+    };
+  };
+
   static chargerExpeditionDuClient = async (userId, colisId) => {
     const colis = await Colis.findOne({
       where: { id: colisId, userId },

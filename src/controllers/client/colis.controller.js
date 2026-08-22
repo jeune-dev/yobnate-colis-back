@@ -26,6 +26,11 @@ exports.getMes = asyncHandler(async (req, res) => {
   return ok(res, { colis: result.colis, pagination: result.pagination }, result.message);
 });
 
+exports.getRecus = asyncHandler(async (req, res) => {
+  const result = await service.getMesReceptions(req.user.telephone, req.query, req.query);
+  return ok(res, { colis: result.colis, pagination: result.pagination }, result.message);
+});
+
 exports.getOne = asyncHandler(async (req, res) => {
   const result = await service.getExpeditionById(req.user.id, req.params.id);
   return ok(res, { colis: result.colis }, result.message);

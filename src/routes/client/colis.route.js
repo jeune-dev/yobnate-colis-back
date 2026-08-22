@@ -18,6 +18,7 @@ router.use(auth, checkActiveUser);
 
 router.post('/devis', validate(devisSchema), ctrl.devis);
 router.get('/', ctrl.getMes);
+router.get('/recus', ctrl.getRecus);
 router.post(
   '/',
   upload.array('photos', 10),
