@@ -8,6 +8,7 @@ const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
 router.use(auth, checkActiveUser, admin);
 
 router.get('/stats', ctrl.stats);
+router.get('/kpis', ctrl.kpis);
 router.get('/colis-par-statut', ctrl.parStatut);
 router.get('/par-pays', ctrl.parPays);
 router.get('/utilisateurs-actifs', ctrl.utilisateursActifs);

@@ -14,8 +14,12 @@ exports.register = asyncHandler(async (req, res) => {
 });
 
 exports.login = asyncHandler(async (req, res) => {
-  const { email, password } = req.body;
-  const result = await authService.login(email, password, requestMeta(req));
+  const { identifiant, email, telephone, password } = req.body;
+  const result = await authService.login(
+    { identifiant, email, telephone },
+    password,
+    requestMeta(req)
+  );
   res.cookie(REFRESH_COOKIE, result.refreshToken, refreshCookieOptions);
   return ok(
     res,
@@ -53,6 +57,31 @@ exports.logout = asyncHandler(async (req, res) => {
   const accessToken = req.headers.authorization?.split(' ')[1];
   const result = await authService.logout(refreshToken, accessToken);
   res.clearCookie(REFRESH_COOKIE, cookieConfig);
+  return ok(res, null, result.message);
+});
+
+exports.verifierEmail = asyncHandler(async (req, res) => {
+  const result = await authService.verifierEmail(req.body.token);
+  return ok(res, null, result.message);
+});
+
+/** Lien cliqué directement depuis l'email : page de confirmation minimale. */
+exports.verifierEmailLien = asyncHandler(async (req, res) => {
+  let titre;
+  try {
+    titre = (await authService.verifierEmail(req.params.token)).message;
+  } catch (err) {
+    titre = err.message;
+  }
+  const { gabarit } = require('../utils/mailer');
+  return res
+    .status(200)
+    .type('html')
+    .send(gabarit({ titre, corps: '' }));
+});
+
+exports.renvoyerVerification = asyncHandler(async (req, res) => {
+  const result = await authService.renvoyerVerification(req.body.email);
   return ok(res, null, result.message);
 });
 

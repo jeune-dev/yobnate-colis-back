@@ -1,6 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
 const { CODES_PAYS } = require('../constants/pays');
+const { ETATS_MARCHANDISE } = require('../constants/colis');
 
 /**
  * Ligne d'une déclaration douanière — un article de la facture commerciale.
@@ -42,13 +43,15 @@ ArticleDouane.init(
       validate: { min: 0, max: 100 },
     },
     marque: { type: DataTypes.STRING(80), allowNull: true },
+    /** Neuf ou d'occasion : repris à l'inventaire imprimé de chaque chargement. */
+    etat: { type: DataTypes.ENUM(...ETATS_MARCHANDISE), allowNull: true },
     ordre: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 1 },
   },
   {
     sequelize,
     modelName: 'ArticleDouane',
     tableName: 'articles_douane',
-    indexes: [{ fields: ['declarationId'] }, { fields: ['codeSh'] }],
+    indexes: [{ fields: ['declarationId'] }, { fields: ['codeSh'] }, { fields: ['designation'] }],
   }
 );
 

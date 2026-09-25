@@ -56,6 +56,15 @@ Ville.init(
       allowNull: false,
       defaultValue: false,
     },
+    /**
+     * La ville relève de la colonne « Dakar » de la grille forfaitaire ; sinon
+     * c'est le prix « autres régions » qui s'applique.
+     */
+    zoneTarifDakar: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
     /** La livraison à domicile est-elle assurée dans cette ville ? */
     livraisonDomicileDisponible: {
       type: DataTypes.BOOLEAN,

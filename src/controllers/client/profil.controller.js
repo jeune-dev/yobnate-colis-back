@@ -22,6 +22,16 @@ exports.updatePreferences = asyncHandler(async (req, res) => {
   return ok(res, { utilisateur: result.utilisateur }, result.message);
 });
 
+exports.deposerJustificatifPro = asyncHandler(async (req, res) => {
+  const result = await profilService.deposerJustificatifPro(req.user.id, req.file);
+  return ok(res, { utilisateur: result.utilisateur }, result.message);
+});
+
+exports.parrainage = asyncHandler(async (req, res) => {
+  const result = await profilService.getParrainage(req.user.id);
+  return ok(res, { parrainage: result.parrainage }, result.message);
+});
+
 exports.updateDeviceToken = asyncHandler(async (req, res) => {
   const result = await profilService.updateDeviceToken(req.user.id, req.body);
   return ok(res, {}, result.message);

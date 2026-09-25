@@ -18,6 +18,8 @@ const JourFerie = require('./jourFerie.model');
 const ServiceExpedition = require('./serviceExpedition.model');
 const Tarif = require('./tarif.model');
 const Surcharge = require('./surcharge.model');
+const ArticleTarif = require('./articleTarif.model');
+const Emballage = require('./emballage.model');
 
 // ── Expédition ───────────────────────────────────────────────────────────────
 const Colis = require('./colis.model');
@@ -27,6 +29,7 @@ const Rotation = require('./rotation.model');
 const DemandeEnlevement = require('./demandeEnlevement.model');
 const PreuveLivraison = require('./preuveLivraison.model');
 const AbonnementSuivi = require('./abonnementSuivi.model');
+const TourneeCollecte = require('./tourneeCollecte.model');
 
 // ── Douane ───────────────────────────────────────────────────────────────────
 const DeclarationDouane = require('./declarationDouane.model');
@@ -41,6 +44,8 @@ const Reclamation = require('./reclamation.model');
 const MessageReclamation = require('./messageReclamation.model');
 const Notification = require('./notification.model');
 const ActivityLog = require('./activityLog.model');
+const Annonce = require('./annonce.model');
+const ModeleEmail = require('./modeleEmail.model');
 
 /* ────────────────────────────────────────────────────────────────────────────
  * Comptes
@@ -53,6 +58,9 @@ User.hasMany(UserOtp, { foreignKey: 'userId', onDelete: 'CASCADE' });
 UserOtp.belongsTo(User, { foreignKey: 'userId' });
 
 User.belongsTo(Ville, { foreignKey: 'villeId', as: 'ville' });
+// Parrainage : un parrain, plusieurs filleuls
+User.belongsTo(User, { foreignKey: 'parrainId', as: 'parrain' });
+User.hasMany(User, { foreignKey: 'parrainId', as: 'filleuls' });
 // Point d'affectation d'un agent de point de collecte
 User.belongsTo(PointCollecte, { foreignKey: 'pointCollecteId', as: 'pointAffectation' });
 
@@ -158,6 +166,20 @@ PreuveLivraison.belongsTo(Colis, { foreignKey: 'colisId' });
 PreuveLivraison.belongsTo(User, { foreignKey: 'remisPar', as: 'agent' });
 PreuveLivraison.belongsTo(PointCollecte, { foreignKey: 'pointRetraitId', as: 'pointRetrait' });
 
+// Tournées de collecte à domicile
+TourneeCollecte.hasMany(Colis, { foreignKey: 'tourneeCollecteId', as: 'colis' });
+Colis.belongsTo(TourneeCollecte, { foreignKey: 'tourneeCollecteId', as: 'tourneeCollecte' });
+TourneeCollecte.hasMany(DemandeEnlevement, { foreignKey: 'tourneeCollecteId', as: 'demandes' });
+DemandeEnlevement.belongsTo(TourneeCollecte, {
+  foreignKey: 'tourneeCollecteId',
+  as: 'tourneeCollecte',
+});
+TourneeCollecte.belongsTo(User, { foreignKey: 'coursierId', as: 'coursier' });
+TourneeCollecte.belongsTo(PointCollecte, { foreignKey: 'pointDepotId', as: 'pointDepot' });
+TourneeCollecte.belongsTo(User, { foreignKey: 'creePar', as: 'auteur' });
+
+Colis.belongsTo(User, { foreignKey: 'validePar', as: 'validateur' });
+
 Colis.hasMany(AbonnementSuivi, { foreignKey: 'colisId', as: 'abonnements', onDelete: 'CASCADE' });
 AbonnementSuivi.belongsTo(Colis, { foreignKey: 'colisId' });
 
@@ -221,6 +243,9 @@ Notification.belongsTo(User, { foreignKey: 'userId' });
 User.hasMany(ActivityLog, { foreignKey: 'userId', onDelete: 'SET NULL' });
 ActivityLog.belongsTo(User, { foreignKey: 'userId' });
 
+Annonce.belongsTo(User, { foreignKey: 'creePar', as: 'auteur' });
+ModeleEmail.belongsTo(User, { foreignKey: 'modifiePar', as: 'auteur' });
+
 module.exports = {
   sequelize,
   // Comptes
@@ -239,6 +264,8 @@ module.exports = {
   ServiceExpedition,
   Tarif,
   Surcharge,
+  ArticleTarif,
+  Emballage,
   // Expédition
   Colis,
   ColisPiece,
@@ -247,6 +274,7 @@ module.exports = {
   DemandeEnlevement,
   PreuveLivraison,
   AbonnementSuivi,
+  TourneeCollecte,
   // Douane
   DeclarationDouane,
   ArticleDouane,
@@ -258,4 +286,6 @@ module.exports = {
   MessageReclamation,
   Notification,
   ActivityLog,
+  Annonce,
+  ModeleEmail,
 };

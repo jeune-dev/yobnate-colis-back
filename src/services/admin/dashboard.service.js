@@ -33,6 +33,83 @@ class DashboardService {
   };
   static startOfMonth = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
+  /**
+   * Indicateurs commerciaux de l'activité expédition sur une période (30 jours
+   * par défaut) : ventes et panier moyen par devise, revenu par client, taux de
+   * fidélisation, part des commandes passées par de nouveaux clients, répartition
+   * par catégorie et demandes en attente d'étude.
+   */
+  static getKpis = async ({ dateDebut, dateFin } = {}) => {
+    const fin = dateFin ? new Date(dateFin) : new Date();
+    const debut = dateDebut ? new Date(dateDebut) : new Date(fin.getTime() - 30 * 24 * 3600 * 1000);
+    const cle = `dashboard:kpis:${debut.toISOString().slice(0, 10)}:${fin.toISOString().slice(0, 10)}`;
+    const enCache = cache.get(cle);
+    if (enCache) return enCache;
+
+    const replacements = { debut, fin };
+    const valides = `c."statut" NOT IN ('annule', 'refuse') AND c."createdAt" BETWEEN :debut AND :fin`;
+
+    const [[ventes], [clients], [categories], [etude]] = await Promise.all([
+      sequelize.query(
+        `SELECT c."devise", COUNT(*)::int AS "commandes",
+                COALESCE(SUM(c."montantTotal"), 0)::float AS "chiffreAffaires",
+                COALESCE(AVG(NULLIF(c."montantTotal", 0)), 0)::float AS "panierMoyen",
+                COUNT(DISTINCT c."userId")::int AS "clients"
+           FROM colis c WHERE ${valides} GROUP BY c."devise"`,
+        { replacements }
+      ),
+      sequelize.query(
+        `WITH periode AS (
+           SELECT c."userId", COUNT(*) AS n FROM colis c WHERE ${valides} GROUP BY c."userId"
+         ), premieres AS (
+           SELECT "userId", MIN("createdAt") AS premiere FROM colis
+            WHERE "statut" NOT IN ('annule', 'refuse') GROUP BY "userId"
+         )
+         SELECT COUNT(*)::int AS "clientsActifs",
+                COUNT(*) FILTER (WHERE p.n >= 2)::int AS "clientsRecurrents",
+                COUNT(*) FILTER (WHERE pr.premiere BETWEEN :debut AND :fin)::int AS "nouveauxClients",
+                COALESCE(SUM(p.n) FILTER (WHERE pr.premiere BETWEEN :debut AND :fin), 0)::int
+                  AS "commandesNouveauxClients",
+                COALESCE(SUM(p.n), 0)::int AS "commandes"
+           FROM periode p JOIN premieres pr ON pr."userId" = p."userId"`,
+        { replacements }
+      ),
+      sequelize.query(
+        `SELECT c."categorie", COUNT(*)::int AS "total" FROM colis c WHERE ${valides}
+          GROUP BY c."categorie"`,
+        { replacements }
+      ),
+      sequelize.query(
+        `SELECT COUNT(*) FILTER (WHERE "statut" = 'en_attente_validation')::int AS "aEtudier",
+                COUNT(*) FILTER (WHERE "statut" = 'en_attente_validation'
+                                   AND "dateLimiteEtude" < NOW())::int AS "etudeEnRetard",
+                COUNT(*) FILTER (WHERE "statut" = 'devis_propose')::int AS "propositionsEnAttente"
+           FROM colis`
+      ),
+    ]);
+
+    const c = clients[0] || {};
+    const taux = (num, den) => (den ? Number(((num / den) * 100).toFixed(1)) : 0);
+    const result = {
+      message: 'Indicateurs de performance',
+      kpis: {
+        periode: { debut, fin },
+        ventes: ventes.map((v) => ({
+          ...v,
+          revenuParClient: v.clients ? Number((v.chiffreAffaires / v.clients).toFixed(2)) : 0,
+        })),
+        clientsActifs: c.clientsActifs || 0,
+        tauxFidelisation: taux(c.clientsRecurrents, c.clientsActifs),
+        nouveauxClients: c.nouveauxClients || 0,
+        partCommandesNouveauxClients: taux(c.commandesNouveauxClients, c.commandes),
+        parCategorie: categories,
+        etude: etude[0],
+      },
+    };
+    cache.set(cle, result, DashboardService.STATS_TTL);
+    return result;
+  };
+
   static computeColisParStatut = async () => {
     const rows = await Colis.findAll({
       attributes: ['statut', [sequelize.fn('COUNT', sequelize.col('id')), 'total']],

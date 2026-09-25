@@ -17,6 +17,8 @@ router.get('/', ctrl.get);
 router.put('/', validate(updateProfilSchema), ctrl.update);
 router.post('/avatar', upload.single('avatar'), ctrl.updateAvatar);
 router.put('/preferences', validate(updatePreferencesSchema), ctrl.updatePreferences);
+router.post('/justificatif-pro', upload.single('justificatif'), ctrl.deposerJustificatifPro);
+router.get('/parrainage', ctrl.parrainage);
 router.post('/device-token', validate(updateDeviceTokenSchema), ctrl.updateDeviceToken);
 
 module.exports = router;

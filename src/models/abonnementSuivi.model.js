@@ -13,7 +13,11 @@ AbonnementSuivi.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     colisId: { type: DataTypes.UUID, allowNull: false },
-    canal: { type: DataTypes.ENUM('email', 'sms'), allowNull: false, defaultValue: 'email' },
+    canal: {
+      type: DataTypes.ENUM('email', 'sms', 'whatsapp'),
+      allowNull: false,
+      defaultValue: 'email',
+    },
     destination: { type: DataTypes.STRING(150), allowNull: false, validate: { notEmpty: true } },
     /** Rôle de l'abonné, pour adapter le contenu du message. */
     profil: {

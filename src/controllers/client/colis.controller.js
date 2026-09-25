@@ -15,7 +15,10 @@ exports.declarer = asyncHandler(async (req, res) => {
       colis: result.colis,
       facture: result.facture,
       declarationDouane: result.declarationDouane,
+      enlevement: result.enlevement,
       devis: result.devis,
+      lienPaiement: result.lienPaiement,
+      adresseReception: result.adresseReception,
     },
     result.message
   );
@@ -43,6 +46,30 @@ exports.suivi = asyncHandler(async (req, res) => {
 
 exports.annuler = asyncHandler(async (req, res) => {
   const result = await service.annulerExpedition(req.user.id, req.params.id, req.body.motif);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
+exports.modifier = asyncHandler(async (req, res) => {
+  const result = await service.modifierExpedition(req.user.id, req.params.id, req.body);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
+exports.accepterProposition = asyncHandler(async (req, res) => {
+  const result = await service.accepterProposition(req.user.id, req.params.id);
+  return ok(
+    res,
+    { colis: result.colis, facture: result.facture, lienPaiement: result.lienPaiement },
+    result.message
+  );
+});
+
+exports.refuserProposition = asyncHandler(async (req, res) => {
+  const result = await service.refuserProposition(req.user.id, req.params.id, req.body.motif);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
+exports.deposerVocal = asyncHandler(async (req, res) => {
+  const result = await service.deposerVocal(req.user.id, req.params.id, req.files?.vocal?.[0]);
   return ok(res, { colis: result.colis }, result.message);
 });
 

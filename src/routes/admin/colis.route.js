@@ -13,6 +13,9 @@ const {
   changerPointRetraitSchema,
   affecterCoursierSchema,
   noteInterneSchema,
+  validerDemandeSchema,
+  refuserDemandeSchema,
+  proposerTarifSchema,
 } = require('../../validations/colis.validation');
 const { uuidParam } = require('../../validations/shared');
 
@@ -39,6 +42,28 @@ router.post(
   admin,
   validate(enregistrerEvenementLotSchema),
   ctrl.enregistrerEvenementLot
+);
+// Étude des demandes : validation (cat. 2), refus, proposition tarifaire (cat. 3)
+router.post(
+  '/:id/valider',
+  admin,
+  validate(uuidParam, 'params'),
+  validate(validerDemandeSchema),
+  ctrl.valider
+);
+router.post(
+  '/:id/refuser',
+  admin,
+  validate(uuidParam, 'params'),
+  validate(refuserDemandeSchema),
+  ctrl.refuser
+);
+router.post(
+  '/:id/proposition',
+  admin,
+  validate(uuidParam, 'params'),
+  validate(proposerTarifSchema),
+  ctrl.proposerTarif
 );
 router.post(
   '/:id/pesee',

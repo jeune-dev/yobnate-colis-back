@@ -51,3 +51,8 @@ exports.pointsAttention = asyncHandler(async (req, res) => {
   const result = await service.getPointsAttention(Number(req.query.limit) || 20);
   return ok(res, { pointsAttention: result.pointsAttention }, result.message);
 });
+
+exports.kpis = asyncHandler(async (req, res) => {
+  const result = await service.getKpis(req.query);
+  return ok(res, { kpis: result.kpis }, result.message);
+});

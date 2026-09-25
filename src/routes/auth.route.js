@@ -8,6 +8,8 @@ const {
   loginSchema,
   refreshTokenSchema,
   forgotPasswordSchema,
+  verifierEmailSchema,
+  renvoyerVerificationSchema,
   resetPasswordSchema,
   changePasswordSchema,
 } = require('../validations/auth.validation');
@@ -101,6 +103,20 @@ router.post('/login', authRateLimit, validate(loginSchema), authController.login
  *       200: { description: Nouveau accessToken émis }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
+// Confirmation de l'adresse email (lien envoyé à l'inscription)
+router.post('/verify-email', validate(verifierEmailSchema), authController.verifierEmail);
+router.get(
+  '/verify-email/:token',
+  validate(verifierEmailSchema, 'params'),
+  authController.verifierEmailLien
+);
+router.post(
+  '/resend-verification',
+  authRateLimit,
+  validate(renvoyerVerificationSchema),
+  authController.renvoyerVerification
+);
+
 router.post('/refresh-token', validate(refreshTokenSchema), authController.refreshToken);
 
 /**

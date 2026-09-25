@@ -1,0 +1,23 @@
+const router = require('express').Router();
+const ctrl = require('../../controllers/admin/articleTarif.controller');
+const auth = require('../../middlewares/auth.middleware');
+const { admin } = require('../../middlewares/admin.middleware');
+const checkActiveUser = require('../../middlewares/checkActiveUser.middleware');
+const validate = require('../../middlewares/validate.middleware');
+const { upload } = require('../../middlewares/upload.middleware');
+const {
+  createArticleTarifSchema,
+  updateArticleTarifSchema,
+} = require('../../validations/catalogue.validation');
+const { uuidParam } = require('../../validations/shared');
+
+/** Grille forfaitaire : prix par article, colonnes Dakar et autres régions. */
+router.use(auth, checkActiveUser, admin);
+
+router.get('/', ctrl.getAll);
+router.post('/', validate(createArticleTarifSchema), ctrl.create);
+router.put('/:id', validate(uuidParam, 'params'), validate(updateArticleTarifSchema), ctrl.update);
+router.delete('/:id', validate(uuidParam, 'params'), ctrl.remove);
+router.post('/:id/photo', validate(uuidParam, 'params'), upload.single('photo'), ctrl.photo);
+
+module.exports = router;

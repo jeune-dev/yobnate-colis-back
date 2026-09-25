@@ -19,7 +19,7 @@ UserOtp.init(
       allowNull: false,
     },
     type: {
-      type: DataTypes.ENUM('reset_password'),
+      type: DataTypes.ENUM('reset_password', 'verification_email'),
       allowNull: false,
     },
     expiresAt: {

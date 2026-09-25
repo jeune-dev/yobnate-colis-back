@@ -25,6 +25,8 @@ Rotation.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     reference: { type: DataTypes.STRING(30), allowNull: false, unique: true },
+    /** Numéro d'ordre du conteneur (01, 02…), repris dans les numéros de suivi. */
+    numeroOrdre: { type: DataTypes.INTEGER, allowNull: true },
     modeTransport: {
       type: DataTypes.ENUM(...MODES_TRANSPORT),
       allowNull: false,

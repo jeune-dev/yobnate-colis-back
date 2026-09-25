@@ -10,8 +10,16 @@ const {
   ForbiddenError,
   ConflictError,
 } = require('../errors/AppError');
-const { sendOtpEmail, sendBienvenueEmail } = require('../utils/mailer');
+const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const {
+  sendOtpEmail,
+  sendBienvenueEmail,
+  envoyerModele,
+  URL_PUBLIQUE,
+} = require('../utils/mailer');
+const { genererCodeParrainage } = require('../utils/referenceGenerator');
 const { logActivity } = require('./activityLog.service');
+const parametreService = require('./parametre.service');
 
 class AuthService {
   static OTP_TTL_MS = 10 * 60 * 1000;
@@ -29,6 +37,79 @@ class AuthService {
       expiresAt: new Date(Date.now() + AuthService.OTP_TTL_MS),
     });
     await sendOtpEmail(user, code);
+  };
+
+  static VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+  /**
+   * Lien de confirmation de l'adresse email. Le jeton n'est stocké qu'haché ;
+   * le lien pointe vers l'API (API_PUBLIC_URL) ou, à défaut, vers l'application
+   * qui transmet le jeton à POST /auth/verify-email.
+   */
+  static envoyerLienVerification = async (user) => {
+    const token = crypto.randomBytes(32).toString('hex');
+    await UserOtp.update(
+      { isUsed: true },
+      { where: { userId: user.id, type: 'verification_email', isUsed: false } }
+    );
+    await UserOtp.create({
+      userId: user.id,
+      codeHash: AuthService.sha256(token),
+      type: 'verification_email',
+      expiresAt: new Date(Date.now() + AuthService.VERIFICATION_TTL_MS),
+    });
+    const baseApi = process.env.API_PUBLIC_URL;
+    const lien = baseApi
+      ? `${baseApi}/auth/verify-email/${token}`
+      : `${URL_PUBLIQUE}/verifier-email?token=${token}`;
+    await envoyerModele('verification_email', user.email, { prenom: user.prenom, lien });
+  };
+
+  static verifierEmail = async (token) => {
+    const otp = await UserOtp.findOne({
+      where: { codeHash: AuthService.sha256(String(token)), type: 'verification_email' },
+    });
+    if (!otp || otp.isUsed || otp.expiresAt < new Date()) {
+      throw new BadRequestError('Lien de confirmation invalide ou expiré');
+    }
+    const user = await User.findByPk(otp.userId);
+    if (!user) throw new BadRequestError('Lien de confirmation invalide ou expiré');
+    await otp.update({ isUsed: true });
+    await user.update({ emailVerifie: true });
+    await logActivity({
+      userId: user.id,
+      action: 'auth.verify_email',
+      entite: 'User',
+      entiteId: user.id,
+    });
+    await sendBienvenueEmail(user).catch(() => {});
+    return { message: 'Adresse email confirmée. Vous pouvez vous connecter.' };
+  };
+
+  static renvoyerVerification = async (email) => {
+    const user = await User.findOne({ where: { email } });
+    if (user && !user.emailVerifie) await AuthService.envoyerLienVerification(user);
+    return { message: 'Si un compte non confirmé existe, un nouveau lien a été envoyé.' };
+  };
+
+  /** Recherche le compte par email ou par téléphone (normalisé au format international). */
+  static trouverParIdentifiant = ({ identifiant, email, telephone }) => {
+    const valeur = String(identifiant || email || telephone || '').trim();
+    if (valeur.includes('@')) {
+      return User.findOne({
+        where: User.sequelize.where(
+          User.sequelize.fn('lower', User.sequelize.col('email')),
+          valeur.toLowerCase()
+        ),
+      });
+    }
+    const numero = parsePhoneNumberFromString(valeur) || parsePhoneNumberFromString(valeur, 'FR');
+    const candidats = [valeur];
+    if (numero?.isValid()) candidats.unshift(numero.number);
+    // Un numéro local sénégalais (77…, 78…) peut être saisi sans indicatif
+    const numeroSn = parsePhoneNumberFromString(valeur, 'SN');
+    if (numeroSn?.isValid()) candidats.push(numeroSn.number);
+    return User.findOne({ where: { telephone: { [Op.in]: [...new Set(candidats)] } } });
   };
 
   static issueTokens = async (user) => {
@@ -54,8 +135,33 @@ class AuthService {
       throw new ConflictError('Un compte existe déjà avec cet email ou ce numéro de téléphone');
     }
 
+    const { codeParrainage: codeParrain, ...donnees } = data;
+    let parrainId = null;
+    if (codeParrain) {
+      const parrain = await User.findOne({
+        where: { codeParrainage: codeParrain, role: 'client', isActive: true },
+      });
+      if (!parrain) throw new BadRequestError('Code de parrainage inconnu');
+      parrainId = parrain.id;
+    }
+
     const password = await bcrypt.hash(data.password, bcryptConfig.saltRounds);
-    const user = await User.create({ ...data, password, role: 'client' });
+    let user;
+    for (let tentative = 0; !user; tentative += 1) {
+      try {
+        user = await User.create({
+          ...donnees,
+          password,
+          role: 'client',
+          parrainId,
+          codeParrainage: genererCodeParrainage(),
+          emailVerifie: false,
+        });
+      } catch (err) {
+        // Collision (improbable) sur le code de parrainage : on en tire un autre
+        if (err.name !== 'SequelizeUniqueConstraintError' || tentative >= 2) throw err;
+      }
+    }
 
     await logActivity({
       userId: user.id,
@@ -64,20 +170,31 @@ class AuthService {
       entiteId: user.id,
       ...meta,
     });
-    await sendBienvenueEmail(user).catch(() => {});
+    await AuthService.envoyerLienVerification(user).catch(() => {});
 
     return {
-      message: 'Compte créé avec succès. Vous pouvez vous connecter.',
+      message:
+        'Compte créé. Un lien de confirmation vous a été envoyé par email : cliquez dessus pour activer votre compte.',
       utilisateur: user.toSafeJSON(),
     };
   };
 
-  static login = async (email, password, meta = {}) => {
-    const user = await User.findOne({ where: { email } });
+  static login = async (identifiants, password, meta = {}) => {
+    const user = await AuthService.trouverParIdentifiant(
+      typeof identifiants === 'string' ? { email: identifiants } : identifiants
+    );
     if (!user || !(await bcrypt.compare(password, user.password))) {
-      throw new UnauthorizedError('Email ou mot de passe incorrect');
+      throw new UnauthorizedError('Identifiant ou mot de passe incorrect');
     }
     if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé');
+    if (user.role === 'client' && !user.emailVerifie) {
+      const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
+      if (obligatoire) {
+        throw new ForbiddenError(
+          'Adresse email non confirmée : cliquez sur le lien reçu par email (ou demandez-en un nouveau).'
+        );
+      }
+    }
 
     const tokens = await AuthService.issueTokens(user);
     await user.update({ lastLoginAt: new Date() });

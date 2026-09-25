@@ -1,5 +1,5 @@
 const Joi = require('joi');
-const { pays } = require('./shared');
+const { pays, heureHHMM } = require('./shared');
 const { CRENEAUX_ENLEVEMENT } = require('../constants/reseau');
 
 const creerEnlevementSchema = Joi.object({
@@ -22,6 +22,11 @@ const creerEnlevementSchema = Joi.object({
   nbColis: Joi.number().integer().min(1).max(100).default(1),
   poidsEstimeKg: Joi.number().positive().max(1000).allow(null),
   instructions: Joi.string().max(500).allow('', null),
+  tourneeCollecteId: Joi.string().uuid().allow(null),
+  heureSouhaitee: heureHHMM.allow(null),
+  etage: Joi.number().integer().min(-5).max(60).allow(null),
+  ascenseur: Joi.boolean().allow(null),
+  emballageRequis: Joi.boolean().default(false),
 });
 
 const modifierEnlevementSchema = Joi.object({
@@ -33,6 +38,10 @@ const modifierEnlevementSchema = Joi.object({
   creneau: Joi.string().valid(...CRENEAUX_ENLEVEMENT),
   nbColis: Joi.number().integer().min(1).max(100),
   instructions: Joi.string().max(500).allow('', null),
+  heureSouhaitee: heureHHMM.allow(null),
+  etage: Joi.number().integer().min(-5).max(60).allow(null),
+  ascenseur: Joi.boolean().allow(null),
+  emballageRequis: Joi.boolean(),
 }).min(1);
 
 const annulerEnlevementSchema = Joi.object({

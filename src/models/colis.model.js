@@ -11,6 +11,10 @@ const {
   PAYEURS,
   STATUTS_TERMINAUX,
   TRANSITIONS_AUTORISEES,
+  CATEGORIES_COLIS,
+  REGLES_CATEGORIE,
+  ETATS_MARCHANDISE,
+  STATUTS_MODIFIABLES_CLIENT,
 } = require('../constants/colis');
 
 /**
@@ -36,6 +40,22 @@ class Colis extends Model {
   /** Statuts atteignables depuis l'état courant. */
   get transitionsPossibles() {
     return TRANSITIONS_AUTORISEES[this.statut] || [];
+  }
+
+  /** Règles de parcours propres à la catégorie (validation, paiement, pièces exigées). */
+  get regles() {
+    return REGLES_CATEGORIE[this.categorie] || REGLES_CATEGORIE.colis_moyen;
+  }
+
+  /** Le client peut encore corriger sa demande tant que le colis n'est pas arrivé au Sénégal. */
+  get modifiableParClient() {
+    return STATUTS_MODIFIABLES_CLIENT.includes(this.statut);
+  }
+
+  /** Demande en attente d'étude au-delà du délai d'engagement (24 h par défaut). */
+  get etudeEnRetard() {
+    if (this.statut !== 'en_attente_validation' || !this.dateLimiteEtude) return false;
+    return new Date(this.dateLimiteEtude) < new Date();
   }
 
   /** Livraison en retard au regard de la date estimée. */
@@ -70,6 +90,24 @@ Colis.init(
     serviceId: {
       type: DataTypes.UUID,
       allowNull: false,
+    },
+
+    // ── Catégorie (cahier des charges) ─────────────────────────────────────
+    /** 1 = documents, 2 = colis moyen, 3 = colis XXL : pilote tout le parcours. */
+    categorie: {
+      type: DataTypes.ENUM(...CATEGORIES_COLIS),
+      allowNull: false,
+      defaultValue: 'colis_moyen',
+    },
+    /** Catégorie 1 : nature du document confirmée par le client (acte, diplôme…). */
+    typeDocument: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    /** État de la marchandise, repris à l'inventaire des chargements. */
+    etatMarchandise: {
+      type: DataTypes.ENUM(...ETATS_MARCHANDISE),
+      allowNull: true,
     },
 
     // ── Contenu ────────────────────────────────────────────────────────────
@@ -166,6 +204,26 @@ Colis.init(
       type: DataTypes.STRING(500),
       allowNull: true,
     },
+    /**
+     * Adresse au Sénégal : le quartier, l'arrondissement, le département et un
+     * point de repère sont exigés (bloquants) pour les catégories 2 et 3.
+     */
+    destinataireQuartier: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    destinataireArrondissement: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    destinataireDepartement: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    destinatairePointRepere: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
 
     // ── Entrée et sortie du réseau ─────────────────────────────────────────
     modeDepot: {
@@ -185,6 +243,26 @@ Colis.init(
     pointRetraitId: {
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    /** Tournée de collecte à domicile à laquelle la demande est rattachée. */
+    tourneeCollecteId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    /**
+     * Informations de collecte saisies par le client : date et heure souhaitées,
+     * adresse en France, étage, ascenseur, emballage à prévoir…
+     */
+    infosCollecte: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {},
+    },
+    /** Envoi postal : le client achète l'étiquette Colissimo par notre intermédiaire. */
+    optionColissimo: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
     /** Point où le colis se trouve physiquement à l'instant T. */
     pointActuelId: {
@@ -289,6 +367,27 @@ Colis.init(
       allowNull: false,
       defaultValue: 0,
     },
+    /**
+     * Articles de la grille forfaitaire retenus (catégories 1 et 2), figés à la
+     * commande : [{ articleTarifId, code, libelle, quantite, prixUnitaire, montant }].
+     */
+    lignesForfait: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
+    /** Emballages achetés ou prestation d'emballage : [{ emballageId, libelle, quantite, montant }]. */
+    emballages: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: [],
+    },
+    /** Crédit de parrainage imputé sur cette expédition, restitué en cas d'annulation. */
+    creditParrainageUtilise: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
     /** Journal détaillé du calcul : tarif retenu, surcharges ligne à ligne, taux. */
     detailTarification: {
       type: DataTypes.JSONB,
@@ -339,6 +438,51 @@ Colis.init(
       allowNull: true,
     },
 
+    // ── Étude de la demande (catégories 2 et 3) ────────────────────────────
+    /** Échéance d'engagement pour étudier la demande (24 h par défaut). */
+    dateLimiteEtude: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    valideAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    validePar: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    motifRefus: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    /** Catégorie 3 : proposition tarifaire de l'administrateur. */
+    montantPropose: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+    },
+    propositionCommentaire: {
+      type: DataTypes.STRING(1000),
+      allowNull: true,
+    },
+    propositionAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    propositionExpireAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    propositionRepondueAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    /** Horodatage de l'acceptation des conditions générales par le client. */
+    conditionsAccepteesAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+
     // ── Sécurité du retrait ────────────────────────────────────────────────
     /** Code exigé du destinataire au retrait ou à la livraison. */
     codeRetrait: {
@@ -351,6 +495,15 @@ Colis.init(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: [],
+    },
+    /** Message vocal descriptif laissé par le client. */
+    vocalUrl: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    vocalPublicId: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
     },
     notesInternes: {
       type: DataTypes.STRING(1000),
@@ -390,6 +543,8 @@ Colis.init(
       { fields: ['pointRetraitId'] },
       { fields: ['pointActuelId'] },
       { fields: ['rotationId'] },
+      { fields: ['categorie', 'statut'] },
+      { fields: ['tourneeCollecteId'] },
       { fields: ['coursierLivraisonId'] },
       { fields: ['userId', 'createdAt'] },
       { fields: ['statut', 'dateLivraisonEstimee'] },

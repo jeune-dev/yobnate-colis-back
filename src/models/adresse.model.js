@@ -29,6 +29,10 @@ Adresse.init(
     adresse: { type: DataTypes.STRING(255), allowNull: false, validate: { notEmpty: true } },
     complementAdresse: { type: DataTypes.STRING(255), allowNull: true },
     quartier: { type: DataTypes.STRING(100), allowNull: true },
+    /** Découpage administratif sénégalais, exigé pour les livraisons des catégories 2 et 3. */
+    arrondissement: { type: DataTypes.STRING(100), allowNull: true },
+    departement: { type: DataTypes.STRING(100), allowNull: true },
+    pointRepere: { type: DataTypes.STRING(255), allowNull: true },
     codePostal: { type: DataTypes.STRING(10), allowNull: true },
     latitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     longitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },

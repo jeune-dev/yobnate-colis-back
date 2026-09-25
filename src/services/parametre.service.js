@@ -132,6 +132,185 @@ class ParametreService {
       libelle: 'Délai de dépôt d une réclamation après livraison (jours)',
     },
 
+    // ── Catégories et étude des demandes ───────────────────────────────────
+    delai_etude_demande_heures: {
+      valeur: '24',
+      type: 'nombre',
+      categorie: 'expedition',
+      libelle: 'Délai d étude d une demande (heures)',
+      description: 'Engagement de réponse pour les catégories 2 et 3',
+    },
+    delai_validite_proposition_jours: {
+      valeur: '7',
+      type: 'nombre',
+      categorie: 'expedition',
+      libelle: 'Durée de validité d une proposition tarifaire (jours)',
+    },
+    prix_forfaits_ttc: {
+      valeur: 'true',
+      type: 'booleen',
+      categorie: 'expedition',
+      libelle: 'Les prix de la grille forfaitaire sont exprimés TTC',
+      description: 'Si vrai, la TVA est incluse dans le prix affiché au lieu d être ajoutée',
+    },
+    prefixe_numero_suivi: {
+      valeur: 'PN',
+      type: 'texte',
+      categorie: 'expedition',
+      libelle: 'Préfixe des numéros de suivi',
+      description: 'Ex. PN pour PNCO0126032026MDT03',
+    },
+    code_conteneur_numero_suivi: {
+      valeur: 'CO',
+      type: 'texte',
+      categorie: 'expedition',
+      libelle: 'Code « conteneur » des numéros de suivi',
+    },
+    adresse_reception_fr: {
+      valeur:
+        '{"nom": "Yobnate Express — Réception France", "adresse": "", "codePostal": "", "ville": "Clermont-Ferrand", "telephone": "", "instructions": "Indiquez votre nom et votre numéro de suivi sur le colis."}',
+      type: 'json',
+      categorie: 'expedition',
+      libelle: 'Adresse de réception des colis en France',
+      description: 'Communiquée au client pour un dépôt ou un envoi postal',
+    },
+    adresse_reception_sn: {
+      valeur:
+        '{"nom": "Yobnate Express — Plateforme Dakar", "adresse": "", "quartier": "", "arrondissement": "", "departement": "Dakar", "pointRepere": "", "telephone": ""}',
+      type: 'json',
+      categorie: 'expedition',
+      libelle: 'Adresse de réception des colis au Sénégal (flux inverse)',
+    },
+    produits_interdits: {
+      valeur:
+        '["Produits inflammables, explosifs ou gaz sous pression", "Batteries lithium seules", "Armes et munitions", "Stupéfiants", "Denrées périssables", "Liquides de plus de 1 litre", "Espèces, bijoux et objets de valeur non déclarés", "Contrefaçons"]',
+      type: 'json',
+      categorie: 'expedition',
+      libelle: 'Produits interdits (information fret aérien)',
+    },
+
+    // ── Collecte et envois postaux ─────────────────────────────────────────
+    collecte_domicile_active: {
+      valeur: 'true',
+      type: 'booleen',
+      categorie: 'collecte',
+      libelle: 'Collecte à domicile activée',
+    },
+    grille_enlevement_domicile_fr: {
+      valeur:
+        '[{"nbColis":1,"prixHt":3.6},{"nbColis":2,"prixHt":4.7},{"nbColis":3,"prixHt":5.8},{"nbColis":4,"prixHt":6.9},{"nbColis":5,"prixHt":8.0},{"nbColis":6,"prixHt":9.1},{"nbColis":7,"prixHt":10.2},{"nbColis":8,"prixHt":11.3},{"nbColis":9,"prixHt":12.4},{"nbColis":10,"prixHt":13.5},{"nbColis":11,"prixHt":14.6},{"nbColis":12,"prixHt":15.7},{"nbColis":13,"prixHt":16.8},{"nbColis":14,"prixHt":17.9},{"nbColis":15,"prixHt":19.0}]',
+      type: 'json',
+      categorie: 'collecte',
+      libelle: 'Tarif HT de l enlèvement à domicile en France, par nombre de colis',
+    },
+    option_colissimo_active: {
+      valeur: 'true',
+      type: 'booleen',
+      categorie: 'collecte',
+      libelle: 'Achat d une étiquette Colissimo proposé au client',
+    },
+    grille_colissimo: {
+      valeur:
+        '[{"poidsMaxKg":0.25,"prixHt":7.89},{"poidsMaxKg":0.5,"prixHt":8.76},{"poidsMaxKg":0.75,"prixHt":9.65},{"poidsMaxKg":1,"prixHt":10.39},{"poidsMaxKg":2,"prixHt":11.53},{"poidsMaxKg":3,"prixHt":12.54},{"poidsMaxKg":4,"prixHt":13.59},{"poidsMaxKg":5,"prixHt":14.59},{"poidsMaxKg":6,"prixHt":15.22},{"poidsMaxKg":7,"prixHt":16.21},{"poidsMaxKg":8,"prixHt":17.2},{"poidsMaxKg":9,"prixHt":18.22},{"poidsMaxKg":10,"prixHt":19.22},{"poidsMaxKg":11,"prixHt":19.84},{"poidsMaxKg":12,"prixHt":20.82},{"poidsMaxKg":13,"prixHt":21.79},{"poidsMaxKg":14,"prixHt":22.8},{"poidsMaxKg":15,"prixHt":23.78},{"poidsMaxKg":16,"prixHt":24.75},{"poidsMaxKg":17,"prixHt":25.73},{"poidsMaxKg":18,"prixHt":26.71},{"poidsMaxKg":19,"prixHt":27.7},{"poidsMaxKg":20,"prixHt":28.67},{"poidsMaxKg":21,"prixHt":29.38},{"poidsMaxKg":22,"prixHt":30.34},{"poidsMaxKg":23,"prixHt":31.33},{"poidsMaxKg":24,"prixHt":32.3},{"poidsMaxKg":25,"prixHt":33.24},{"poidsMaxKg":26,"prixHt":34.24},{"poidsMaxKg":27,"prixHt":35.18},{"poidsMaxKg":28,"prixHt":36.16},{"poidsMaxKg":29,"prixHt":37.17},{"poidsMaxKg":30,"prixHt":38.1}]',
+      type: 'json',
+      categorie: 'collecte',
+      libelle: 'Tarif HT Colissimo par tranche de poids',
+    },
+
+    // ── Tarif préférentiel et parrainage ───────────────────────────────────
+    remise_professionnelle_pourcent: {
+      valeur: '10',
+      type: 'nombre',
+      categorie: 'commercial',
+      libelle: 'Remise accordée aux professionnels (NINEA ou Kbis validé) (%)',
+    },
+    parrainage_actif: {
+      valeur: 'true',
+      type: 'booleen',
+      categorie: 'commercial',
+      libelle: 'Programme de parrainage actif',
+    },
+    parrainage_remise_filleul_pourcent: {
+      valeur: '10',
+      type: 'nombre',
+      categorie: 'commercial',
+      libelle: 'Remise du filleul sur sa première expédition (%)',
+    },
+    parrainage_gain_parrain_eur: {
+      valeur: '5',
+      type: 'nombre',
+      categorie: 'commercial',
+      libelle: 'Crédit offert au parrain à la première expédition du filleul (EUR)',
+    },
+
+    // ── Comptes et notifications ───────────────────────────────────────────
+    verification_email_obligatoire: {
+      valeur: 'true',
+      type: 'booleen',
+      categorie: 'comptes',
+      libelle: 'Connexion soumise à la vérification de l adresse email',
+    },
+    whatsapp_notifications_actives: {
+      valeur: 'false',
+      type: 'booleen',
+      categorie: 'notifications',
+      libelle: 'Notifications WhatsApp activées',
+      description: 'Nécessite WHATSAPP_TOKEN et WHATSAPP_PHONE_NUMBER_ID',
+    },
+    evenements_whatsapp: {
+      valeur: '["RECEPTION", "DEPART_HUB", "ARR_PAYS", "ARR_AGENCE", "DISPO", "LIVRE"]',
+      type: 'json',
+      categorie: 'notifications',
+      libelle: 'Événements de suivi notifiés par WhatsApp',
+    },
+
+    // ── Liens publics (site vitrine et applications) ───────────────────────
+    lien_app_boutique: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Lien vers l application Boutique',
+    },
+    lien_app_android: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Lien Google Play',
+    },
+    lien_app_ios: { valeur: '', type: 'texte', categorie: 'liens', libelle: 'Lien App Store' },
+    lien_chronopost: {
+      valeur: 'https://www.chronopost.fr/fr/envoyer-un-colis',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Module Chronopost pour imprimer un bon d envoi',
+    },
+    lien_application_mesure: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Application gratuite de mesure recommandée',
+    },
+    lien_cgv: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Conditions générales de vente',
+    },
+    whatsapp_contact: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Numéro WhatsApp du service client (format international)',
+    },
+    url_paiement_banque: {
+      valeur: '',
+      type: 'texte',
+      categorie: 'liens',
+      libelle: 'Modèle d URL du paiement en ligne',
+      description:
+        'Variables : {{reference}}, {{montant}}, {{devise}}. Vide = page de paiement de l application',
+    },
+
     // ── Identité de l entreprise (documents) ───────────────────────────────
     entreprise_nom: {
       valeur: 'Yobnate Express',

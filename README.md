@@ -41,6 +41,35 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
   relances.
 - **Après-vente** — réclamations avec fil de messages et indemnisation.
 
+### Parcours par catégorie de colis
+
+| | Catégorie 1 — Documents | Catégorie 2 — Colis moyen | Catégorie 3 — Colis XXL |
+|---|---|---|---|
+| Prix | Forfait fixe (grille) | Forfait par article (grille) ou au poids | Proposé par l'admin sous 24 h |
+| Validation admin | Non | Oui | Oui (proposition tarifaire à accepter) |
+| Facture / paiement | À la commande | À la réception du colis (lien de paiement) | À l'acceptation de la proposition |
+| Photos exigées | 1 (enveloppe) | 3 angles | 1 minimum + dimensions |
+| Remise | Point, poste, boîte aux lettres | + collecte à domicile | Point ou collecte (étage, ascenseur, emballage) |
+
+- **Grille forfaitaire** (`/admin/articles-tarif`) : prix par article, colonnes
+  *Dakar* / *autres régions* (villes marquées `zoneTarifDakar`), par mode de
+  fret (maritime / aérien). Le tarif au kilo reste géré par service (`/admin/tarifs`).
+- **Numéro de suivi** : `PNCO0126032026MDT03` = préfixe + n° de conteneur +
+  date + initiales du client + catégorie (préfixes paramétrables).
+- **Adresse au Sénégal** : quartier, arrondissement, département et point de
+  repère obligatoires (bloquants) pour les catégories 2 et 3.
+- **Collecte** : tournées programmées par l'admin (date, villes, codes postaux),
+  bannière dans l'app et notification des clients de la zone ; tarif Colissimo
+  et enlèvement à domicile paramétrables.
+- **Conteneurs** (`/admin/conteneurs`, alias des rotations) : numérotation 01,
+  02…, étapes propagées aux colis (expédié vers le port, dédouanement, arrivée
+  plateforme) et **inventaire imprimable** des produits chargés (quantité, état
+  neuf/occasion) par conteneur ou par tournée (`/admin/inventaire`).
+- **Relation client** : connexion par email ou téléphone, confirmation de
+  l'email par lien, parrainage, tarif professionnel (NINEA/Kbis validé),
+  notifications push (FCM) et WhatsApp, message vocal, modèles d'emails
+  personnalisables, annonces sur l'accueil de l'application.
+
 ## Prérequis
 
 - Node.js ≥ 18
@@ -69,6 +98,12 @@ npm run dev
 #    services, grille tarifaire de base, premiers points de collecte)
 npm run seed
 ```
+
+> **Base existante :** `npm run migrate` applique la migration additive
+> `20260925000001-cahier-des-charges-colis` (nouvelles tables, colonnes et
+> valeurs d'ENUM), puis `npm run seed` ajoute les nouveaux paramètres et la
+> grille forfaitaire. En développement, `sequelize.sync()` ne crée que les
+> tables manquantes : il ne suffit pas à mettre à jour une base existante.
 
 ## Variables d'environnement
 
@@ -132,7 +167,7 @@ deploy/
 | Préfixe | Accès | Description |
 |---|---|---|
 | `/auth` | Public | Inscription, connexion, refresh, logout, reset mot de passe |
-| `/public` | Public | Suivi d'expédition, recherche de points, catalogue, devis |
+| `/public` | Public | Suivi, simulation sans compte, tarifs, catégories, accueil (annonces, tournées), configuration |
 | `/client/colis` | Client | Devis, déclaration, suivi, annulation, documents |
 | `/client/enlevements` | Client | Demandes d'enlèvement à domicile |
 | `/client/adresses` | Client | Carnet d'adresses |
@@ -152,6 +187,11 @@ deploy/
 | `/admin/reclamations` | Admin | Service après-vente |
 | `/admin/factures` · `/admin/paiements` | Admin | Facturation et caisse |
 | `/admin/users` · `/admin/personnel` · `/admin/admins` | Admin | Comptes (clients, coursiers/agents, admins) |
+| `/admin/articles-tarif` · `/admin/emballages` | Admin | Grille forfaitaire, barigots et emballages |
+| `/admin/tournees-collecte` | Admin | Tournées de collecte à domicile |
+| `/admin/conteneurs` · `/admin/inventaire` | Admin | Conteneurs et inventaire des chargements |
+| `/admin/annonces` · `/admin/modeles-emails` | Admin | Accueil de l'app et modèles d'emails |
+| `/admin/parrainage` · `/admin/dashboard/kpis` | Admin | Parrainage et indicateurs commerciaux |
 | `/admin/parametres` | Super Admin | Réglages du moteur métier |
 | `/admin/activity-logs` | Admin | Journal d'activité |
 

@@ -207,9 +207,156 @@ const sendReclamationEmail = (user, reclamation, titre, corpsTexte) =>
     }),
   });
 
+/* ── Modèles personnalisables par l'administrateur ──────────────────────── */
+
+/**
+ * Gabarits par défaut des courriels du parcours d'expédition. L'administrateur
+ * peut remplacer le sujet et le corps de chacun depuis le back-office (table
+ * `modeles_email`) ; les variables `{{nom}}` sont substituées et échappées.
+ */
+const MODELES_PAR_DEFAUT = {
+  verification_email: {
+    description: "Lien de confirmation de l'adresse email à l'inscription",
+    variables: ['prenom', 'lien'],
+    sujet: 'Confirmez votre adresse email',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Merci pour votre inscription. Pour activer votre compte, confirmez votre adresse
+      email en cliquant sur le bouton ci-dessous. Ce lien est valable 24 heures.</p>`,
+    bouton: { libelle: 'Confirmer mon adresse email', variable: 'lien' },
+  },
+  accuse_reception_demande: {
+    description: "Accusé de réception d'une demande d'expédition",
+    variables: ['prenom', 'reference', 'categorie', 'delaiEtude', 'lien'],
+    sujet: 'Demande {{reference}} bien reçue',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Nous avons bien reçu votre demande d'expédition <strong>{{reference}}</strong>
+      ({{categorie}}).</p>
+      <p>Nos équipes l'étudient et reviennent vers vous sous {{delaiEtude}} heures.</p>`,
+    bouton: { libelle: 'Suivre ma demande', variable: 'lien' },
+  },
+  demande_validee: {
+    description: "Validation d'une demande par l'administrateur",
+    variables: ['prenom', 'reference', 'montant', 'instructions', 'lien'],
+    sujet: 'Demande {{reference}} validée',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Votre demande <strong>{{reference}}</strong> est validée. Montant : <strong>{{montant}}</strong>.</p>
+      <p>{{instructions}}</p>`,
+    bouton: { libelle: 'Voir ma demande', variable: 'lien' },
+  },
+  demande_refusee: {
+    description: "Refus d'une demande par l'administrateur",
+    variables: ['prenom', 'reference', 'motif'],
+    sujet: 'Demande {{reference}} non retenue',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Nous ne sommes malheureusement pas en mesure de donner suite à votre demande
+      <strong>{{reference}}</strong>.</p><p>Motif : {{motif}}</p>
+      <p>N'hésitez pas à nous contacter par WhatsApp pour en discuter.</p>`,
+  },
+  proposition_tarifaire: {
+    description: 'Proposition tarifaire pour un colis de catégorie 3',
+    variables: [
+      'prenom',
+      'reference',
+      'montant',
+      'commentaire',
+      'dateExpiration',
+      'conditions',
+      'lien',
+    ],
+    sujet: 'Votre proposition tarifaire — {{reference}}',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Après étude de votre demande <strong>{{reference}}</strong>, nous vous proposons le tarif
+      suivant :</p>
+      <p style="font-size:24px;font-weight:bold;color:#0b3d2c;">{{montant}}</p>
+      <p>{{commentaire}}</p>
+      <p>Conditions : {{conditions}}</p>
+      <p>Cette proposition est valable jusqu'au <strong>{{dateExpiration}}</strong>. Acceptez-la
+      depuis l'application pour procéder au paiement.</p>`,
+    bouton: { libelle: 'Accepter ou refuser', variable: 'lien' },
+  },
+  facture_lien_paiement: {
+    description: 'Facture et lien de paiement (colis réceptionné ou proposition acceptée)',
+    variables: ['prenom', 'reference', 'facture', 'montant', 'dateLimite', 'lien'],
+    sujet: 'Facture {{facture}} — colis {{reference}}',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>La facture <strong>{{facture}}</strong> relative à votre colis <strong>{{reference}}</strong>
+      est disponible, pour un montant de <strong>{{montant}}</strong>.</p>
+      <p>Merci de procéder au règlement avant le {{dateLimite}}.</p>`,
+    bouton: { libelle: 'Payer en ligne', variable: 'lien' },
+  },
+  tournee_collecte: {
+    description: "Annonce d'une tournée de collecte aux clients domiciliés dans la zone",
+    variables: ['prenom', 'titre', 'date', 'horaires', 'zone', 'message', 'lien'],
+    sujet: 'Collecte à domicile le {{date}} — {{titre}}',
+    corps: `<p>Bonjour {{prenom}},</p>
+      <p>Une collecte à domicile est programmée dans votre secteur ({{zone}}) le
+      <strong>{{date}}</strong> {{horaires}}.</p><p>{{message}}</p>`,
+    bouton: { libelle: 'Réserver ma collecte', variable: 'lien' },
+  },
+};
+
+const remplacerVariables = (texte, variables, echapperValeurs = true) =>
+  String(texte || '').replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, cle) => {
+    const valeur = variables[cle] ?? '';
+    return echapperValeurs ? echapper(valeur) : String(valeur);
+  });
+
+const CACHE_MODELES_MS = 5 * 60 * 1000;
+let cacheModeles = { valeur: null, expireA: 0 };
+
+const invaliderCacheModeles = () => {
+  cacheModeles = { valeur: null, expireA: 0 };
+};
+
+const chargerModelesPersonnalises = async () => {
+  if (cacheModeles.valeur && cacheModeles.expireA > Date.now()) return cacheModeles.valeur;
+  try {
+    // Chargement différé : les modèles Sequelize importent indirectement ce module
+    const { ModeleEmail } = require('../models');
+    const lignes = await ModeleEmail.findAll({ where: { isActive: true } });
+    cacheModeles = {
+      valeur: Object.fromEntries(lignes.map((l) => [l.code, l])),
+      expireA: Date.now() + CACHE_MODELES_MS,
+    };
+  } catch (err) {
+    logger.warn('Modèles d emails personnalisés indisponibles', { message: err.message });
+    cacheModeles = { valeur: {}, expireA: Date.now() + 30 * 1000 };
+  }
+  return cacheModeles.valeur;
+};
+
+/**
+ * Envoie un courriel à partir de son code de modèle : la version personnalisée
+ * par l'administrateur si elle existe, le gabarit par défaut sinon.
+ */
+const envoyerModele = async (code, to, variables = {}) => {
+  const defaut = MODELES_PAR_DEFAUT[code];
+  if (!defaut) throw new Error(`Modèle d'email inconnu : ${code}`);
+  const personnalise = (await chargerModelesPersonnalises())[code];
+
+  const sujet = remplacerVariables(personnalise?.sujet || defaut.sujet, variables, false);
+  const corps = remplacerVariables(personnalise?.corpsHtml || defaut.corps, variables);
+  const urlBouton = defaut.bouton ? variables[defaut.bouton.variable] : null;
+
+  return sendMail({
+    to,
+    subject: sujet,
+    html: gabarit({
+      titre: sujet,
+      corps,
+      bouton: urlBouton ? { url: urlBouton, libelle: defaut.bouton.libelle } : null,
+    }),
+  });
+};
+
 module.exports = {
   sendMail,
   gabarit,
+  MODELES_PAR_DEFAUT,
+  envoyerModele,
+  invaliderCacheModeles,
+  remplacerVariables,
+  URL_PUBLIQUE,
   sendOtpEmail,
   sendBienvenueEmail,
   sendColisCreeEmail,

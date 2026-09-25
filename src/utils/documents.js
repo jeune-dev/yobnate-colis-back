@@ -472,6 +472,65 @@ const genererBordereauDepot = (colis, point, entreprise = {}) => {
   return page(`Bordereau ${colis.reference}`, contenu, '@page { size: A6; margin: 4mm; }');
 };
 
+/* ── Inventaire d'un chargement ─────────────────────────────────────────── */
+
+/**
+ * Liste imprimable de tous les produits chargés (par conteneur ou par tournée) :
+ * synthèse par produit et par état, puis détail colis par colis.
+ */
+const genererInventaire = (inventaire, entreprise = {}) => {
+  const synthese = inventaire.synthese
+    .map(
+      (s) => `
+    <tr>
+      <td>${echapper(s.produit)}</td>
+      <td>${echapper(s.etat)}</td>
+      <td class="droite"><strong>${echapper(s.quantite)}</strong></td>
+      <td class="droite">${echapper(s.colis)}</td>
+    </tr>`
+    )
+    .join('');
+
+  const detail = inventaire.lignes
+    .map(
+      (l) => `
+    <tr>
+      <td><strong>${echapper(l.reference)}</strong></td>
+      <td>${echapper(l.produit)}</td>
+      <td class="droite">${echapper(l.quantite)}</td>
+      <td>${echapper(l.etat)}</td>
+      <td>${echapper(l.expediteur)}</td>
+      <td>${echapper(l.destinataire)}<br><span class="muted">${echapper(l.villeArrivee)}</span></td>
+    </tr>`
+    )
+    .join('');
+
+  const contenu = `
+    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
+      <div>
+        <h1 style="color:#0b3d2c;">INVENTAIRE DES PRODUITS CHARGÉS</h1>
+        <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobnate Express')}</div>
+      </div>
+      <div class="droite">
+        <div><strong>${echapper(inventaire.titre)}</strong></div>
+        <div>${echapper(inventaire.nbColis)} colis · ${echapper(inventaire.quantiteTotale)} article(s)</div>
+        <div>Édité le ${echapper(dateHeureFr(new Date()))}</div>
+      </div>
+    </div>
+    <h2 style="margin-top:16px;">Synthèse par produit</h2>
+    <table>
+      <thead><tr><th>Produit</th><th>État</th><th class="droite">Quantité</th><th class="droite">Colis</th></tr></thead>
+      <tbody>${synthese || '<tr><td colspan="4">Aucun produit</td></tr>'}</tbody>
+    </table>
+    <h2 style="margin-top:16px;">Détail par colis</h2>
+    <table>
+      <thead><tr><th>N° de suivi</th><th>Produit</th><th class="droite">Qté</th><th>État</th><th>Expéditeur</th><th>Destinataire</th></tr></thead>
+      <tbody>${detail || '<tr><td colspan="6">Aucun colis</td></tr>'}</tbody>
+    </table>`;
+
+  return page(`Inventaire — ${inventaire.titre}`, contenu);
+};
+
 module.exports = {
   genererEtiquette,
   genererEtiquettes,
@@ -479,6 +538,7 @@ module.exports = {
   genererFactureTransport,
   genererManifeste,
   genererBordereauDepot,
+  genererInventaire,
   echapper,
   dateFr,
   dateHeureFr,

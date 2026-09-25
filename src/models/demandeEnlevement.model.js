@@ -30,6 +30,15 @@ DemandeEnlevement.init(
     longitude: { type: DataTypes.DECIMAL(10, 7), allowNull: true },
     dateSouhaitee: { type: DataTypes.DATEONLY, allowNull: false },
     creneau: { type: DataTypes.ENUM(...CRENEAUX_ENLEVEMENT), allowNull: false },
+    /** Heure précise souhaitée (catégorie 3), à l'intérieur du créneau. */
+    heureSouhaitee: { type: DataTypes.STRING(5), allowNull: true },
+    /** Tournée de collecte programmée par l'administrateur. */
+    tourneeCollecteId: { type: DataTypes.UUID, allowNull: true },
+    // ── Logement (colis volumineux) ────────────────────────────────────────
+    etage: { type: DataTypes.SMALLINT, allowNull: true },
+    ascenseur: { type: DataTypes.BOOLEAN, allowNull: true },
+    /** Le client souhaite que nos équipes emballent sur place (option payante). */
+    emballageRequis: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     nbColis: {
       type: DataTypes.SMALLINT,
       allowNull: false,
@@ -64,6 +73,7 @@ DemandeEnlevement.init(
       { fields: ['coursierId', 'dateSouhaitee'] },
       { fields: ['pays', 'dateSouhaitee'] },
       { fields: ['colisId'] },
+      { fields: ['tourneeCollecteId'] },
     ],
   }
 );

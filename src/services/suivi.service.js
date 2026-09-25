@@ -15,6 +15,8 @@ const { PAYS } = require('../constants/pays');
 const { ajouterJoursCalendaires } = require('../utils/delais');
 const { logActivity } = require('./activityLog.service');
 const notificationService = require('./notification.service');
+const parametreService = require('./parametre.service');
+const facturationService = require('./facturation.service');
 const { sendColisStatutEmail, sendColisDisponibleEmail } = require('../utils/mailer');
 
 /**
@@ -184,6 +186,11 @@ class SuiviService {
       ? await executer(options.transaction)
       : await sequelize.transaction(executer);
 
+    await SuiviService.notifierSansBloquer(
+      SuiviService.facturerALaReception(colis, codeEvenement, options.auteurId || null),
+      { colisId: colis.id, etape: 'facturation' }
+    );
+
     await logActivity({
       userId: options.auteurId || null,
       action: `colis.suivi.${codeEvenement.toLowerCase()}`,
@@ -225,9 +232,29 @@ class SuiviService {
         notificationService.diffuserEvenement(colis, evenement),
         { colisId: colis.id }
       );
+      await SuiviService.notifierSansBloquer(
+        parametreService
+          .chargerTous()
+          .then((parametres) =>
+            notificationService.notifierWhatsappSuivi(colis, evenement, parametres)
+          ),
+        { colisId: colis.id, canal: 'whatsapp' }
+      );
     }
 
     return { message: `Suivi mis à jour : ${evenement.libelle}.`, evenement, colis };
+  };
+
+  /**
+   * Catégorie 2 : la facture et le lien de paiement sont émis dès que le colis
+   * est pris en charge par nos équipes (dépôt, collecte ou réception).
+   */
+  static facturerALaReception = async (colis, codeEvenement, auteurId) => {
+    if (!['DEPOT', 'RECEPTION', 'ENL_OK'].includes(codeEvenement)) return;
+    if (colis.regles?.paiement !== 'a_la_reception') return;
+    if (Number(colis.montantTotal) <= 0) return;
+    const { facture, creee } = await facturationService.emettreFactureColis(colis, { auteurId });
+    if (creee) await facturationService.envoyerLienPaiement(colis, facture);
   };
 
   /** Enregistre plusieurs événements sur des colis distincts (scan par lot). */
@@ -311,6 +338,7 @@ class SuiviService {
       suivi: {
         reference: colis.reference,
         statut: colis.statut,
+        categorie: colis.categorie,
         statutLibelle: colis.historique?.length
           ? colis.historique[colis.historique.length - 1].libelle
           : 'Expédition enregistrée',

@@ -1,7 +1,9 @@
 const crypto = require('crypto');
 const { Notification, AbonnementSuivi, User } = require('../models');
 const logger = require('../config/logger');
-const { sendColisStatutEmail } = require('../utils/mailer');
+const { sendColisStatutEmail, URL_PUBLIQUE } = require('../utils/mailer');
+const { envoyerPush } = require('../utils/push');
+const { envoyerWhatsapp } = require('../utils/whatsapp');
 
 /**
  * Diffusion des notifications.
@@ -38,16 +40,55 @@ class NotificationService {
         lienCible,
       });
 
-      if (email) {
-        const user = await User.findByPk(userId, {
-          attributes: ['id', 'email', 'prenom', 'notificationsEmail'],
+      const user = await User.findByPk(userId, {
+        attributes: [
+          'id',
+          'email',
+          'prenom',
+          'notificationsEmail',
+          'notificationsPush',
+          'deviceToken',
+        ],
+      });
+      if (email && user?.notificationsEmail) await email(user);
+      // Notification push sur le téléphone du client, si l'application est enregistrée
+      if (user?.deviceToken && user.notificationsPush) {
+        await envoyerPush({
+          token: user.deviceToken,
+          titre,
+          message,
+          donnees: { type, entite, entiteId, lienCible },
         });
-        if (user?.notificationsEmail) await email(user);
       }
       return notification;
     } catch (err) {
       logger.error('Échec de création de notification', { message: err.message, userId, type });
       return null;
+    }
+  };
+
+  /**
+   * Message WhatsApp sur les étapes clés du suivi (réception, arrivée à Dakar,
+   * livraison…), selon le paramétrage et les préférences du client.
+   */
+  static notifierWhatsappSuivi = async (colis, evenement, parametres) => {
+    try {
+      if (!parametres?.whatsapp_notifications_actives) return false;
+      if (!(parametres.evenements_whatsapp || []).includes(evenement.codeEvenement)) return false;
+      const client = await User.findByPk(colis.userId, {
+        attributes: ['id', 'telephone', 'notificationsWhatsapp'],
+      });
+      if (!client?.notificationsWhatsapp) return false;
+      const lien = URL_PUBLIQUE ? ` Suivi : ${URL_PUBLIQUE}/suivi/${colis.reference}` : '';
+      return envoyerWhatsapp({
+        telephone: colis.expediteurTelephone || client.telephone,
+        message:
+          `Yobnate — Colis ${colis.reference} : ${evenement.libelle}` +
+          `${evenement.lieu ? ` (${evenement.lieu})` : ''}.${lien}`,
+      });
+    } catch (err) {
+      logger.error('Notification WhatsApp non délivrée', { message: err.message });
+      return false;
     }
   };
 
@@ -134,6 +175,12 @@ class NotificationService {
         concernes.map(async (abonnement) => {
           if (abonnement.canal === 'email') {
             await sendColisStatutEmail(abonnement.destination, colis, evenement);
+          }
+          if (abonnement.canal === 'whatsapp') {
+            await envoyerWhatsapp({
+              telephone: abonnement.destination,
+              message: `Yobnate — Colis ${colis.reference} : ${evenement.libelle}.`,
+            });
           }
           // Le canal SMS est branché sur le futur agrégat opérateur ; l'abonnement est
           // enregistré dès maintenant pour ne rien perdre de l'historique client.

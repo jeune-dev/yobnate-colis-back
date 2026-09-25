@@ -41,6 +41,13 @@ const adminFactureRoutes = require('./routes/admin/facture.route');
 const adminPaiementRoutes = require('./routes/admin/paiement.route');
 const adminParametreRoutes = require('./routes/admin/parametre.route');
 const adminActivityLogRoutes = require('./routes/admin/activityLog.route');
+const adminArticleTarifRoutes = require('./routes/admin/articleTarif.route');
+const adminEmballageRoutes = require('./routes/admin/emballage.route');
+const adminTourneeCollecteRoutes = require('./routes/admin/tourneeCollecte.route');
+const adminAnnonceRoutes = require('./routes/admin/annonce.route');
+const adminModeleEmailRoutes = require('./routes/admin/modeleEmail.route');
+const adminInventaireRoutes = require('./routes/admin/inventaire.route');
+const adminParrainageRoutes = require('./routes/admin/parrainage.route');
 
 const app = express();
 
@@ -144,6 +151,8 @@ app.use('/admin/tarifs', adminTarifRoutes);
 app.use('/admin/surcharges', adminSurchargeRoutes);
 app.use('/admin/jours-feries', adminJourFerieRoutes);
 app.use('/admin/rotations', adminRotationRoutes);
+// Alias métier : une rotation maritime est un conteneur
+app.use('/admin/conteneurs', adminRotationRoutes);
 app.use('/admin/enlevements', adminEnlevementRoutes);
 app.use('/admin/douane', adminDouaneRoutes);
 app.use('/admin/reclamations', adminReclamationRoutes);
@@ -151,6 +160,13 @@ app.use('/admin/factures', adminFactureRoutes);
 app.use('/admin/paiements', adminPaiementRoutes);
 app.use('/admin/parametres', adminParametreRoutes);
 app.use('/admin/activity-logs', adminActivityLogRoutes);
+app.use('/admin/articles-tarif', adminArticleTarifRoutes);
+app.use('/admin/emballages', adminEmballageRoutes);
+app.use('/admin/tournees-collecte', adminTourneeCollecteRoutes);
+app.use('/admin/annonces', adminAnnonceRoutes);
+app.use('/admin/modeles-emails', adminModeleEmailRoutes);
+app.use('/admin/inventaire', adminInventaireRoutes);
+app.use('/admin/parrainage', adminParrainageRoutes);
 
 // R-04 : Gestionnaire d'erreurs global — DERNIER middleware
 app.use((_req, res) => res.status(404).json({ success: false, message: 'Route introuvable' }));

@@ -1,5 +1,13 @@
 const { Op } = require('sequelize');
-const { DemandeEnlevement, Ville, PointCollecte, Colis, User } = require('../../models');
+const {
+  DemandeEnlevement,
+  Ville,
+  PointCollecte,
+  Colis,
+  User,
+  TourneeCollecte,
+} = require('../../models');
+const tarificationService = require('../tarification.service');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../errors/AppError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { logActivity } = require('../activityLog.service');
@@ -20,7 +28,25 @@ class EnlevementService {
     { model: PointCollecte, as: 'pointDepot', attributes: ['id', 'code', 'nom', 'adresse'] },
     { model: Colis, as: 'colis', attributes: ['id', 'reference', 'statut'] },
     { model: User, as: 'coursier', attributes: ['id', 'prenom', 'telephone'] },
+    {
+      model: TourneeCollecte,
+      as: 'tourneeCollecte',
+      attributes: ['id', 'reference', 'titre', 'dateCollecte', 'heureDebut', 'heureFin'],
+    },
   ];
+
+  /**
+   * Frais d'enlèvement : grille par nombre de colis en France (HT, TVA ajoutée),
+   * forfait en francs CFA au Sénégal.
+   */
+  static calculerFrais = (pays, nbColis, parametres) => {
+    if (pays !== 'FR') return Number(parametres.frais_enlevement_domicile_xof || 0);
+    const grille = parametres.grille_enlevement_domicile_fr || [];
+    const ht = tarificationService.prixPalier(grille, 'nbColis', nbColis);
+    const dernier = [...grille].sort((a, b) => a.nbColis - b.nbColis).pop();
+    const prixHt = ht ?? Number(dernier?.prixHt || 0);
+    return Number((prixHt * (1 + Number(parametres.tva_fr || 0) / 100)).toFixed(2));
+  };
 
   /** Une demande se prend au plus tôt pour le lendemain et au plus tard sous 30 jours. */
   static validerDate = (dateSouhaitee) => {
@@ -72,15 +98,38 @@ class EnlevementService {
     }
 
     const parametres = await parametreService.chargerTous();
-    const reference = await genererRefEnlevement();
+    if (!parametres.collecte_domicile_active) {
+      throw new BadRequestError("La collecte à domicile n'est pas proposée actuellement");
+    }
 
+    // Rattachement à une tournée programmée : la date est celle de la tournée
+    let tournee = null;
+    if (data.tourneeCollecteId) {
+      tournee = await TourneeCollecte.findByPk(data.tourneeCollecteId);
+      if (!tournee) throw new BadRequestError('Tournée de collecte introuvable');
+      if (!tournee.accepteInscriptions) {
+        throw new BadRequestError("Cette tournée de collecte n'accepte plus d'inscription");
+      }
+      if (
+        tournee.pays !== data.pays ||
+        !tournee.couvre({ codePostal: data.codePostal, villeId: data.villeId })
+      ) {
+        throw new BadRequestError("Votre adresse n'est pas desservie par cette tournée");
+      }
+    }
+
+    const reference = await genererRefEnlevement();
     const demande = await DemandeEnlevement.create({
       ...data,
+      dateSouhaitee: tournee ? tournee.dateCollecte : data.dateSouhaitee,
       reference,
       userId,
       statut: 'demande',
-      fraisEnlevement: Number(parametres.frais_enlevement_domicile_xof),
+      fraisEnlevement: EnlevementService.calculerFrais(data.pays, data.nbColis || 1, parametres),
     });
+    if (tournee) {
+      await TourneeCollecte.increment('nbInscrits', { by: 1, where: { id: tournee.id } });
+    }
 
     await notificationService.notifierAdmins({
       titre: `Nouvelle demande d'enlèvement ${reference}`,
@@ -160,6 +209,12 @@ class EnlevementService {
     }
 
     await demande.update({ statut: 'annule', motifEchec: motif || 'Annulée par le client' });
+    if (demande.tourneeCollecteId && !demande.colisId) {
+      await TourneeCollecte.decrement('nbInscrits', {
+        by: 1,
+        where: { id: demande.tourneeCollecteId, nbInscrits: { [Op.gt]: 0 } },
+      });
+    }
     await logActivity({
       userId,
       action: 'enlevement.cancel',

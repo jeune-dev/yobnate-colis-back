@@ -16,11 +16,30 @@ const registerSchema = Joi.object({
     .when('typeCompte', { is: 'entreprise', then: Joi.required() }),
   numeroIdentificationFiscale: Joi.string().max(30).allow('', null),
   numeroTvaIntracom: Joi.string().max(20).allow('', null),
+  codePostal: Joi.string().max(10).allow('', null),
+  // Code personnel d'un client existant (programme de parrainage)
+  codeParrainage: Joi.string().trim().uppercase().max(12).allow('', null),
 });
 
+/**
+ * Connexion par email ou par numéro de téléphone : `identifiant` accepte l'un ou
+ * l'autre ; `email` et `telephone` restent acceptés pour compatibilité.
+ */
 const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
+  identifiant: Joi.string().trim().max(150),
+  email: Joi.string().email(),
+  telephone: Joi.string().trim().max(20),
   password: Joi.string().required(),
+})
+  .or('identifiant', 'email', 'telephone')
+  .messages({ 'object.missing': 'Indiquez votre email ou votre numéro de téléphone' });
+
+const verifierEmailSchema = Joi.object({
+  token: Joi.string().hex().length(64).required(),
+});
+
+const renvoyerVerificationSchema = Joi.object({
+  email: Joi.string().email().required(),
 });
 
 const refreshTokenSchema = Joi.object({
@@ -47,6 +66,8 @@ module.exports = {
   loginSchema,
   refreshTokenSchema,
   forgotPasswordSchema,
+  verifierEmailSchema,
+  renvoyerVerificationSchema,
   resetPasswordSchema,
   changePasswordSchema,
 };

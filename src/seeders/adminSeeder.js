@@ -8,6 +8,8 @@ const {
   Tarif,
   PointCollecte,
   JourFerie,
+  ArticleTarif,
+  Emballage,
 } = require('../models');
 const { bcryptConfig } = require('../config/security');
 const logger = require('../config/logger');
@@ -278,6 +280,105 @@ const seedPointsCollecte = async (villes) => {
   logger.info(`${crees} point(s) de collecte créé(s).`);
 };
 
+/* ── Grille forfaitaire (tableau « Nature du colis » fourni par le client) ── */
+
+/**
+ * Prix en euros, livraison incluse, fret maritime France → Sénégal.
+ * [code, libellé, prix Dakar, prix autres régions, catégorie, options]
+ */
+const GRILLE_FORFAITAIRE = [
+  ['DOC-ENV', 'Enveloppe de documents', 25, 30, 'documents', { poidsMaxKg: 0.5 }],
+  ['BARIGOT-GRAND', 'Grand barigot', 110, 120, 'colis_moyen'],
+  ['VALISE-23', 'Valise 23 kg', 40, 50, 'colis_moyen', { poidsMaxKg: 23 }],
+  ['VALISE-MOY', 'Valise moyenne', 50, 60, 'colis_moyen'],
+  ['VALISE-GRD', 'Valise (grande)', 70, 80, 'colis_moyen'],
+  ['SAC-PETIT', 'Sac (petit)', 40, 50, 'colis_moyen'],
+  ['SAC-MOYEN', 'Sac (moyen)', 50, 60, 'colis_moyen'],
+  ['SAC-GRAND', 'Sac (grand)', 70, 80, 'colis_moyen'],
+  ['SAC-MEGA', 'Sac (méga)', 90, 100, 'colis_moyen'],
+  ['MALLE-80', 'Malle 80 cm', 80, 90, 'colis_moyen', { longueurCm: 80 }],
+  ['MALLE-90', 'Malle 90 cm', 90, 100, 'colis_moyen', { longueurCm: 90 }],
+  ['MALLE-100', 'Malle 1 m', 100, 110, 'colis_moyen', { longueurCm: 100 }],
+  ['MALLE-110', 'Malle 110 cm', 110, 120, 'colis_moyen', { longueurCm: 110 }],
+  ['PORTE', 'Porte', 25, 30, 'colis_moyen'],
+  ['MATELAS-1P', 'Matelas 1 personne', 50, 60, 'colis_moyen'],
+  ['MATELAS-2P', 'Matelas 2 personnes', 110, 120, 'colis_moyen'],
+  ['TV-80', 'Télévision (80 cm)', 70, 80, 'colis_moyen'],
+  ['TV-94', 'Télévision (94 cm)', 120, 130, 'colis_moyen'],
+  ['TV-117', 'Télévision (117 cm)', 160, 250, 'colis_moyen'],
+  ['GAZINIERE', 'Gazinière', 90, 100, 'colis_xxl'],
+  ['LAVE-LINGE', 'Machine à laver', 90, 120, 'colis_xxl'],
+  ['CONGELATEUR-PETIT', 'Congélateur (petit)', 90, 100, 'colis_xxl'],
+  ['FRIGO', 'Frigo', 130, 150, 'colis_xxl', { prixAPartirDe: true }],
+];
+
+const seedGrilleForfaitaire = async () => {
+  let crees = 0;
+  for (const [
+    index,
+    [code, libelle, prixDakar, prixAutresRegions, categorie, options = {}],
+  ] of GRILLE_FORFAITAIRE.entries()) {
+    const [, cree] = await ArticleTarif.findOrCreate({
+      where: { code },
+      defaults: {
+        code,
+        libelle,
+        prixDakar,
+        prixAutresRegions,
+        categorie,
+        modeTransport: 'maritime',
+        paysDepart: 'FR',
+        paysArrivee: 'SN',
+        devise: 'EUR',
+        ordreAffichage: index,
+        isActive: true,
+        ...options,
+      },
+    });
+    if (cree) crees += 1;
+  }
+  logger.info(`${crees} article(s) de grille forfaitaire créé(s).`);
+};
+
+/** Emballages proposés à la vente : prix à confirmer par l'administrateur avant activation. */
+const seedEmballages = async () => {
+  const emballages = [
+    {
+      code: 'BARIGOT-VENTE',
+      libelle: 'Barigot',
+      description: 'Fût de transport étanche, idéal pour un envoi groupé',
+      type: 'contenant',
+      prix: 0,
+      isActive: false,
+    },
+    {
+      code: 'EMBALLAGE-SUR-SITE',
+      libelle: 'Emballage par nos équipes',
+      description: 'Emballage renforcé réalisé sur site ou lors de la collecte',
+      type: 'prestation',
+      prix: 0,
+      isActive: false,
+    },
+  ];
+  let crees = 0;
+  for (const e of emballages) {
+    const [, cree] = await Emballage.findOrCreate({ where: { code: e.code }, defaults: e });
+    if (cree) crees += 1;
+  }
+  logger.info(`${crees} emballage(s) créé(s) (inactifs : prix à définir).`);
+};
+
+/** Villes relevant de la colonne « Dakar » de la grille forfaitaire. */
+const VILLES_ZONE_DAKAR = ['Dakar', 'Pikine', 'Guédiawaye', 'Guediawaye', 'Rufisque'];
+
+const seedZoneDakar = async () => {
+  const [nb] = await Ville.update(
+    { zoneTarifDakar: true },
+    { where: { pays: 'SN', nom: VILLES_ZONE_DAKAR } }
+  );
+  logger.info(`${nb} ville(s) rattachée(s) au tarif Dakar.`);
+};
+
 /* ── Jours fériés récurrents ─────────────────────────────────────────────── */
 
 const seedJoursFeries = async () => {
@@ -314,6 +415,9 @@ const run = async () => {
   await seedTarifs(services);
   await seedPointsCollecte(villes);
   await seedJoursFeries();
+  await seedGrilleForfaitaire();
+  await seedEmballages();
+  await seedZoneDakar();
   await sequelize.close();
 };
 

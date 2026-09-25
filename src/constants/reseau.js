@@ -40,9 +40,16 @@ const STATUTS_ROTATION = [
   'cloturee',
   'en_transit',
   'arrivee',
+  'en_douane', // dédouanement du conteneur au port de destination
   'dechargee',
   'annulee',
 ];
+
+/** Cycle de vie d'une tournée de collecte à domicile programmée par l'administrateur. */
+const STATUTS_TOURNEE = ['brouillon', 'ouverte', 'complete', 'en_cours', 'terminee', 'annulee'];
+
+/** Emplacements d'affichage d'une annonce publiée par l'administrateur. */
+const EMPLACEMENTS_ANNONCE = ['accueil', 'banniere', 'popup'];
 
 /** Mode d'acheminement entre les deux pays. */
 const MODES_TRANSPORT = ['aerien', 'maritime', 'routier'];
@@ -60,6 +67,8 @@ module.exports = {
   JOURS_SEMAINE,
   HORAIRES_PAR_DEFAUT,
   STATUTS_ROTATION,
+  STATUTS_TOURNEE,
+  EMPLACEMENTS_ANNONCE,
   MODES_TRANSPORT,
   STATUTS_ENLEVEMENT,
   CRENEAUX_ENLEVEMENT,

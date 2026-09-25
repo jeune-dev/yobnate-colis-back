@@ -23,6 +23,7 @@ const updateProfilSchema = Joi.object({
   prenom: Joi.string().min(2).max(50),
   telephone: phone,
   adresse: Joi.string().max(255).allow('', null),
+  codePostal: Joi.string().max(10).allow('', null),
   villeId: Joi.string().uuid().allow(null),
   raisonSociale: Joi.string().max(150).allow('', null),
   numeroIdentificationFiscale: Joi.string().max(30).allow('', null),
@@ -33,6 +34,8 @@ const updateProfilSchema = Joi.object({
 const updatePreferencesSchema = Joi.object({
   notificationsEmail: Joi.boolean(),
   notificationsSms: Joi.boolean(),
+  notificationsWhatsapp: Joi.boolean(),
+  notificationsPush: Joi.boolean(),
 }).min(1);
 
 const updateDeviceTokenSchema = Joi.object({
@@ -44,6 +47,8 @@ const conditionsCommercialesSchema = Joi.object({
   remiseContractuelle: Joi.number().min(0).max(100),
   paiementDiffereAutorise: Joi.boolean(),
   plafondEncours: Joi.number().min(0).allow(null),
+  // NINEA ou Kbis contrôlé : ouvre droit au tarif préférentiel professionnel
+  justificatifProValide: Joi.boolean(),
 }).min(1);
 
 const createPersonnelSchema = Joi.object({

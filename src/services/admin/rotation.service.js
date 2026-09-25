@@ -115,7 +115,9 @@ class RotationService {
     await RotationService.validerHub(data.hubArriveeId, data.paysArrivee, "d'arrivée");
 
     const reference = await genererRefRotation();
-    const rotation = await Rotation.create({ ...data, reference, creePar: adminId });
+    // Numéro du conteneur : le suivant de la série, sauf saisie explicite
+    const numeroOrdre = data.numeroOrdre || Number((await Rotation.max('numeroOrdre')) || 0) + 1;
+    const rotation = await Rotation.create({ ...data, numeroOrdre, reference, creePar: adminId });
 
     await logActivity({
       userId: adminId,
@@ -124,7 +126,7 @@ class RotationService {
       entiteId: rotation.id,
       details: { reference, corridor: `${data.paysDepart}-${data.paysArrivee}` },
     });
-    return { message: 'Rotation créée.', rotation };
+    return { message: `Conteneur n° ${String(numeroOrdre).padStart(2, '0')} créé.`, rotation };
   };
 
   static updateRotation = async (id, data, adminId) => {
@@ -320,7 +322,8 @@ class RotationService {
     ouverte: ['cloturee', 'annulee'],
     cloturee: ['en_transit', 'ouverte', 'annulee'],
     en_transit: ['arrivee'],
-    arrivee: ['dechargee'],
+    arrivee: ['en_douane', 'dechargee'],
+    en_douane: ['dechargee'],
     dechargee: [],
     annulee: [],
   };
@@ -355,6 +358,7 @@ class RotationService {
     const EVENEMENT_PAR_STATUT = {
       en_transit: { codeEvenement: 'DEPART_HUB', pointCollecteId: null },
       arrivee: { codeEvenement: 'ARR_PAYS', pointCollecteId: rotation.hubArriveeId || null },
+      en_douane: { codeEvenement: 'DOUANE_IMP', pointCollecteId: rotation.hubArriveeId || null },
       dechargee: { codeEvenement: 'ARR_AGENCE', pointCollecteId: rotation.hubArriveeId || null },
     };
     const evenement = EVENEMENT_PAR_STATUT[nouveauStatut];

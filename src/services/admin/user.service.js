@@ -107,7 +107,7 @@ class UserService {
   /** Accorde ou modifie les conditions commerciales d'un compte professionnel. */
   static definirConditionsCommerciales = async (
     id,
-    { remiseContractuelle, paiementDiffereAutorise, plafondEncours },
+    { remiseContractuelle, paiementDiffereAutorise, plafondEncours, justificatifProValide },
     adminId
   ) => {
     const user = await User.findOne({ where: { id, role: 'client' } });
@@ -122,6 +122,7 @@ class UserService {
       ...(remiseContractuelle !== undefined && { remiseContractuelle }),
       ...(paiementDiffereAutorise !== undefined && { paiementDiffereAutorise }),
       ...(plafondEncours !== undefined && { plafondEncours }),
+      ...(justificatifProValide !== undefined && { justificatifProValide }),
     });
 
     await logActivity({
@@ -129,7 +130,12 @@ class UserService {
       action: 'admin.user.conditions_commerciales',
       entite: 'User',
       entiteId: user.id,
-      details: { remiseContractuelle, paiementDiffereAutorise, plafondEncours },
+      details: {
+        remiseContractuelle,
+        paiementDiffereAutorise,
+        plafondEncours,
+        justificatifProValide,
+      },
     });
     return { message: 'Conditions commerciales mises à jour.', utilisateur: user.toSafeJSON() };
   };

@@ -14,7 +14,11 @@ const {
   DeclarationDouane,
   ArticleDouane,
   PreuveLivraison,
+  DemandeEnlevement,
+  TourneeCollecte,
 } = require('../../models');
+const { arrondir, formater } = require('../../utils/devise');
+const { envoyerModele, URL_PUBLIQUE } = require('../../utils/mailer');
 const { BadRequestError, NotFoundError } = require('../../errors/AppError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const { logActivity } = require('../activityLog.service');
@@ -75,6 +79,13 @@ class ColisService {
     },
     { model: PreuveLivraison, as: 'preuveLivraison' },
     {
+      model: TourneeCollecte,
+      as: 'tourneeCollecte',
+      attributes: ['id', 'reference', 'titre', 'dateCollecte', 'statut'],
+    },
+    { model: DemandeEnlevement, as: 'enlevement' },
+    { model: User, as: 'validateur', attributes: ['id', 'nom', 'prenom'] },
+    {
       model: SuiviColis,
       as: 'historique',
       include: [{ model: User, as: 'auteur', attributes: ['id', 'nom', 'prenom', 'role'] }],
@@ -112,6 +123,41 @@ class ColisService {
     if (filters.expediteur) where.expediteurNom = { [Op.iLike]: `%${filters.expediteur}%` };
     if (filters.destinataire) where.destinataireNom = { [Op.iLike]: `%${filters.destinataire}%` };
     if (filters.typeContenu) where.typeContenu = filters.typeContenu;
+    if (filters.categorie) where.categorie = filters.categorie;
+    if (filters.tourneeCollecteId) where.tourneeCollecteId = filters.tourneeCollecteId;
+    if (filters.modeDepot) where.modeDepot = filters.modeDepot;
+    // Demandes à étudier (catégories 2 et 3), en commençant par les plus urgentes
+    if (filters.aEtudier === 'true' || filters.aEtudier === true) {
+      where.statut = { [Op.in]: ['en_attente_validation'] };
+    }
+    if (filters.etudeEnRetard === 'true' || filters.etudeEnRetard === true) {
+      where.statut = 'en_attente_validation';
+      where.dateLimiteEtude = { [Op.lt]: new Date() };
+    }
+    // Recherche par produit : description du colis, articles de la grille ou lignes douanières
+    if (filters.produit) {
+      const motif = `%${String(filters.produit).replace(/[%_]/g, '')}%`;
+      where[Op.and] = [
+        ...(where[Op.and] || []),
+        {
+          [Op.or]: [
+            { description: { [Op.iLike]: motif } },
+            sequelize.where(sequelize.cast(sequelize.col('Colis.lignesForfait'), 'text'), {
+              [Op.iLike]: motif,
+            }),
+            {
+              id: {
+                [Op.in]: sequelize.literal(
+                  `(SELECT d."colisId" FROM declarations_douane d
+                     JOIN articles_douane a ON a."declarationId" = d.id
+                    WHERE a.designation ILIKE ${sequelize.escape(motif)})`
+                ),
+              },
+            },
+          ],
+        },
+      ];
+    }
     if (filters.sansRotation === 'true' || filters.sansRotation === true) where.rotationId = null;
 
     if (filters.enRetard === 'true' || filters.enRetard === true) {
@@ -253,6 +299,13 @@ class ColisService {
     ]);
     if (colis.estTermine)
       throw new BadRequestError('Une expédition terminée ne peut plus être repesée');
+    // Forfait ou prix sur devis : le poids ne fait pas le prix
+    const modeTarification = colis.detailTarification?.modeTarification;
+    if (modeTarification && modeTarification !== 'poids') {
+      throw new BadRequestError(
+        'Le prix de ce colis ne dépend pas du poids : ajustez-le par la validation ou la proposition tarifaire'
+      );
+    }
     if (colis.facture?.statut === 'payee') {
       throw new BadRequestError(
         'La facture est déjà réglée : passez par un avoir ou une facture complémentaire'
@@ -281,6 +334,7 @@ class ColisService {
       service: colis.service,
       villeDepart,
       villeArrivee,
+      categorie: colis.categorie,
       pieces: piecesRetenues,
       typeContenu: colis.typeContenu,
       valeurDeclaree: colis.valeurDeclaree,
@@ -411,6 +465,260 @@ class ColisService {
     });
 
     return { message: 'Pesée corrigée et tarification recalculée.', colis, devis, ecart };
+  };
+
+  /* ── Étude des demandes (catégories 2 et 3) ─────────────────────────────── */
+
+  /**
+   * Décompose un montant TTC arrêté par l'administrateur (prix ajusté ou
+   * proposition tarifaire) en hors taxes et TVA, selon le pays de facturation.
+   */
+  static montantsDepuisTtc = (colis, montantTotal, parametres, { forfaitGlobal = false } = {}) => {
+    const devise = colis.devise;
+    const paysFacturation = colis.payeur === 'destinataire' ? colis.paysArrivee : colis.paysDepart;
+    const tauxTva = Number(paysFacturation === 'FR' ? parametres.tva_fr : parametres.tva_sn);
+    const droits = Number(colis.montantDroitsDouane || 0);
+    const total = arrondir(montantTotal, devise);
+    const ht = arrondir((total - droits) / (1 + tauxTva / 100), devise);
+    const tva = arrondir(total - droits - ht, devise);
+    const surcharges = forfaitGlobal ? 0 : Number(colis.montantSurcharges || 0);
+    const assurance = forfaitGlobal ? 0 : Number(colis.montantAssurance || 0);
+    const fret = arrondir(Math.max(0, ht - surcharges - assurance), devise);
+    return {
+      colonnes: {
+        montantFret: fret,
+        montantSurcharges: surcharges,
+        montantAssurance: assurance,
+        montantTva: tva,
+        montantTotal: total,
+      },
+      montants: {
+        fret,
+        surcharges,
+        assurance,
+        totalHt: ht,
+        tauxTva,
+        tva,
+        droitsDouane: droits,
+        creditParrainage: 0,
+        creditParrainageHt: 0,
+        total,
+      },
+    };
+  };
+
+  static chargerDemandeAEtudier = async (id, statutsAutorises = ['en_attente_validation']) => {
+    const colis = await Colis.findByPk(id, {
+      include: [
+        { model: User, as: 'client', attributes: ['id', 'email', 'prenom', 'notificationsEmail'] },
+        { model: PointCollecte, as: 'pointCollecteDepart', attributes: ['id', 'nom', 'adresse'] },
+      ],
+    });
+    if (!colis) throw new NotFoundError('Expédition introuvable');
+    if (!statutsAutorises.includes(colis.statut)) {
+      throw new BadRequestError(`Cette demande n'est pas à l'étude (statut : ${colis.statut})`);
+    }
+    return colis;
+  };
+
+  /** Date prévue d'enlèvement renseignée par l'administrateur avant la tournée. */
+  static fixerDatePrevueEnlevement = async (colis, date) => {
+    if (!date) return;
+    await colis.update({ infosCollecte: { ...(colis.infosCollecte || {}), datePrevue: date } });
+    await DemandeEnlevement.update(
+      { dateSouhaitee: date },
+      { where: { colisId: colis.id, statut: { [Op.in]: ['demande', 'planifie'] } } }
+    );
+  };
+
+  /**
+   * Valide une demande de catégorie 2. Un prix « à partir de » peut être ajusté à
+   * cette occasion ; la facture sera émise à la réception du colis.
+   */
+  static validerDemande = async (
+    id,
+    { montantTotal, commentaire, datePrevueEnlevement },
+    adminId
+  ) => {
+    const colis = await ColisService.chargerDemandeAEtudier(id);
+    if (colis.categorie === 'colis_xxl') {
+      throw new BadRequestError('Un colis XXL se valide par une proposition tarifaire');
+    }
+    const parametres = await parametreService.chargerTous();
+
+    const maj = { valideAt: new Date(), validePar: adminId };
+    if (montantTotal) {
+      const { colonnes, montants } = ColisService.montantsDepuisTtc(
+        colis,
+        montantTotal,
+        parametres
+      );
+      Object.assign(maj, colonnes, {
+        detailTarification: {
+          ...colis.detailTarification,
+          montants,
+          ajustement: {
+            ancienMontant: Number(colis.montantTotal),
+            nouveauMontant: montants.total,
+            par: adminId,
+            le: new Date().toISOString(),
+          },
+        },
+      });
+    }
+    await colis.update(maj);
+    await ColisService.fixerDatePrevueEnlevement(colis, datePrevueEnlevement);
+
+    await suiviService.enregistrerEvenement(
+      colis,
+      { codeEvenement: 'VALIDE', commentaire: commentaire || null },
+      { auteurId: adminId }
+    );
+
+    const consigne = ColisService.consigneRemise(colis, parametres, datePrevueEnlevement);
+    if (colis.client?.email) {
+      await envoyerModele('demande_validee', colis.client.email, {
+        prenom: colis.client.prenom,
+        reference: colis.reference,
+        montant: formater(colis.montantTotal, colis.devise),
+        instructions: [commentaire, consigne].filter(Boolean).join(' '),
+        lien: URL_PUBLIQUE ? `${URL_PUBLIQUE}/suivi/${colis.reference}` : null,
+      });
+    }
+
+    await logActivity({
+      userId: adminId,
+      action: 'admin.colis.valider',
+      entite: 'Colis',
+      entiteId: colis.id,
+      details: { montant: colis.montantTotal },
+    });
+    return { message: 'Demande validée, le client est prévenu.', colis };
+  };
+
+  /** Consigne de remise du colis communiquée au client après validation. */
+  static consigneRemise = (colis, parametres, datePrevue = null) => {
+    if (colis.modeDepot === 'enlevement_domicile') {
+      const date = datePrevue || colis.infosCollecte?.datePrevue;
+      return date
+        ? `Collecte à domicile prévue le ${date}.`
+        : 'Nous vous communiquerons la date de collecte.';
+    }
+    if (colis.modeDepot === 'point_collecte' && colis.pointCollecteDepart) {
+      return `Déposez votre colis au point « ${colis.pointCollecteDepart.nom} » (${colis.pointCollecteDepart.adresse}).`;
+    }
+    const adresse =
+      colis.paysDepart === 'SN' ? parametres.adresse_reception_sn : parametres.adresse_reception_fr;
+    const ligne = [adresse?.nom, adresse?.adresse, adresse?.codePostal, adresse?.ville]
+      .filter(Boolean)
+      .join(', ');
+    return ligne ? `Adresse de réception : ${ligne}.` : '';
+  };
+
+  /** Refus d'une demande à l'étude (ou retrait d'une proposition non acceptée). */
+  static refuserDemande = async (id, { motif }, adminId) => {
+    const colis = await ColisService.chargerDemandeAEtudier(id, [
+      'en_attente_validation',
+      'devis_propose',
+    ]);
+    await colis.update({ motifRefus: motif, validePar: adminId });
+    await suiviService.enregistrerEvenement(
+      colis,
+      { codeEvenement: 'DEMANDE_REFUSEE', commentaire: motif, motif },
+      { auteurId: adminId }
+    );
+    await require('../client/colis.service').liberRessources(colis);
+
+    if (colis.client?.email) {
+      await envoyerModele('demande_refusee', colis.client.email, {
+        prenom: colis.client.prenom,
+        reference: colis.reference,
+        motif,
+      });
+    }
+    await logActivity({
+      userId: adminId,
+      action: 'admin.colis.refuser',
+      entite: 'Colis',
+      entiteId: colis.id,
+      details: { motif },
+    });
+    return { message: 'Demande refusée, le client est prévenu.', colis };
+  };
+
+  /**
+   * Proposition tarifaire d'un colis XXL, envoyée par email et notification avec
+   * le tarif, les conditions et le lien pour l'accepter. Une nouvelle proposition
+   * remplace la précédente tant que le client n'a pas répondu.
+   */
+  static proposerTarif = async (
+    id,
+    { montantTotal, commentaire, validiteJours, datePrevueEnlevement },
+    adminId
+  ) => {
+    const colis = await ColisService.chargerDemandeAEtudier(id, [
+      'en_attente_validation',
+      'devis_propose',
+    ]);
+    const parametres = await parametreService.chargerTous();
+    const { colonnes, montants } = ColisService.montantsDepuisTtc(colis, montantTotal, parametres, {
+      forfaitGlobal: true,
+    });
+    const duree = Number(validiteJours || parametres.delai_validite_proposition_jours || 7);
+    const expireAt = new Date(Date.now() + duree * 24 * 3600 * 1000);
+
+    await colis.update({
+      ...colonnes,
+      montantPropose: montants.total,
+      propositionCommentaire: commentaire || null,
+      propositionAt: new Date(),
+      propositionExpireAt: expireAt,
+      propositionRepondueAt: null,
+      validePar: adminId,
+      valideAt: new Date(),
+      detailTarification: {
+        ...colis.detailTarification,
+        modeTarification: 'sur_devis',
+        montants,
+        proposition: { montant: montants.total, commentaire, par: adminId, le: new Date() },
+      },
+    });
+    await ColisService.fixerDatePrevueEnlevement(colis, datePrevueEnlevement);
+
+    await suiviService.enregistrerEvenement(
+      colis,
+      {
+        codeEvenement: 'DEVIS_PROPOSE',
+        commentaire: `Proposition : ${formater(montants.total, colis.devise)}`,
+      },
+      { auteurId: adminId }
+    );
+
+    if (colis.client?.email) {
+      await envoyerModele('proposition_tarifaire', colis.client.email, {
+        prenom: colis.client.prenom,
+        reference: colis.reference,
+        montant: formater(montants.total, colis.devise),
+        commentaire: commentaire || '',
+        conditions: [
+          ColisService.consigneRemise(colis, parametres, datePrevueEnlevement),
+          parametres.lien_cgv ? `Conditions générales : ${parametres.lien_cgv}` : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        dateExpiration: expireAt.toISOString().slice(0, 10),
+        lien: URL_PUBLIQUE ? `${URL_PUBLIQUE}/colis/${colis.id}` : null,
+      });
+    }
+
+    await logActivity({
+      userId: adminId,
+      action: 'admin.colis.proposition',
+      entite: 'Colis',
+      entiteId: colis.id,
+      details: { montant: montants.total, validiteJours: duree },
+    });
+    return { message: 'Proposition tarifaire envoyée au client.', colis };
   };
 
   /** Met à jour les données descriptives d'une expédition, hors statut et montants. */
@@ -695,6 +1003,9 @@ class ColisService {
     { cle: 'reference', libelle: 'N° de suivi' },
     { cle: 'createdAt', libelle: 'Date de création', transforme: (v) => documents.dateHeureFr(v) },
     { cle: 'statut', libelle: 'Statut' },
+    { cle: 'categorie', libelle: 'Catégorie' },
+    { cle: 'etatMarchandise', libelle: 'État' },
+    { cle: 'description', libelle: 'Contenu' },
     { cle: 'service.nom', libelle: 'Service' },
     { cle: 'expediteurNom', libelle: 'Expéditeur' },
     { cle: 'villeDepart.nom', libelle: 'Ville de départ' },

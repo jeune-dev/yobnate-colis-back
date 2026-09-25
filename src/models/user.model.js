@@ -50,6 +50,8 @@ User.init(
     pays: { type: DataTypes.ENUM(...CODES_PAYS), allowNull: false, defaultValue: 'SN' },
     villeId: { type: DataTypes.UUID, allowNull: true },
     adresse: { type: DataTypes.STRING(255), allowNull: true },
+    /** Code postal de domiciliation : cible les annonces de tournées de collecte. */
+    codePostal: { type: DataTypes.STRING(10), allowNull: true },
     /** Point de collecte d'affectation d'un agent. */
     pointCollecteId: { type: DataTypes.UUID, allowNull: true },
 
@@ -63,6 +65,13 @@ User.init(
     /** NINEA au Sénégal, SIRET en France. */
     numeroIdentificationFiscale: { type: DataTypes.STRING(30), allowNull: true },
     numeroTvaIntracom: { type: DataTypes.STRING(20), allowNull: true },
+    /**
+     * Justificatif professionnel (NINEA ou Kbis) contrôlé par l'administrateur :
+     * ouvre droit au tarif préférentiel.
+     */
+    justificatifProUrl: { type: DataTypes.STRING(255), allowNull: true },
+    justificatifProPublicId: { type: DataTypes.STRING(150), allowNull: true },
+    justificatifProValide: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     /** Remise contractuelle appliquée au fret, en pourcentage. */
     remiseContractuelle: {
       type: DataTypes.DECIMAL(5, 2),
@@ -74,10 +83,25 @@ User.init(
     paiementDiffereAutorise: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     plafondEncours: { type: DataTypes.DECIMAL(12, 2), allowNull: true, validate: { min: 0 } },
 
+    // ── Parrainage ─────────────────────────────────────────────────────────
+    /** Code personnel à partager ; le filleul le saisit à l'inscription. */
+    codeParrainage: { type: DataTypes.STRING(12), allowNull: true, unique: true },
+    parrainId: { type: DataTypes.UUID, allowNull: true },
+    /** Crédit acquis par le parrainage, imputé sur les prochaines expéditions (EUR). */
+    creditParrainage: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0,
+      validate: { min: 0 },
+    },
+    /** Le bonus de bienvenue du filleul et la récompense du parrain ont été attribués. */
+    parrainageRecompense: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // ── Préférences ────────────────────────────────────────────────────────
     langue: { type: DataTypes.ENUM('fr'), allowNull: false, defaultValue: 'fr' },
     notificationsEmail: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     notificationsSms: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    notificationsWhatsapp: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    notificationsPush: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
 
     // ── Compte ─────────────────────────────────────────────────────────────
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
@@ -101,6 +125,8 @@ User.init(
       { fields: ['pays'] },
       { fields: ['pointCollecteId'] },
       { fields: ['typeCompte'] },
+      { fields: ['parrainId'] },
+      { fields: ['codePostal'] },
     ],
   }
 );

@@ -28,6 +28,21 @@ exports.enregistrerEvenementLot = asyncHandler(async (req, res) => {
   return ok(res, { traites: result.traites, erreurs: result.erreurs }, result.message);
 });
 
+exports.valider = asyncHandler(async (req, res) => {
+  const result = await service.validerDemande(req.params.id, req.body, req.user.id);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
+exports.refuser = asyncHandler(async (req, res) => {
+  const result = await service.refuserDemande(req.params.id, req.body, req.user.id);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
+exports.proposerTarif = asyncHandler(async (req, res) => {
+  const result = await service.proposerTarif(req.params.id, req.body, req.user.id);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
 exports.corrigerPesee = asyncHandler(async (req, res) => {
   const result = await service.corrigerPesee(req.params.id, req.body, req.user.id);
   return ok(res, { colis: result.colis, devis: result.devis, ecart: result.ecart }, result.message);

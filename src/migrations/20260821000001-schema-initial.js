@@ -24,6 +24,12 @@ module.exports = {
       CREATE EXTENSION IF NOT EXISTS "pg_trgm";
     `);
 
+    // Base déjà créée hors migrations (sync() du mode développement) : son schéma
+    // est celui d'une version antérieure des modèles, que les migrations suivantes
+    // font évoluer. Un sync() ici tenterait d'indexer des colonnes encore absentes.
+    const tables = await queryInterface.showAllTables();
+    if (tables.includes('colis')) return;
+
     // Charge toutes les définitions de modèles et associations, puis crée
     // les tables absentes avec leurs colonnes, types, valeurs par défaut et index.
     const { sequelize } = require('../models');
