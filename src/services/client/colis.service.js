@@ -18,8 +18,8 @@ const {
   TourneeCollecte,
   DemandeEnlevement,
 } = require('../../models');
-const { BadRequestError, NotFoundError } = require('../../errors/AppError');
-const { paginate, paginateResult } = require('../../utils/paginate');
+const { BadRequestError, NotFoundError, ConflictError } = require('../../errors/AppError');
+const { paginate, paginateResult, listerPagine } = require('../../utils/paginate');
 const {
   genererNumeroSuiviYobnate,
   genererNumeroPiece,
@@ -68,9 +68,10 @@ class ColisService {
     },
   ];
 
+  /** Relations « 1-N » chargées séparément : voir admin/colis.service (produit cartésien). */
   static INCLUDE_DETAIL = [
     ...ColisService.INCLUDE_LISTE,
-    { model: ColisPiece, as: 'pieces' },
+    { model: ColisPiece, as: 'pieces', separate: true, order: [['ordre', 'ASC']] },
     {
       model: PointCollecte,
       as: 'pointCollecteDepart',
@@ -81,11 +82,19 @@ class ColisService {
       as: 'pointRetrait',
       attributes: ['id', 'code', 'nom', 'adresse', 'telephone', 'horaires'],
     },
-    { model: Facture, as: 'facture', include: [{ model: Paiement, as: 'paiements' }] },
+    {
+      model: Facture,
+      as: 'facture',
+      include: [
+        { model: Paiement, as: 'paiements', separate: true, order: [['createdAt', 'ASC']] },
+      ],
+    },
     {
       model: DeclarationDouane,
       as: 'declarationDouane',
-      include: [{ model: ArticleDouane, as: 'articles' }],
+      include: [
+        { model: ArticleDouane, as: 'articles', separate: true, order: [['createdAt', 'ASC']] },
+      ],
     },
     { model: PreuveLivraison, as: 'preuveLivraison' },
     {
@@ -382,7 +391,14 @@ class ColisService {
     for (let i = 0; i < tentatives; i += 1) {
       const reference = await fabriqueReference();
       try {
-        return await model.create(construire(reference), { transaction });
+        // Point de sauvegarde : dans PostgreSQL, une violation d'unicité annule toute la
+        // transaction englobante ; sans SAVEPOINT, la nouvelle tentative échouait
+        // toujours (« current transaction is aborted »).
+        return transaction
+          ? await sequelize.transaction({ transaction }, (sp) =>
+              model.create(construire(reference), { transaction: sp })
+            )
+          : await model.create(construire(reference));
       } catch (err) {
         if (err instanceof UniqueConstraintError && i < tentatives - 1) continue;
         throw err;
@@ -729,36 +745,73 @@ class ColisService {
             { transaction: t }
           );
         }
+        // Réservations atomiques : chaque mise à jour porte sa propre condition, vérifiée
+        // par PostgreSQL au moment de l'écriture. Deux déclarations simultanées ne
+        // peuvent donc ni dépasser la capacité d'une tournée, ni rendre un stock
+        // négatif, ni dépenser deux fois le même crédit (la transaction est annulée).
         if (tournee) {
-          await TourneeCollecte.increment('nbInscrits', {
-            by: 1,
-            where: { id: tournee.id },
-            transaction: t,
-          });
+          const [reserve] = await TourneeCollecte.update(
+            { nbInscrits: sequelize.literal('"nbInscrits" + 1') },
+            {
+              where: {
+                id: tournee.id,
+                [Op.or]: [
+                  { capaciteMax: null },
+                  { nbInscrits: { [Op.lt]: sequelize.col('capaciteMax') } },
+                ],
+              },
+              transaction: t,
+            }
+          );
+          if (!reserve) throw new ConflictError('Cette tournée de collecte vient d’être complète');
         }
 
-        // Emballages achetés : le stock suivi est décrémenté
+        // Emballages achetés : le stock suivi est décrémenté, sans jamais passer sous zéro
         for (const achat of colis.emballages || []) {
-          await Emballage.decrement('stock', {
-            by: achat.quantite,
-            where: { id: achat.emballageId, stock: { [Op.ne]: null } },
-            transaction: t,
-          });
+          const [nbLignes] = await Emballage.update(
+            { stock: sequelize.literal(`"stock" - ${Number(achat.quantite)}`) },
+            {
+              where: {
+                id: achat.emballageId,
+                [Op.or]: [{ stock: null }, { stock: { [Op.gte]: Number(achat.quantite) } }],
+              },
+              // stock NULL (non suivi) : NULL - n reste NULL, la ligne compte comme réservée
+              transaction: t,
+            }
+          );
+          if (!nbLignes) {
+            throw new ConflictError('Stock d’emballages insuffisant pour cette commande');
+          }
         }
 
         // Crédit de parrainage consommé et récompense du parrain à la première expédition du filleul
         if (creditUtilise > 0) {
-          await User.decrement('creditParrainage', {
-            by: creditUtilise,
-            where: { id: userId },
-            transaction: t,
-          });
+          const [debite] = await User.update(
+            {
+              creditParrainage: sequelize.literal(`"creditParrainage" - ${Number(creditUtilise)}`),
+            },
+            {
+              where: { id: userId, creditParrainage: { [Op.gte]: Number(creditUtilise) } },
+              transaction: t,
+            }
+          );
+          if (!debite) {
+            throw new ConflictError(
+              'Votre crédit de parrainage a changé : relancez la déclaration'
+            );
+          }
         }
         if (avantages.remiseParrainagePourcent > 0 && !devis.surDevis) {
-          await User.update(
+          // Une seule « première expédition » par filleul, même en cas de double envoi
+          const [premiere] = await User.update(
             { parrainageRecompense: true },
-            { where: { id: userId }, transaction: t }
+            { where: { id: userId, parrainageRecompense: false }, transaction: t }
           );
+          if (!premiere) {
+            throw new ConflictError(
+              'La remise de première expédition a déjà été utilisée : relancez la déclaration'
+            );
+          }
           await User.increment('creditParrainage', {
             by: Number(parametres.parrainage_gain_parrain_eur || 0),
             where: { id: client.parrainId },
@@ -938,13 +991,12 @@ class ColisService {
     }
 
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Colis.findAndCountAll({
+    const { rows, count } = await listerPagine(Colis, {
       where,
       include: ColisService.INCLUDE_LISTE,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -971,13 +1023,12 @@ class ColisService {
     }
 
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Colis.findAndCountAll({
+    const { rows, count } = await listerPagine(Colis, {
       where,
       include: ColisService.INCLUDE_LISTE,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -987,10 +1038,16 @@ class ColisService {
     };
   };
 
-  static chargerExpeditionDuClient = async (userId, colisId) => {
+  static chargerExpeditionDuClient = async (
+    userId,
+    colisId,
+    include = ColisService.INCLUDE_DETAIL
+  ) => {
     const colis = await Colis.findOne({
       where: { id: colisId, userId },
-      include: ColisService.INCLUDE_DETAIL,
+      include,
+      // Simple contrôle de propriété : inutile de rapatrier la ligne complète
+      ...(include.length ? {} : { attributes: ['id'] }),
     });
     if (!colis) throw new NotFoundError('Expédition introuvable');
     return colis;
@@ -1020,7 +1077,7 @@ class ColisService {
   };
 
   static getSuivi = async (userId, colisId) => {
-    await ColisService.chargerExpeditionDuClient(userId, colisId);
+    await ColisService.chargerExpeditionDuClient(userId, colisId, []);
     return suiviService.getHistorique(colisId, { inclureInternes: false });
   };
 
@@ -1038,14 +1095,12 @@ class ColisService {
         parametreService.chargerTous(),
       ]);
       if (filleul?.parrainId) {
-        const parrain = await User.findByPk(filleul.parrainId, { transaction });
+        // Reprise atomique (et non lecture puis écriture) : un crédit concurrent n'est pas perdu
         const gain = Number(parametres.parrainage_gain_parrain_eur || 0);
-        if (parrain) {
-          await parrain.update(
-            { creditParrainage: Math.max(0, Number(parrain.creditParrainage) - gain) },
-            { transaction }
-          );
-        }
+        await User.update(
+          { creditParrainage: sequelize.literal(`GREATEST(0, "creditParrainage" - ${gain})`) },
+          { where: { id: filleul.parrainId }, transaction }
+        );
         await filleul.update({ parrainageRecompense: false }, { transaction });
       }
     }
@@ -1288,7 +1343,7 @@ class ColisService {
 
   /** Inscrit une adresse aux alertes de suivi de l'expédition. */
   static abonnerAuSuivi = async (userId, colisId, { canal, destination, profil }) => {
-    await ColisService.chargerExpeditionDuClient(userId, colisId);
+    await ColisService.chargerExpeditionDuClient(userId, colisId, []);
     const abonnement = await notificationService.abonner({ colisId, canal, destination, profil });
     return {
       message: `Les alertes de suivi seront envoyées à ${destination}.`,

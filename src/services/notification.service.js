@@ -4,6 +4,7 @@ const logger = require('../config/logger');
 const { sendColisStatutEmail, URL_PUBLIQUE } = require('../utils/mailer');
 const { envoyerPush } = require('../utils/push');
 const { envoyerWhatsapp } = require('../utils/whatsapp');
+const arrierePlan = require('../utils/arrierePlan');
 
 /**
  * Diffusion des notifications.
@@ -50,15 +51,18 @@ class NotificationService {
           'deviceToken',
         ],
       });
+      // Le courriel part par la file d'arrière-plan (voir utils/mailer)
       if (email && user?.notificationsEmail) await email(user);
-      // Notification push sur le téléphone du client, si l'application est enregistrée
+      // Notification push : appel HTTP externe, hors du chemin de la requête
       if (user?.deviceToken && user.notificationsPush) {
-        await envoyerPush({
-          token: user.deviceToken,
-          titre,
-          message,
-          donnees: { type, entite, entiteId, lienCible },
-        });
+        arrierePlan.lancer('push', () =>
+          envoyerPush({
+            token: user.deviceToken,
+            titre,
+            message,
+            donnees: { type, entite, entiteId, lienCible },
+          })
+        );
       }
       return notification;
     } catch (err) {
@@ -80,12 +84,15 @@ class NotificationService {
       });
       if (!client?.notificationsWhatsapp) return false;
       const lien = URL_PUBLIQUE ? ` Suivi : ${URL_PUBLIQUE}/suivi/${colis.reference}` : '';
-      return envoyerWhatsapp({
-        telephone: colis.expediteurTelephone || client.telephone,
-        message:
-          `Yobnate — Colis ${colis.reference} : ${evenement.libelle}` +
-          `${evenement.lieu ? ` (${evenement.lieu})` : ''}.${lien}`,
-      });
+      arrierePlan.lancer('whatsapp', () =>
+        envoyerWhatsapp({
+          telephone: colis.expediteurTelephone || client.telephone,
+          message:
+            `Yobnate — Colis ${colis.reference} : ${evenement.libelle}` +
+            `${evenement.lieu ? ` (${evenement.lieu})` : ''}.${lien}`,
+        })
+      );
+      return true;
     } catch (err) {
       logger.error('Notification WhatsApp non délivrée', { message: err.message });
       return false;
@@ -177,10 +184,12 @@ class NotificationService {
             await sendColisStatutEmail(abonnement.destination, colis, evenement);
           }
           if (abonnement.canal === 'whatsapp') {
-            await envoyerWhatsapp({
-              telephone: abonnement.destination,
-              message: `Yobnate — Colis ${colis.reference} : ${evenement.libelle}.`,
-            });
+            arrierePlan.lancer('whatsapp', () =>
+              envoyerWhatsapp({
+                telephone: abonnement.destination,
+                message: `Yobnate — Colis ${colis.reference} : ${evenement.libelle}.`,
+              })
+            );
           }
           // Le canal SMS est branché sur le futur agrégat opérateur ; l'abonnement est
           // enregistré dès maintenant pour ne rien perdre de l'historique client.

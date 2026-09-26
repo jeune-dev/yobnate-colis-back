@@ -28,18 +28,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 (async () => {
   try {
-    // En production : ne jamais altérer le schéma au démarrage — utiliser des migrations.
-    // En développement : on utilise sync() simple (création des tables manquantes).
-    //   NB : on n'utilise PAS { alter: true } car il génère un SQL invalide sur PostgreSQL
-    //   pour les colonnes `unique` (erreur "syntax error at or near UNIQUE", bug Sequelize 6).
-    //   Pour faire évoluer un schéma existant, passez par une migration ou recréez la base de dev.
-    const isProd = process.env.NODE_ENV === 'production';
-    await sequelize.sync({ force: false });
-    logger.info(
-      isProd
-        ? 'DB connectée (mode production — schéma non altéré)'
-        : 'DB synchronisée (création des tables manquantes)'
-    );
+    // Le schéma est géré exclusivement par les migrations (`npm start` les exécute).
+    // Pas de sequelize.sync() ici : sur PostgreSQL, chaque sync() recréait les
+    // contraintes UNIQUE des colonnes (users_email_key1, _key2…), soit 21 index en
+    // double à chaque démarrage, qui ralentissaient toutes les écritures.
+    await sequelize.authenticate();
+    logger.info('Connexion PostgreSQL établie');
 
     startPurgeJob();
     // Propositions expirées, délais d'étude, tournées passées, relances de factures…
@@ -48,12 +42,37 @@ const HOST = process.env.HOST || '0.0.0.0';
     const server = app.listen(PORT, HOST, () => {
       logger.info(`Serveur démarré sur ${HOST}:${PORT} [${process.env.NODE_ENV || 'development'}]`);
     });
+    // Derrière Nginx (keepalive vers l'upstream) : le keep-alive Node doit durer plus
+    // longtemps que celui du proxy (60 s), sinon Node ferme une connexion que Nginx
+    // réutilise au même instant, d'où des 502 intermittents. Défaut Node : 5 s.
+    server.keepAliveTimeout = Number(process.env.HTTP_KEEPALIVE_TIMEOUT_MS) || 65000;
+    server.headersTimeout = server.keepAliveTimeout + 1000;
+    // Une requête (envoi de photos compris) ne peut pas occuper un socket plus de 2 min
+    server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS) || 120000;
+
+    // Un client qui coupe sa connexion ne met pas fin au traitement côté serveur : le
+    // serveur HTTP se croit alors vide et l'arrêt fermait le pool pendant que des
+    // requêtes écrivaient encore en base (« getConnection … after closed », observé
+    // en test de charge). On attend que le pool reste inactif 250 ms d'affilée.
+    const attendreRequetes = async (delaiMs) => {
+      const pool = sequelize.connectionManager.pool;
+      const limite = Date.now() + delaiMs;
+      let calmeDepuis = Date.now();
+      while (Date.now() < limite) {
+        if (pool.using > 0 || pool.waiting > 0) calmeDepuis = Date.now();
+        else if (Date.now() - calmeDepuis >= 250) return;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    };
 
     // Résilience : graceful shutdown sur SIGTERM et SIGINT
     const shutdown = (signal) => {
       logger.info(`Signal ${signal} reçu — arrêt en cours…`);
       server.close(async () => {
         try {
+          await attendreRequetes(5000);
+          // Laisser partir les courriels et notifications déjà confiés à la file
+          await require('./utils/arrierePlan').vider(4000);
           await sequelize.close();
           logger.info('Connexion DB fermée proprement');
         } catch (_err) {

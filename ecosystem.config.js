@@ -9,7 +9,8 @@ module.exports = {
       max_memory_restart: '500M',
       restart_delay: 3000,
       max_restarts: 10,
-      kill_timeout: 10000,
+      // Arrêt propre : le serveur attend jusqu'à 10 s les requêtes et envois en cours
+      kill_timeout: 15000,
       listen_timeout: 8000,
       error_file: 'logs/pm2-error.log',
       out_file: 'logs/pm2-out.log',
@@ -20,6 +21,9 @@ module.exports = {
       },
       env_production: {
         NODE_ENV: 'production',
+        // Chaque worker ouvre jusqu'à DB_POOL_MAX connexions : total = workers × DB_POOL_MAX,
+        // à garder sous max_connections de PostgreSQL (100 par défaut). Réglez
+        // PM2_INSTANCES et DB_POOL_MAX ensemble (ex. 4 workers × 15 = 60).
       },
     },
   ],

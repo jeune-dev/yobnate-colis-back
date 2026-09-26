@@ -114,11 +114,16 @@ class AuthService {
   };
 
   static issueTokens = async (user) => {
+    // jwtid unique : deux connexions du même compte dans la même seconde produisaient
+    // des jetons identiques (même sub, même iat), donc le même hash de refresh token
+    // et une violation d'unicité (409) — double tap, deux appareils, réessai réseau.
     const accessToken = jwt.sign({ sub: user.id, role: user.role }, jwtConfig.secret, {
       expiresIn: jwtConfig.expiresIn,
+      jwtid: crypto.randomUUID(),
     });
     const refreshTokenValue = jwt.sign({ sub: user.id }, jwtConfig.refreshSecret, {
       expiresIn: jwtConfig.refreshExpiresIn,
+      jwtid: crypto.randomUUID(),
     });
     await RefreshToken.create({
       userId: user.id,
@@ -221,14 +226,16 @@ class AuthService {
       throw new UnauthorizedError('Token de rafraîchissement invalide ou expiré');
     }
 
+    // Consommation atomique : le DELETE ne réussit qu'une fois. Avec une lecture puis
+    // une suppression séparées, deux rafraîchissements simultanés du même jeton (deux
+    // onglets, réessai réseau) obtenaient chacun une nouvelle paire de jetons.
     const tokenHash = AuthService.sha256(token);
-    const stored = await RefreshToken.findOne({ where: { tokenHash } });
-    if (!stored) throw new UnauthorizedError('Token de rafraîchissement révoqué');
+    const consomme = await RefreshToken.destroy({ where: { tokenHash } });
+    if (!consomme) throw new UnauthorizedError('Token de rafraîchissement révoqué');
 
     const user = await User.findByPk(payload.sub);
     if (!user || !user.isActive) throw new UnauthorizedError('Compte introuvable ou désactivé');
 
-    await stored.destroy();
     const tokens = await AuthService.issueTokens(user);
     return { message: 'Token rafraîchi', ...tokens, utilisateur: user.toSafeJSON() };
   };

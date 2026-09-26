@@ -7,6 +7,7 @@ const {
   Adresse,
   Ville,
   PointCollecte,
+  Notification,
 } = require('../../models');
 const { BadRequestError, NotFoundError } = require('../../errors/AppError');
 const { paginate, paginateResult } = require('../../utils/paginate');
@@ -14,6 +15,8 @@ const { genererRefTournee } = require('../../utils/referenceGenerator');
 const { envoyerModele, URL_PUBLIQUE } = require('../../utils/mailer');
 const { dateFr } = require('../../utils/documents');
 const logger = require('../../config/logger');
+const arrierePlan = require('../../utils/arrierePlan');
+const { envoyerPush } = require('../../utils/push');
 const { logActivity } = require('../activityLog.service');
 const notificationService = require('../notification.service');
 
@@ -307,25 +310,56 @@ class TourneeCollecteService {
 
       const clients = await User.findAll({
         where: { id: ids, isActive: true, role: 'client' },
-        attributes: ['id', 'email', 'prenom', 'notificationsEmail'],
+        attributes: [
+          'id',
+          'email',
+          'prenom',
+          'notificationsEmail',
+          'notificationsPush',
+          'deviceToken',
+        ],
       });
       const horaires =
         tournee.heureDebut && tournee.heureFin
           ? `entre ${tournee.heureDebut} et ${tournee.heureFin}`
           : '';
       const date = dateFr(tournee.dateCollecte);
+      const contenu = {
+        titre: `Collecte à domicile le ${date}`,
+        message: tournee.messageBanniere || `${tournee.titre} — réservez votre collecte.`,
+        type: 'enlevement',
+        niveau: 'info',
+        entite: 'TourneeCollecte',
+        entiteId: tournee.id,
+        lienCible: `/collectes/${tournee.id}`,
+      };
 
+      // Notifications internes insérées par lots (une requête pour 500 clients) au lieu
+      // de deux requêtes par client exécutées l'une après l'autre dans la requête HTTP.
+      const TAILLE_LOT = 500;
+      for (let i = 0; i < clients.length; i += TAILLE_LOT) {
+        await Notification.bulkCreate(
+          clients.slice(i, i + TAILLE_LOT).map((client) => ({ ...contenu, userId: client.id }))
+        );
+      }
+
+      // Envois externes confiés à la file d'arrière-plan (courriels via envoyerModele)
       for (const client of clients) {
-        await notificationService.notifier({
-          userId: client.id,
-          titre: `Collecte à domicile le ${date}`,
-          message: tournee.messageBanniere || `${tournee.titre} — réservez votre collecte.`,
-          type: 'enlevement',
-          niveau: 'info',
-          entite: 'TourneeCollecte',
-          entiteId: tournee.id,
-          lienCible: `/collectes/${tournee.id}`,
-        });
+        if (client.deviceToken && client.notificationsPush) {
+          arrierePlan.lancer('push', () =>
+            envoyerPush({
+              token: client.deviceToken,
+              titre: contenu.titre,
+              message: contenu.message,
+              donnees: {
+                type: contenu.type,
+                entite: contenu.entite,
+                entiteId: contenu.entiteId,
+                lienCible: contenu.lienCible,
+              },
+            })
+          );
+        }
         if (client.notificationsEmail) {
           await envoyerModele('tournee_collecte', client.email, {
             prenom: client.prenom,

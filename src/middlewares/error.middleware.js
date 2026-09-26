@@ -36,15 +36,32 @@ function redactBody(body) {
 }
 
 const errorMiddleware = (err, req, res, _next) => {
-  logger.error(err.message, {
-    name: err.name,
-    statusCode: err.statusCode,
-    path: req.path,
-    method: req.method,
-    ip: req.ip,
-    stack: err.stack,
-    body: redactBody(req.body),
-  });
+  // Erreur attendue côté client (4xx : validation, droits, jeton expiré…) : une ligne
+  // d'avertissement suffit. La pile et le corps de requête ne sont journalisés que pour
+  // les vraies anomalies ; les sérialiser pour chaque 401/404 coûtait du CPU et
+  // noyait les erreurs serveur dans le volume.
+  const statut = Number(err.statusCode || err.status) || 500;
+  const attendue = (err instanceof AppError && err.isOperational) || err.isJoi || statut < 500;
+  if (attendue) {
+    logger.warn(err.message, {
+      requestId: req.requestId,
+      name: err.name,
+      statusCode: statut,
+      path: req.path,
+      method: req.method,
+    });
+  } else {
+    logger.error(err.message, {
+      requestId: req.requestId,
+      name: err.name,
+      statusCode: err.statusCode,
+      path: req.path,
+      method: req.method,
+      ip: req.ip,
+      stack: err.stack,
+      body: redactBody(req.body),
+    });
+  }
 
   if (err instanceof AppError && err.isOperational) {
     const body = { success: false, message: err.message };
@@ -105,8 +122,11 @@ const errorMiddleware = (err, req, res, _next) => {
       'SequelizeConnectionError',
       'SequelizeConnectionRefusedError',
       'SequelizeConnectionTimedOutError',
+      'SequelizeConnectionAcquireTimeoutError', // pool saturé
       'SequelizeTimeoutError',
-    ].includes(err.name)
+    ].includes(err.name) ||
+    // 57014 : requête annulée par statement_timeout
+    err.parent?.code === '57014'
   ) {
     return res.status(503).json({ success: false, message: 'Service temporairement indisponible' });
   }

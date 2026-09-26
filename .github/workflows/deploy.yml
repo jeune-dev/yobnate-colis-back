@@ -1,12 +1,16 @@
 name: Deploy Yobante Colis API
 
+# Déploiement uniquement après une CI réussie sur main (lint, migrations, tests, build)
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 jobs:
   deploy:
     name: Deploy to VPS
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -24,6 +28,13 @@ jobs:
             git pull --rebase origin main
             docker compose -f docker-compose.prod.yml up -d --build backend
             docker image prune -f
-            sleep 5
-            curl -sf http://localhost:3000/health || (echo "Health check échoué" && exit 1)
-            echo "✔ Déploiement réussi"
+            # Les migrations s'exécutent au démarrage : on attend que l'API joigne la base
+            for i in $(seq 1 24); do
+              if curl -sf http://localhost:3000/ready > /dev/null; then
+                echo "✔ Déploiement réussi"; exit 0
+              fi
+              sleep 5
+            done
+            echo "✗ L'API n'est pas prête après 2 minutes"
+            docker compose -f docker-compose.prod.yml logs --tail=100 backend
+            exit 1

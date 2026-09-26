@@ -72,6 +72,10 @@ decrire('Parcours complets (base réelle)', () => {
   beforeAll(async () => {
     m = require('../../src/models');
     await m.sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    // Extensions créées par la migration initiale (index trigrammes de recherche)
+    await m.sequelize.query(
+      'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+    );
     await m.sequelize.sync();
     await require('../../src/services/parametre.service').initialiser();
     app = require('../../src/app');
@@ -274,16 +278,13 @@ decrire('Parcours complets (base réelle)', () => {
     const recus = await request(app).get('/client/colis/recus').set(auth(donnees.filleul));
     expect(recus.status).toBe(200);
 
-    const rot = await request(app)
-      .post('/admin/conteneurs')
-      .set(auth(donnees.admin))
-      .send({
-        modeTransport: 'maritime',
-        paysDepart: 'FR',
-        paysArrivee: 'SN',
-        dateDepartPrevue: '2026-10-10T08:00:00Z',
-        dateArriveePrevue: '2026-11-01T08:00:00Z',
-      });
+    const rot = await request(app).post('/admin/conteneurs').set(auth(donnees.admin)).send({
+      modeTransport: 'maritime',
+      paysDepart: 'FR',
+      paysArrivee: 'SN',
+      dateDepartPrevue: '2026-10-10T08:00:00Z',
+      dateArriveePrevue: '2026-11-01T08:00:00Z',
+    });
     const rotationId = rot.body.data.rotation.id;
     await request(app)
       .post(`/admin/conteneurs/${rotationId}/colis`)
@@ -367,5 +368,107 @@ decrire('Parcours complets (base réelle)', () => {
       dateLimitePaiement: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10),
     });
     expect(await taches.relancerFacturesEchues()).toBeGreaterThanOrEqual(1);
+  });
+
+  /* ── Concurrence : requêtes simultanées contre PostgreSQL ─────────────── */
+
+  test('concurrence : connexions simultanées du même compte (jetons distincts)', async () => {
+    const connexions = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        request(app)
+          .post('/auth/login')
+          .send({ identifiant: 'admin@test.fr', password: 'Admin_Test_1234!' })
+      )
+    );
+    expect(connexions.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+    const refresh = connexions.map((r) => r.body.data.refreshToken);
+    expect(new Set(refresh).size).toBe(4);
+
+    // Un même refresh token rafraîchi deux fois en même temps : une seule réussite
+    const doubles = await Promise.all(
+      [0, 1, 2].map(() =>
+        request(app).post('/auth/refresh-token').send({ refreshToken: refresh[0] })
+      )
+    );
+    expect(doubles.filter((r) => r.status === 200)).toHaveLength(1);
+    expect(doubles.filter((r) => r.status === 401)).toHaveLength(2);
+  });
+
+  test('concurrence : scans simultanés du même colis, stock du point compté une fois', async () => {
+    const champs = {
+      ...base(),
+      ...adresseSn,
+      categorie: 'colis_moyen',
+      etatMarchandise: 'neuf',
+      valeurDeclaree: 100,
+      articles: [{ articleTarifId: donnees.valise.id }],
+      modeDepot: 'point_collecte',
+      pointCollecteDepartId: donnees.point.id,
+    };
+    const colis = (await declarer(donnees.parrain, champs, 3)).body.data.colis;
+    await request(app)
+      .post(`/admin/colis/${colis.id}/valider`)
+      .set(auth(donnees.admin))
+      .send({})
+      .expect(200);
+    const hub = await m.PointCollecte.create({
+      code: 'FR-HUB-CC',
+      nom: 'Hub concurrence',
+      type: 'agence',
+      pays: 'FR',
+      villeId: donnees.paris.id,
+      adresse: '1 rue du Test',
+      telephone: '+33100000009',
+      services: ['depot'],
+    });
+
+    const scans = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        request(app)
+          .post(`/admin/colis/${colis.id}/evenements`)
+          .set(auth(donnees.admin))
+          .send({ codeEvenement: 'RECEPTION', pointCollecteId: hub.id })
+      )
+    );
+    expect(scans.every((r) => r.status === 200)).toBe(true);
+    await hub.reload();
+    expect(hub.colisEnStock).toBe(1);
+    expect((await m.Colis.findByPk(colis.id)).statut).toBe('receptionne');
+    donnees.colisConcurrence = colis.id;
+  });
+
+  test('concurrence : un colis chargé simultanément sur deux conteneurs ne l’est qu’une fois', async () => {
+    const creer = () =>
+      request(app).post('/admin/conteneurs').set(auth(donnees.admin)).send({
+        modeTransport: 'maritime',
+        paysDepart: 'FR',
+        paysArrivee: 'SN',
+        dateDepartPrevue: '2026-12-10T08:00:00Z',
+        dateArriveePrevue: '2027-01-05T08:00:00Z',
+      });
+    const [a, b] = (await Promise.all([creer(), creer()])).map((r) => r.body.data.rotation.id);
+    const charges = await Promise.all(
+      [a, b].map((rotationId) =>
+        request(app)
+          .post(`/admin/conteneurs/${rotationId}/colis`)
+          .set(auth(donnees.admin))
+          .send({ colisIds: [donnees.colisConcurrence] })
+      )
+    );
+    expect(charges.map((r) => r.status)).toEqual([200, 200]);
+    const rotations = await m.Rotation.findAll({ where: { id: [a, b] } });
+    expect(rotations.reduce((n, r) => n + r.nbColisCharges, 0)).toBe(1);
+    const colis = await m.Colis.findByPk(donnees.colisConcurrence);
+    expect([a, b]).toContain(colis.rotationId);
+  });
+
+  test('concurrence : une tâche planifiée ne s’exécute qu’une fois entre plusieurs processus', async () => {
+    const maintenant = new Date();
+    const essais = await Promise.all(
+      Array.from({ length: 6 }, () => taches.reserver('test_cluster', maintenant))
+    );
+    expect(essais.filter(Boolean)).toHaveLength(1);
+    // Créneau déjà pris : personne ne le réobtient avant la période suivante
+    expect(await taches.reserver('test_cluster', new Date(Date.now() - 60 * 1000))).toBe(false);
   });
 });

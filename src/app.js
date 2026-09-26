@@ -88,7 +88,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
 
 // PERF-01 : compression gzip/brotli
@@ -98,6 +98,8 @@ app.use(globalRateLimit);
 
 // Logger HTTP structuré avec Request ID
 app.use((req, res, next) => {
+  // La sonde de santé (toutes les 30 s par conteneur) ne mérite pas une ligne de log
+  if (req.path === '/health' || req.path === '/ready') return next();
   const start = Date.now();
   res.on('finish', () => {
     logger.info('http', {
@@ -123,6 +125,16 @@ if (process.env.NODE_ENV !== 'production') {
 app.get('/health', (req, res) =>
   res.json({ success: true, message: 'Yobnate Express API opérationnelle' })
 );
+// Disponibilité : l'API répond ET joint PostgreSQL. /health reste une sonde de vie sans
+// base (un conteneur redémarré ne répare pas une base indisponible).
+app.get('/ready', async (req, res) => {
+  try {
+    await require('./config/db').query('SELECT 1');
+    res.json({ success: true, message: 'Prête' });
+  } catch (_err) {
+    res.status(503).json({ success: false, message: 'Base de données indisponible' });
+  }
+});
 
 // Routes publiques (aucune authentification)
 app.use('/auth', authRoutes);

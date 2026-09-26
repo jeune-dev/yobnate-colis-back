@@ -22,6 +22,7 @@ module.exports = [
         Promise: 'readonly',
         URL: 'readonly',
         fetch: 'readonly',
+        AbortSignal: 'readonly',
       },
     },
     rules: {

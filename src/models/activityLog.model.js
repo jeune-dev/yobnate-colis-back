@@ -46,6 +46,8 @@ ActivityLog.init(
     updatedAt: false,
     indexes: [
       { fields: ['userId', 'createdAt'] },
+      // Journal complet et « dernières activités » : tri par date sans filtre utilisateur
+      { name: 'activity_logs_created_at', fields: ['createdAt'] },
       { fields: ['action'] },
       { fields: ['entite', 'entiteId'] },
     ],
