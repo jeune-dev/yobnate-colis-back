@@ -461,4 +461,14 @@ decrire('Parcours complets (base réelle)', () => {
     const colis = await m.Colis.findByPk(donnees.colisConcurrence);
     expect([a, b]).toContain(colis.rotationId);
   });
+
+  test('concurrence : une tâche planifiée ne s’exécute qu’une fois entre plusieurs processus', async () => {
+    const maintenant = new Date();
+    const essais = await Promise.all(
+      Array.from({ length: 6 }, () => taches.reserver('test_cluster', maintenant))
+    );
+    expect(essais.filter(Boolean)).toHaveLength(1);
+    // Créneau déjà pris : personne ne le réobtient avant la période suivante
+    expect(await taches.reserver('test_cluster', new Date(Date.now() - 60 * 1000))).toBe(false);
+  });
 });

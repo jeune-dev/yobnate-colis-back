@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const logger = require('../config/logger');
+const arrierePlan = require('./arrierePlan');
 const { formater } = require('./devise');
 
 /**
@@ -9,6 +10,9 @@ const { formater } = require('./devise');
  * déclenché : les erreurs sont journalisées, pas propagées.
  */
 
+// Connexions SMTP réutilisées (pool) au lieu d'une poignée de main TLS par message,
+// et délais bornés : les valeurs par défaut de nodemailer (2 min de connexion,
+// 10 min d'inactivité) laissaient un envoi bloqué occuper des ressources très longtemps.
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT) || 587,
@@ -16,6 +20,11 @@ const transporter = nodemailer.createTransport({
   auth: process.env.SMTP_USER
     ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
     : undefined,
+  pool: true,
+  maxConnections: Number(process.env.SMTP_MAX_CONNEXIONS) || 3,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 30000,
 });
 
 const URL_PUBLIQUE = process.env.APP_PUBLIC_URL || '';
@@ -60,19 +69,26 @@ const smtpConfigure = () => {
   return !exemple(hote) && !exemple(utilisateur);
 };
 
-const sendMail = async ({ to, subject, html, texte = null }) => {
-  if (!to) return;
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to,
-      subject,
-      html,
-      text: texte || undefined,
-    });
-  } catch (err) {
-    logger.error(`Échec envoi email à ${to}`, { message: err.message, subject });
-  }
+/**
+ * Envoi d'un courriel, confié à la file d'arrière-plan : l'appelant (et donc la
+ * requête HTTP) n'attend plus le serveur SMTP. Les échecs restent journalisés.
+ */
+const sendMail = ({ to, subject, html, texte = null }) => {
+  if (!to) return Promise.resolve();
+  arrierePlan.lancer('email', async () => {
+    try {
+      await transporter.sendMail({
+        from: process.env.MAIL_FROM,
+        to,
+        subject,
+        html,
+        text: texte || undefined,
+      });
+    } catch (err) {
+      logger.error(`Échec envoi email à ${to}`, { message: err.message, subject });
+    }
+  });
+  return Promise.resolve();
 };
 
 /* ── Comptes ────────────────────────────────────────────────────────────── */

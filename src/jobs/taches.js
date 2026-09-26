@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { Colis, Facture, TourneeCollecte } = require('../models');
+const { Colis, Facture, TourneeCollecte, TachePlanifiee } = require('../models');
 const logger = require('../config/logger');
 const suiviService = require('../services/suivi.service');
 const notificationService = require('../services/notification.service');
@@ -24,17 +24,25 @@ const expirerPropositions = async () => {
   const expirees = await Colis.findAll({
     where: { statut: 'devis_propose', propositionExpireAt: { [Op.lt]: new Date() } },
   });
+  let traitees = 0;
   for (const colis of expirees) {
-    await suiviService.enregistrerEvenement(colis, {
-      codeEvenement: 'DEVIS_REFUSE',
-      libelle: 'Proposition tarifaire expirée',
-      commentaire: 'Aucune réponse avant la date de validité de la proposition',
-    });
-    // Libère le crédit de parrainage, la place en tournée et le stock d'emballages
-    await require('../services/client/colis.service').liberRessources(colis);
-    await colis.update({ propositionRepondueAt: new Date(), motifRefus: 'Proposition expirée' });
+    // Chaque colis est indépendant : si le client accepte au même instant, l'événement
+    // est refusé sous verrou (transition invalide) et seul ce colis est ignoré.
+    try {
+      await suiviService.enregistrerEvenement(colis, {
+        codeEvenement: 'DEVIS_REFUSE',
+        libelle: 'Proposition tarifaire expirée',
+        commentaire: 'Aucune réponse avant la date de validité de la proposition',
+      });
+      // Libère le crédit de parrainage, la place en tournée et le stock d'emballages
+      await require('../services/client/colis.service').liberRessources(colis);
+      await colis.update({ propositionRepondueAt: new Date(), motifRefus: 'Proposition expirée' });
+      traitees += 1;
+    } catch (err) {
+      logger.warn('Proposition non expirée', { colisId: colis.id, message: err.message });
+    }
   }
-  return expirees.length;
+  return traitees;
 };
 
 /**
@@ -140,14 +148,40 @@ const executer = async (taches) => {
   }
 };
 
-let dernierJourQuotidien = null;
+/**
+ * Réserve l'exécution d'une tâche pour ce créneau. L'UPDATE conditionnel est atomique :
+ * parmi plusieurs processus (workers PM2, conteneurs), un seul obtient la ligne.
+ */
+const reserver = async (nom, dernierAvant) => {
+  await TachePlanifiee.bulkCreate([{ nom, derniereExecution: new Date(0) }], {
+    ignoreDuplicates: true,
+  });
+  const [nb] = await TachePlanifiee.update(
+    { derniereExecution: new Date() },
+    { where: { nom, derniereExecution: { [Op.lt]: dernierAvant } } }
+  );
+  return nb === 1;
+};
+
+const debutDuJour = () => new Date(new Date().setHours(0, 0, 0, 0));
+/** Tolérance sur la période horaire (dérive des minuteurs entre processus). */
+const PERIODE_HORAIRE_MS = 55 * 60 * 1000;
 
 const tic = async () => {
-  await executer(TACHES_HORAIRES);
-  const jour = aujourdHui();
-  if (new Date().getHours() >= HEURE_QUOTIDIENNE && dernierJourQuotidien !== jour) {
-    dernierJourQuotidien = jour;
-    await executer(TACHES_QUOTIDIENNES);
+  try {
+    if (await reserver('taches_horaires', new Date(Date.now() - PERIODE_HORAIRE_MS))) {
+      await executer(TACHES_HORAIRES);
+    }
+    if (
+      new Date().getHours() >= HEURE_QUOTIDIENNE &&
+      (await reserver('taches_quotidiennes', debutDuJour()))
+    ) {
+      await executer(TACHES_QUOTIDIENNES);
+    }
+  } catch (err) {
+    // Base momentanément indisponible : on retentera au prochain passage, sans faire
+    // tomber le serveur (une promesse rejetée non gérée arrête le processus).
+    logger.error('Planification des tâches en échec', { message: err.message });
   }
 };
 
@@ -157,4 +191,11 @@ const demarrerTaches = () => {
   return setInterval(tic, HEURE_MS);
 };
 
-module.exports = { demarrerTaches, executer, ...TACHES_HORAIRES, ...TACHES_QUOTIDIENNES };
+module.exports = {
+  demarrerTaches,
+  executer,
+  reserver,
+  tic,
+  ...TACHES_HORAIRES,
+  ...TACHES_QUOTIDIENNES,
+};

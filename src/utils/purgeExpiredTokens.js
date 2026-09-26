@@ -14,10 +14,20 @@ const purge = async () => {
     logger.info(`Purge tokens expirés : ${blacklistCount} entrée(s) supprimée(s)`);
 };
 
+// Un seul processus purge par créneau (voir jobs/taches.js : reserver)
+const purgerUneFois = async () => {
+  const { reserver } = require('../jobs/taches');
+  if (await reserver('purge_jetons', new Date(Date.now() - INTERVAL_MS + 5 * 60 * 1000))) {
+    await purge();
+  }
+};
+
 const startPurgeJob = () => {
-  purge().catch((err) => logger.error('Purge tokens : erreur initiale', { message: err.message }));
-  setInterval(() => {
-    purge().catch((err) =>
+  purgerUneFois().catch((err) =>
+    logger.error('Purge tokens : erreur initiale', { message: err.message })
+  );
+  return setInterval(() => {
+    purgerUneFois().catch((err) =>
       logger.error('Purge tokens : erreur périodique', { message: err.message })
     );
   }, INTERVAL_MS);

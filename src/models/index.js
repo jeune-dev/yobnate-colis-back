@@ -47,6 +47,9 @@ const ActivityLog = require('./activityLog.model');
 const Annonce = require('./annonce.model');
 const ModeleEmail = require('./modeleEmail.model');
 
+// ── Exploitation ─────────────────────────────────────────────────────────────
+const TachePlanifiee = require('./tachePlanifiee.model');
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Comptes
  * ────────────────────────────────────────────────────────────────────────── */
@@ -288,4 +291,6 @@ module.exports = {
   ActivityLog,
   Annonce,
   ModeleEmail,
+  // Exploitation
+  TachePlanifiee,
 };

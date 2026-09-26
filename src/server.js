@@ -55,6 +55,8 @@ const HOST = process.env.HOST || '0.0.0.0';
       logger.info(`Signal ${signal} reçu — arrêt en cours…`);
       server.close(async () => {
         try {
+          // Laisser partir les courriels et notifications déjà confiés à la file
+          await require('./utils/arrierePlan').vider(8000);
           await sequelize.close();
           logger.info('Connexion DB fermée proprement');
         } catch (_err) {
