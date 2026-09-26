@@ -98,7 +98,11 @@ exports.bordereau = asyncHandler(async (req, res) => {
 });
 
 exports.statistiques = asyncHandler(async (req, res) => {
-  const result = await service.getStatistiques(req.query, perimetre.colis(req.user));
+  const result = await service.getStatistiques(
+    req.query,
+    perimetre.colis(req.user),
+    perimetre.cle(req.user)
+  );
   return ok(res, { statistiques: result.statistiques }, result.message);
 });
 

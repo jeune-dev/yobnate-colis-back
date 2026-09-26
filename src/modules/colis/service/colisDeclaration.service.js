@@ -381,7 +381,14 @@ class ColisDeclarationService {
     for (let i = 0; i < tentatives; i += 1) {
       const reference = await fabriqueReference();
       try {
-        return await model.create(construire(reference), { transaction });
+        // Point de sauvegarde : dans PostgreSQL, une violation d'unicité annule toute la
+        // transaction englobante ; sans SAVEPOINT, la nouvelle tentative échouait
+        // toujours (« current transaction is aborted »).
+        return transaction
+          ? await sequelize.transaction({ transaction }, (sp) =>
+              model.create(construire(reference), { transaction: sp })
+            )
+          : await model.create(construire(reference));
       } catch (err) {
         if (err instanceof UniqueConstraintError && i < tentatives - 1) continue;
         throw err;
@@ -729,12 +736,25 @@ class ColisDeclarationService {
             { transaction: t }
           );
         }
+        // Réservations atomiques : chaque mise à jour porte sa propre condition, vérifiée
+        // par PostgreSQL au moment de l'écriture. Deux déclarations simultanées ne
+        // peuvent donc ni dépasser la capacité d'une tournée, ni rendre un stock
+        // négatif, ni dépenser deux fois le même crédit (la transaction est annulée).
         if (tournee) {
-          await TourneeCollecte.increment('nbInscrits', {
-            by: 1,
-            where: { id: tournee.id },
-            transaction: t,
-          });
+          const [reserve] = await TourneeCollecte.update(
+            { nbInscrits: sequelize.literal('"nbInscrits" + 1') },
+            {
+              where: {
+                id: tournee.id,
+                [Op.or]: [
+                  { capaciteMax: null },
+                  { nbInscrits: { [Op.lt]: sequelize.col('capaciteMax') } },
+                ],
+              },
+              transaction: t,
+            }
+          );
+          if (!reserve) throw new ConflictError('Cette tournée de collecte vient d’être complète');
         }
 
         // Emballages achetés : le stock suivi est décrémenté (refus si épuisé entre-temps)
@@ -743,10 +763,16 @@ class ColisDeclarationService {
         // Crédit de parrainage consommé et récompense du parrain à la première expédition du filleul
         await ColisDeclarationService.consommerCreditParrainage(userId, creditUtilise, t);
         if (avantages.remiseParrainagePourcent > 0 && !devis.surDevis) {
-          await User.update(
+          // Une seule « première expédition » par filleul, même en cas de double envoi
+          const [premiere] = await User.update(
             { parrainageRecompense: true },
-            { where: { id: userId }, transaction: t }
+            { where: { id: userId, parrainageRecompense: false }, transaction: t }
           );
+          if (!premiere) {
+            throw new ConflictError(
+              'La remise de première expédition a déjà été utilisée : relancez la déclaration'
+            );
+          }
           await User.increment('creditParrainage', {
             by: Number(parametres.parrainage_gain_parrain_eur || 0),
             where: { id: client.parrainId },

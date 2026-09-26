@@ -232,20 +232,62 @@ class RotationService {
       );
     }
 
-    await sequelize.transaction(async (t) => {
-      await Colis.update(
+    // Sous verrou de la rotation, pour que deux chargements simultanés ne dépassent
+    // pas la capacité ni ne fassent diverger les compteurs (lecture-écriture sinon
+    // concurrente), et seulement pour les colis encore libres : un autre chargement
+    // a pu en affecter certains depuis le contrôle ci-dessus.
+    const idsCharges = await sequelize.transaction(async (t) => {
+      const verrou = await Rotation.findByPk(rotation.id, {
+        attributes: [
+          'id',
+          'statut',
+          'poidsCharge',
+          'nbColisCharges',
+          'capacitePoidsKg',
+          'capaciteColis',
+        ],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+      const [, lignes] = await Colis.update(
         { rotationId: rotation.id },
-        { where: { id: acceptes.map((c) => c.id) }, transaction: t }
-      );
-      await rotation.update(
         {
-          poidsCharge: Number(rotation.poidsCharge) + poidsAjoute,
-          nbColisCharges: rotation.nbColisCharges + acceptes.length,
-          statut: rotation.statut === 'planifiee' ? 'ouverte' : rotation.statut,
+          where: { id: acceptes.map((c) => c.id), rotationId: null },
+          returning: true,
+          transaction: t,
+        }
+      );
+      const poids = lignes.reduce((acc, c) => acc + Number(c.poidsFactureKg), 0);
+      const poidsCharge = Number(verrou.poidsCharge) + poids;
+      const nbColisCharges = verrou.nbColisCharges + lignes.length;
+      if (verrou.capacitePoidsKg && poidsCharge > Number(verrou.capacitePoidsKg)) {
+        throw new BadRequestError(
+          `Capacité dépassée : ${poidsCharge.toFixed(2)} kg pour une limite de ${verrou.capacitePoidsKg} kg`
+        );
+      }
+      if (verrou.capaciteColis && nbColisCharges > verrou.capaciteColis) {
+        throw new BadRequestError(
+          `Capacité dépassée : ${nbColisCharges} colis pour une limite de ${verrou.capaciteColis}`
+        );
+      }
+      await verrou.update(
+        {
+          poidsCharge,
+          nbColisCharges,
+          statut: verrou.statut === 'planifiee' ? 'ouverte' : verrou.statut,
         },
         { transaction: t }
       );
+      return new Set(lignes.map((c) => c.id));
     });
+    for (const colis of acceptes.filter((c) => !idsCharges.has(c.id))) {
+      refuses.push({
+        id: colis.id,
+        reference: colis.reference,
+        motif: 'Déjà affecté à une autre rotation',
+      });
+    }
+    acceptes.splice(0, acceptes.length, ...acceptes.filter((c) => idsCharges.has(c.id)));
 
     // L'événement de manifeste est journalisé colis par colis, hors transaction
     for (const colis of acceptes) {
@@ -288,17 +330,26 @@ class RotationService {
     if (!colisList.length)
       throw new BadRequestError("Aucun de ces colis n'est chargé sur cette rotation");
 
-    const poidsRetire = colisList.reduce((acc, c) => acc + Number(c.poidsFactureKg), 0);
-
+    // Même verrou qu'au chargement ; seuls les colis encore sur la rotation sont retirés
     await sequelize.transaction(async (t) => {
-      await Colis.update(
+      const verrou = await Rotation.findByPk(id, {
+        attributes: ['id', 'poidsCharge', 'nbColisCharges'],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+      const [, lignes] = await Colis.update(
         { rotationId: null },
-        { where: { id: colisList.map((c) => c.id) }, transaction: t }
-      );
-      await rotation.update(
         {
-          poidsCharge: Math.max(0, Number(rotation.poidsCharge) - poidsRetire),
-          nbColisCharges: Math.max(0, rotation.nbColisCharges - colisList.length),
+          where: { id: colisList.map((c) => c.id), rotationId: id },
+          returning: true,
+          transaction: t,
+        }
+      );
+      const poidsRetire = lignes.reduce((acc, c) => acc + Number(c.poidsFactureKg), 0);
+      await verrou.update(
+        {
+          poidsCharge: Math.max(0, Number(verrou.poidsCharge) - poidsRetire),
+          nbColisCharges: Math.max(0, verrou.nbColisCharges - lignes.length),
         },
         { transaction: t }
       );

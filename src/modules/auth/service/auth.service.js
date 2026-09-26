@@ -15,6 +15,7 @@ const {
   sendOtpEmail,
   sendBienvenueEmail,
   envoyerModele,
+  smtpConfigure,
   URL_PUBLIQUE,
 } = require('../../../infrastructure/mailer');
 const { genererCodeParrainage } = require('../../../utils/referenceGenerator');
@@ -145,8 +146,10 @@ class AuthService {
   };
 
   static issueTokens = async (user) => {
+    // jti unique : deux connexions du même compte dans la même seconde produisaient
+    // des jetons identiques (même sub, même iat), donc le même hash de refresh token
+    // et une violation d'unicité (409) — double tap, deux appareils, réessai réseau.
     const accessToken = jwt.sign(
-      // jti : deux jetons émis dans la même seconde restent distincts
       { sub: user.id, role: user.role, tv: user.tokenVersion ?? 0, jti: crypto.randomUUID() },
       jwtConfig.secret,
       { expiresIn: jwtConfig.expiresIn, algorithm: jwtConfig.algorithm }
@@ -233,7 +236,8 @@ class AuthService {
     if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé');
     if (user.role === 'client' && !user.emailVerifie) {
       const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
-      if (obligatoire) {
+      // Sans SMTP configuré, le lien ne peut pas être reçu : la vérification ne bloque pas
+      if (obligatoire && smtpConfigure()) {
         throw new ForbiddenError(
           'Adresse email non confirmée : cliquez sur le lien reçu par email (ou demandez-en un nouveau).'
         );
@@ -265,14 +269,16 @@ class AuthService {
       throw new UnauthorizedError('Token de rafraîchissement invalide ou expiré');
     }
 
+    // Consommation atomique : le DELETE ne réussit qu'une fois. Avec une lecture puis
+    // une suppression séparées, deux rafraîchissements simultanés du même jeton (deux
+    // onglets, réessai réseau) obtenaient chacun une nouvelle paire de jetons.
     const tokenHash = AuthService.sha256(token);
-    const stored = await RefreshToken.findOne({ where: { tokenHash } });
-    if (!stored) throw new UnauthorizedError('Token de rafraîchissement révoqué');
+    const consomme = await RefreshToken.destroy({ where: { tokenHash } });
+    if (!consomme) throw new UnauthorizedError('Token de rafraîchissement révoqué');
 
     const user = await User.findByPk(payload.sub);
     if (!user || !user.isActive) throw new UnauthorizedError('Compte introuvable ou désactivé');
 
-    await stored.destroy();
     const tokens = await AuthService.issueTokens(user);
     return { message: 'Token rafraîchi', ...tokens, utilisateur: user.toSafeJSON() };
   };

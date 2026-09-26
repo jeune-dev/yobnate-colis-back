@@ -16,8 +16,8 @@ describeDb('Socle de l’API (base réelle)', () => {
   afterAll(fermerBase);
 
   describe('Sondes de santé', () => {
-    test.each(['/health', '/health/ready', '/api/v1/health'])(
-      '%s → 200 base connectée',
+    test.each(['/ready', '/health/ready', '/api/v1/ready'])(
+      '%s (disponibilité) → 200 base connectée',
       async (url) => {
         const res = await request(app).get(url);
         expect(res.status).toBe(200);
@@ -26,16 +26,21 @@ describeDb('Socle de l’API (base réelle)', () => {
       }
     );
 
-    test('/health/live répond sans interroger la base', async () => {
-      expect((await request(app).get('/health/live')).status).toBe(200);
-    });
+    test.each(['/health', '/health/live', '/api/v1/health'])(
+      '%s (vie) répond sans interroger la base',
+      async (url) => {
+        const res = await request(app).get(url);
+        expect(res.status).toBe(200);
+        expect(res.body.db).toBeUndefined();
+      }
+    );
 
-    test('pendant l’arrêt gracieux → 503', async () => {
+    test('pendant l’arrêt gracieux : /ready → 503, /health reste vivant', async () => {
       const etat = require('../../src/utils/etatApplication');
       etat.signalerArret();
       try {
-        const res = await request(app).get('/health');
-        expect(res.status).toBe(503);
+        expect((await request(app).get('/ready')).status).toBe(503);
+        expect((await request(app).get('/health')).status).toBe(200);
       } finally {
         etat.reprendre();
       }

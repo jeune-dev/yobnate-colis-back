@@ -1,15 +1,5 @@
 const { Op } = require('sequelize');
-const {
-  sequelize,
-  User,
-  Colis,
-  Ville,
-  ActivityLog,
-  Facture,
-  PointCollecte,
-  Reclamation,
-  DemandeEnlevement,
-} = require('../../../models');
+const { sequelize, User, Colis, Ville, ActivityLog, Facture } = require('../../../models');
 const cache = require('../../../utils/cache');
 const { STATUTS_COLIS } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
@@ -39,13 +29,16 @@ class DashboardService {
    * fidélisation, part des commandes passées par de nouveaux clients, répartition
    * par catégorie et demandes en attente d'étude.
    */
-  static getKpis = async ({ dateDebut, dateFin } = {}) => {
+  static getKpis = ({ dateDebut, dateFin } = {}) => {
     const fin = dateFin ? new Date(dateFin) : new Date();
     const debut = dateDebut ? new Date(dateDebut) : new Date(fin.getTime() - 30 * 24 * 3600 * 1000);
     const cle = `dashboard:kpis:${debut.toISOString().slice(0, 10)}:${fin.toISOString().slice(0, 10)}`;
-    const enCache = cache.get(cle);
-    if (enCache) return enCache;
+    return cache.memoiser(cle, DashboardService.STATS_TTL, () =>
+      DashboardService.calculerKpis(debut, fin)
+    );
+  };
 
+  static calculerKpis = async (debut, fin) => {
     const replacements = { debut, fin };
     const valides = `c."statut" NOT IN ('annule', 'refuse') AND c."createdAt" BETWEEN :debut AND :fin`;
 
@@ -106,7 +99,6 @@ class DashboardService {
         etude: etude[0],
       },
     };
-    cache.set(cle, result, DashboardService.STATS_TTL);
     return result;
   };
 
@@ -119,148 +111,156 @@ class DashboardService {
     return STATUTS_COLIS.map((statut) => ({ statut, total: counts[statut] || 0 }));
   };
 
-  /** Statistiques globales : comptes, expéditions, chiffre d'affaires par devise. */
-  static getStatsGlobales = async () => {
-    const cached = cache.get('dashboard:stats');
-    if (cached) return cached;
+  /**
+   * Statistiques globales : comptes, expéditions, chiffre d'affaires par devise.
+   *
+   * Quatre requêtes agrégées (un seul parcours par table grâce à FILTER) au lieu
+   * de dix-sept COUNT lancés simultanément : un seul affichage du tableau de bord
+   * mobilisait alors plus de connexions que n'en compte le pool (10), bloquant
+   * toutes les autres requêtes de l'API pendant le calcul.
+   */
+  static getStatsGlobales = () =>
+    cache.memoiser('dashboard:stats', DashboardService.STATS_TTL, async () => {
+      const replacements = {
+        aujourdhui: new Date().toISOString().slice(0, 10),
+        debutJour: DashboardService.startOfToday(),
+        debutSemaine: DashboardService.startOfWeek(),
+        debutMois: DashboardService.startOfMonth(),
+      };
+      const [[[comptes]], [statuts], [[alertes]], chiffreAffaires] = await Promise.all([
+        sequelize.query(
+          `SELECT COUNT(*) FILTER (WHERE role = 'client')::int AS "totalClients",
+                  COUNT(*) FILTER (WHERE role = 'client' AND "isActive")::int AS "clientsActifs",
+                  COUNT(*) FILTER (WHERE role IN ('coursier', 'agent_point'))::int AS "totalPersonnel",
+                  COUNT(*) FILTER (WHERE role IN ('admin', 'super_admin'))::int AS "totalAdmins",
+                  COUNT(*) FILTER (WHERE role = 'client' AND "createdAt" >= :debutJour)::int AS "nouveauxJour",
+                  COUNT(*) FILTER (WHERE role = 'client' AND "createdAt" >= :debutSemaine)::int AS "nouveauxSemaine",
+                  COUNT(*) FILTER (WHERE role = 'client' AND "createdAt" >= :debutMois)::int AS "nouveauxMois"
+             FROM users`,
+          { replacements }
+        ),
+        sequelize.query(
+          `SELECT statut::text AS statut, COUNT(*)::int AS total,
+                  COUNT(*) FILTER (WHERE "dateLivraisonEstimee" < :aujourdhui
+                    AND statut NOT IN ('livre', 'recupere', 'retourne', 'annule'))::int AS "enRetard",
+                  COUNT(*) FILTER (WHERE statut = 'disponible_retrait'
+                    AND "dateLimiteRetrait" < :aujourdhui)::int AS "enSouffrance",
+                  COUNT(*) FILTER (WHERE "createdAt" >= :debutJour)::int AS "nouveauxJour",
+                  COUNT(*) FILTER (WHERE "createdAt" >= :debutSemaine)::int AS "nouveauxSemaine",
+                  COUNT(*) FILTER (WHERE "createdAt" >= :debutMois)::int AS "nouveauxMois"
+             FROM colis GROUP BY statut`,
+          { replacements }
+        ),
+        sequelize.query(
+          `SELECT (SELECT COUNT(*) FROM reclamations
+                    WHERE statut NOT IN ('resolue', 'rejetee', 'cloturee'))::int AS "reclamationsOuvertes",
+                  (SELECT COUNT(*) FROM demandes_enlevement
+                    WHERE statut IN ('demande', 'planifie'))::int AS "enlevementsEnAttente"`
+        ),
+        Facture.findAll({
+          attributes: ['devise', [sequelize.fn('SUM', sequelize.col('montantPaye')), 'total']],
+          group: ['devise'],
+          raw: true,
+        }),
+      ]);
 
-    const [
-      totalClients,
-      clientsActifs,
-      totalPersonnel,
-      totalAdmins,
-      totalColis,
-      colisEnRetard,
-      colisEnSouffrance,
-      nouveauxClientsToday,
-      nouveauxClientsWeek,
-      nouveauxClientsMois,
-      nouveauxColisToday,
-      nouveauxColisWeek,
-      nouveauxColisMois,
-      reclamationsOuvertes,
-      enlevementsEnAttente,
-      parStatut,
-      chiffreAffaires,
-    ] = await Promise.all([
-      User.count({ where: { role: 'client' } }),
-      User.count({ where: { role: 'client', isActive: true } }),
-      User.count({ where: { role: { [Op.in]: ['coursier', 'agent_point'] } } }),
-      User.count({ where: { role: { [Op.in]: ['admin', 'super_admin'] } } }),
-      Colis.count(),
-      Colis.count({
-        where: {
-          dateLivraisonEstimee: { [Op.lt]: new Date().toISOString().slice(0, 10) },
-          statut: { [Op.notIn]: ['livre', 'recupere', 'retourne', 'annule'] },
-        },
-      }),
-      Colis.count({
-        where: {
-          statut: 'disponible_retrait',
-          dateLimiteRetrait: { [Op.lt]: new Date().toISOString().slice(0, 10) },
-        },
-      }),
-      User.count({
-        where: { role: 'client', createdAt: { [Op.gte]: DashboardService.startOfToday() } },
-      }),
-      User.count({
-        where: { role: 'client', createdAt: { [Op.gte]: DashboardService.startOfWeek() } },
-      }),
-      User.count({
-        where: { role: 'client', createdAt: { [Op.gte]: DashboardService.startOfMonth() } },
-      }),
-      Colis.count({ where: { createdAt: { [Op.gte]: DashboardService.startOfToday() } } }),
-      Colis.count({ where: { createdAt: { [Op.gte]: DashboardService.startOfWeek() } } }),
-      Colis.count({ where: { createdAt: { [Op.gte]: DashboardService.startOfMonth() } } }),
-      Reclamation.count({ where: { statut: { [Op.notIn]: ['resolue', 'rejetee', 'cloturee'] } } }),
-      DemandeEnlevement.count({ where: { statut: { [Op.in]: ['demande', 'planifie'] } } }),
-      DashboardService.computeColisParStatut(),
-      Facture.findAll({
-        attributes: ['devise', [sequelize.fn('SUM', sequelize.col('montantPaye')), 'total']],
-        group: ['devise'],
-        raw: true,
-      }),
-    ]);
+      const somme = (champ) => statuts.reduce((total, ligne) => total + ligne[champ], 0);
+      const counts = Object.fromEntries(statuts.map((l) => [l.statut, l.total]));
+      const parStatut = STATUTS_COLIS.map((statut) => ({ statut, total: counts[statut] || 0 }));
+      const totalColis = somme('total');
+      const taux = (n) => (totalColis ? Number(((n / totalColis) * 100).toFixed(1)) : 0);
 
-    const statutCount = (statut) => parStatut.find((s) => s.statut === statut)?.total || 0;
-    const livres = statutCount('livre');
-    const recuperes = statutCount('recupere');
-    const annules = statutCount('annule');
-
-    const result = {
-      message: 'Statistiques globales',
-      stats: {
-        clients: {
-          total: totalClients,
-          actifs: clientsActifs,
-          nouveauxAujourdhui: nouveauxClientsToday,
-          nouveauxCetteSemaine: nouveauxClientsWeek,
-          nouveauxCeMois: nouveauxClientsMois,
+      return {
+        message: 'Statistiques globales',
+        stats: {
+          clients: {
+            total: comptes.totalClients,
+            actifs: comptes.clientsActifs,
+            nouveauxAujourdhui: comptes.nouveauxJour,
+            nouveauxCetteSemaine: comptes.nouveauxSemaine,
+            nouveauxCeMois: comptes.nouveauxMois,
+          },
+          equipe: { personnel: comptes.totalPersonnel, administrateurs: comptes.totalAdmins },
+          colis: {
+            total: totalColis,
+            parStatut,
+            enRetard: somme('enRetard'),
+            enSouffrance: somme('enSouffrance'),
+            nouveauxAujourdhui: somme('nouveauxJour'),
+            nouveauxCetteSemaine: somme('nouveauxSemaine'),
+            nouveauxCeMois: somme('nouveauxMois'),
+            tauxLivraison: taux(counts.livre || 0),
+            tauxRecuperation: taux(counts.recupere || 0),
+            tauxAnnulation: taux(counts.annule || 0),
+          },
+          chiffreAffaires: chiffreAffaires.map((r) => ({
+            devise: r.devise,
+            encaisse: Number(r.total || 0),
+          })),
+          alertes: {
+            reclamationsOuvertes: alertes.reclamationsOuvertes,
+            enlevementsEnAttente: alertes.enlevementsEnAttente,
+          },
         },
-        equipe: { personnel: totalPersonnel, administrateurs: totalAdmins },
-        colis: {
-          total: totalColis,
-          parStatut,
-          enRetard: colisEnRetard,
-          enSouffrance: colisEnSouffrance,
-          nouveauxAujourdhui: nouveauxColisToday,
-          nouveauxCetteSemaine: nouveauxColisWeek,
-          nouveauxCeMois: nouveauxColisMois,
-          tauxLivraison: totalColis ? Number(((livres / totalColis) * 100).toFixed(1)) : 0,
-          tauxRecuperation: totalColis ? Number(((recuperes / totalColis) * 100).toFixed(1)) : 0,
-          tauxAnnulation: totalColis ? Number(((annules / totalColis) * 100).toFixed(1)) : 0,
-        },
-        chiffreAffaires: chiffreAffaires.map((r) => ({
-          devise: r.devise,
-          encaisse: Number(r.total || 0),
-        })),
-        alertes: { reclamationsOuvertes, enlevementsEnAttente },
-      },
-    };
-
-    cache.set('dashboard:stats', result, DashboardService.STATS_TTL);
-    return result;
-  };
+      };
+    });
 
   static getColisParStatut = async () => ({
     message: 'Répartition des expéditions par statut',
     parStatut: await DashboardService.computeColisParStatut(),
   });
 
-  /** Vue par pays : volumétrie et état du réseau, France et Sénégal côte à côte. */
-  static getVueParPays = async () => {
-    const cached = cache.get('dashboard:pays');
-    if (cached) return cached;
+  /**
+   * Vue par pays : volumétrie et état du réseau, France et Sénégal côte à côte.
+   * Trois requêtes groupées par pays au lieu de cinq COUNT par pays.
+   */
+  static getVueParPays = () =>
+    cache.memoiser('dashboard:pays', DashboardService.STATS_TTL, async () => {
+      const [[flux], [points], [clients]] = await Promise.all([
+        sequelize.query(
+          `SELECT 'depart' AS sens, "paysDepart"::text AS pays, COUNT(*)::int AS total
+             FROM colis GROUP BY "paysDepart"
+           UNION ALL
+           SELECT 'arrivee', "paysArrivee"::text, COUNT(*)::int FROM colis GROUP BY "paysArrivee"`
+        ),
+        sequelize.query(
+          `SELECT pays::text AS pays, COUNT(*) FILTER (WHERE "isActive")::int AS actifs,
+                  COALESCE(SUM("colisEnStock"), 0)::int AS stock
+             FROM points_collecte GROUP BY pays`
+        ),
+        sequelize.query(
+          `SELECT pays::text AS pays, COUNT(*)::int AS total FROM users
+            WHERE role = 'client' GROUP BY pays`
+        ),
+      ]);
+      const trouver = (lignes, filtre) => lignes.find(filtre) || {};
 
-    const resultat = await Promise.all(
-      Object.keys(PAYS).map(async (code) => {
-        const [expeditionsDepart, expeditionsArrivee, points, colisEnStock, clients] =
-          await Promise.all([
-            Colis.count({ where: { paysDepart: code } }),
-            Colis.count({ where: { paysArrivee: code } }),
-            PointCollecte.count({ where: { pays: code, isActive: true } }),
-            PointCollecte.sum('colisEnStock', { where: { pays: code } }),
-            User.count({ where: { role: 'client', pays: code } }),
-          ]);
-        return {
-          pays: code,
-          libelle: PAYS[code].libelle,
-          devise: PAYS[code].devise,
-          expeditionsDepart,
-          expeditionsArrivee,
-          pointsActifs: points,
-          colisEnStock: Number(colisEnStock || 0),
-          clients,
-        };
-      })
+      const pays = Object.keys(PAYS).map((code) => ({
+        pays: code,
+        libelle: PAYS[code].libelle,
+        devise: PAYS[code].devise,
+        expeditionsDepart: trouver(flux, (l) => l.sens === 'depart' && l.pays === code).total || 0,
+        expeditionsArrivee:
+          trouver(flux, (l) => l.sens === 'arrivee' && l.pays === code).total || 0,
+        pointsActifs: trouver(points, (l) => l.pays === code).actifs || 0,
+        colisEnStock: trouver(points, (l) => l.pays === code).stock || 0,
+        clients: trouver(clients, (l) => l.pays === code).total || 0,
+      }));
+      return { message: 'Vue par pays', pays };
+    });
+
+  /** Agrégat sur toute la table des colis (170 ms mesurées sur 200 000 lignes) : mis en cache. */
+  /** `limit` vient de la query string : borné pour ne pas multiplier les clés de cache. */
+  static borner = (limit) => Math.min(Math.max(Number(limit) || 10, 1), 100);
+
+  static getUtilisateursActifs = (limit = 10) => {
+    const n = DashboardService.borner(limit);
+    return cache.memoiser(`dashboard:actifs:${n}`, DashboardService.STATS_TTL, () =>
+      DashboardService.calculerUtilisateursActifs(n)
     );
-
-    const result = { message: 'Vue par pays', pays: resultat };
-    cache.set('dashboard:pays', result, DashboardService.STATS_TTL);
-    return result;
   };
 
-  static getUtilisateursActifs = async (limit = 10) => {
+  static calculerUtilisateursActifs = async (limit) => {
     const rows = await Colis.findAll({
       attributes: ['userId', [sequelize.fn('COUNT', sequelize.col('Colis.id')), 'nbColis']],
       include: [
@@ -276,7 +276,14 @@ class DashboardService {
     };
   };
 
-  static getVillesFrequentes = async (field, limit = 10) => {
+  static getVillesFrequentes = (field, limit = 10) => {
+    const n = DashboardService.borner(limit);
+    return cache.memoiser(`dashboard:villes:${field}:${n}`, DashboardService.STATS_TTL, () =>
+      DashboardService.calculerVillesFrequentes(field, n)
+    );
+  };
+
+  static calculerVillesFrequentes = async (field, limit) => {
     const alias = field === 'villeDepartId' ? 'villeDepart' : 'villeArrivee';
     const rows = await Colis.findAll({
       attributes: [field, [sequelize.fn('COUNT', sequelize.col('Colis.id')), 'total']],

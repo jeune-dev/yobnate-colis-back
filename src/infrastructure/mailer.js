@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
+const arrierePlan = require('../utils/arrierePlan');
 const { formater } = require('../utils/devise');
 
 /**
@@ -9,6 +10,9 @@ const { formater } = require('../utils/devise');
  * déclenché : les erreurs sont journalisées, pas propagées.
  */
 
+// Connexions SMTP réutilisées (pool) au lieu d'une poignée de main TLS par message,
+// et délais bornés : les valeurs par défaut de nodemailer (2 min de connexion,
+// 10 min d'inactivité) laissaient un envoi bloqué occuper des ressources très longtemps.
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT) || 587,
@@ -16,6 +20,11 @@ const transporter = nodemailer.createTransport({
   auth: process.env.SMTP_USER
     ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
     : undefined,
+  pool: true,
+  maxConnections: Number(process.env.SMTP_MAX_CONNEXIONS) || 3,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 30000,
 });
 
 const URL_PUBLIQUE = process.env.APP_PUBLIC_URL || '';
@@ -48,19 +57,38 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
   </table>
 </body></html>`;
 
-const sendMail = async ({ to, subject, html, texte = null }) => {
-  if (!to) return;
-  try {
-    await transporter.sendMail({
-      from: process.env.MAIL_FROM,
-      to,
-      subject,
-      html,
-      text: texte || undefined,
-    });
-  } catch (err) {
-    logger.error(`Échec envoi email à ${to}`, { message: err.message, subject });
-  }
+/**
+ * Le SMTP est-il réellement configuré ? Tant qu'il ne l'est pas (valeurs vides
+ * ou d'exemple), aucun courriel ne peut partir : les parcours qui en dépendent,
+ * comme la confirmation d'email, doivent alors se dégrader proprement.
+ */
+const smtpConfigure = () => {
+  const hote = String(process.env.SMTP_HOST || '').trim();
+  const utilisateur = String(process.env.SMTP_USER || '').trim();
+  const exemple = (v) => !v || /A_RENSEIGNER|example\.com|^your_/i.test(v);
+  return !exemple(hote) && !exemple(utilisateur);
+};
+
+/**
+ * Envoi d'un courriel, confié à la file d'arrière-plan : l'appelant (et donc la
+ * requête HTTP) n'attend plus le serveur SMTP. Les échecs restent journalisés.
+ */
+const sendMail = ({ to, subject, html, texte = null }) => {
+  if (!to) return Promise.resolve();
+  arrierePlan.lancer('email', async () => {
+    try {
+      await transporter.sendMail({
+        from: process.env.MAIL_FROM,
+        to,
+        subject,
+        html,
+        text: texte || undefined,
+      });
+    } catch (err) {
+      logger.error(`Échec envoi email à ${to}`, { message: err.message, subject });
+    }
+  });
+  return Promise.resolve();
 };
 
 /* ── Comptes ────────────────────────────────────────────────────────────── */
@@ -351,6 +379,7 @@ const envoyerModele = async (code, to, variables = {}) => {
 
 module.exports = {
   sendMail,
+  smtpConfigure,
   gabarit,
   MODELES_PAR_DEFAUT,
   envoyerModele,

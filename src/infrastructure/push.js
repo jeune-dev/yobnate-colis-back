@@ -42,6 +42,7 @@ const obtenirJetonAcces = async () => {
       grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
       assertion,
     }),
+    signal: AbortSignal.timeout(10000),
   });
   if (!reponse.ok) throw new Error(`OAuth2 Google : HTTP ${reponse.status}`);
   const { access_token: valeur, expires_in: duree } = await reponse.json();
@@ -60,6 +61,8 @@ const envoyerPush = async ({ token, titre, message, donnees = {} }) => {
     const reponse = await fetch(`https://fcm.googleapis.com/v1/projects/${PROJET}/messages:send`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${acces}`, 'Content-Type': 'application/json' },
+      // Un service tiers lent ne doit pas retenir la tâche indéfiniment
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         message: {
           token,

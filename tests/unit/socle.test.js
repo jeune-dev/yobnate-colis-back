@@ -121,17 +121,11 @@ describe('Documentation OpenAPI générée', () => {
 });
 
 describe('Tâches planifiées', () => {
-  const { estLeader } = require('../../src/jobs');
-  afterEach(() => delete process.env.NODE_APP_INSTANCE);
-
-  test('processus seul (conteneur) : exécute les tâches', () => {
-    expect(estLeader()).toBe(true);
-  });
-
-  test('cluster PM2 : seule l’instance 0 les exécute', () => {
-    process.env.NODE_APP_INSTANCE = '0';
-    expect(estLeader()).toBe(true);
-    process.env.NODE_APP_INSTANCE = '2';
-    expect(estLeader()).toBe(false);
+  // L'exécution unique entre processus (réservation du créneau en base) est
+  // vérifiée sur base réelle par tests/e2e/parcours.test.js.
+  test('la purge des jetons et codes fait partie des tâches horaires', () => {
+    const taches = require('../../src/jobs/taches');
+    expect(typeof taches.purgerJetons).toBe('function');
+    expect(typeof taches.expirerPropositions).toBe('function');
   });
 });

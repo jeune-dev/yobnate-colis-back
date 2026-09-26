@@ -20,6 +20,9 @@ const isProd = process.env.NODE_ENV === 'production';
 
 /** Préfixe versionné de l'API (comme Widjila). Les chemins historiques sans préfixe restent servis. */
 const PREFIXE_API = '/api/v1';
+const SONDES = new Set(
+  ['/health', '/health/live', '/ready', '/health/ready'].flatMap((c) => [c, `${PREFIXE_API}${c}`])
+);
 
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
@@ -61,6 +64,8 @@ app.use(compression());
 
 // Journal HTTP structuré : URL masquée (jetons), identifiant de corrélation et utilisateur
 app.use((req, res, next) => {
+  // Les sondes de santé (toutes les 30 s par conteneur) ne méritent pas une ligne de log
+  if (SONDES.has(req.path)) return next();
   const debut = Date.now();
   res.on('finish', () => {
     logger.info('http', {
@@ -130,10 +135,14 @@ const disponibilite = async (req, res) => {
     .json(enArret ? { ...corps, success: false, status: 'arret en cours' } : corps);
 };
 
+// Vie (/health) : le processus répond, sans interroger la base — un conteneur
+// redémarré ne répare pas une base indisponible. Disponibilité (/ready) : l'API
+// répond ET joint PostgreSQL ; utilisée par le déploiement et le HEALTHCHECK.
 for (const base of ['', PREFIXE_API]) {
-  app.get(`${base}/health`, disponibilite);
-  app.get(`${base}/health/ready`, disponibilite);
+  app.get(`${base}/health`, vivacite);
   app.get(`${base}/health/live`, vivacite);
+  app.get(`${base}/ready`, disponibilite);
+  app.get(`${base}/health/ready`, disponibilite);
 }
 
 /* ── Documentation (hors production) ────────────────────────────────────── */

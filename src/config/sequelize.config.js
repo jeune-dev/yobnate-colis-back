@@ -1,16 +1,13 @@
 require('dotenv').config();
-const { dialectOptions } = require('./dbOptions');
+const { dialectOptions, connexionParVariables } = require('./dbOptions');
 
 /**
- * Configuration de la CLI Sequelize (npm run migrate, docker-entrypoint.sh) :
- * mêmes paramètres de connexion que l'application, quel que soit NODE_ENV.
+ * Configuration de la CLI Sequelize (npm run migrate, docker-entrypoint.sh),
+ * alignée sur config/db.js : DATABASE_URL prioritaire, sinon les variables DB_*,
+ * mêmes options de connexion que l'application quel que soit NODE_ENV.
  */
 const base = {
-  username: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: Number(process.env.DB_PORT) || 5432,
+  ...(process.env.DATABASE_URL ? { use_env_variable: 'DATABASE_URL' } : connexionParVariables()),
   dialect: 'postgres',
   logging: false,
   dialectOptions: dialectOptions(),

@@ -5,8 +5,8 @@
   "main": "src/server.js",
   "private": true,
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
+    "start": "npm run migrate && node src/server.js",
+    "dev": "npm run migrate && nodemon src/server.js",
     "migrate": "sequelize-cli db:migrate",
     "migrate:undo": "sequelize-cli db:migrate:undo",
     "migrate:undo:all": "sequelize-cli db:migrate:undo:all",
@@ -17,10 +17,11 @@
     "lint:fix": "eslint src/ scripts/ --fix",
     "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\"",
-    "prepare": "husky",
+    "prepare": "husky || true",
     "docs:openapi": "node scripts/exporterOpenApi.js",
     "schema:verifier": "node scripts/verifierSchema.js",
-    "test:integration": "jest tests/integration"
+    "test:integration": "jest tests/integration",
+    "start:sans-migration": "node src/server.js"
   },
   "lint-staged": {
     "src/**/*.js": [
@@ -43,7 +44,6 @@
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.11",
     "multer": "^2.0.2",
-    "node-cron": "^4.2.1",
     "nodemailer": "^10.0.10",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",

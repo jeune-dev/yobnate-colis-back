@@ -95,6 +95,9 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       REDIS_URL: redis://redis:6379
+      # Tas V8 borné sous la limite mémoire du conteneur (512 Mo) : le GC se déclenche
+      # avant que le noyau ne tue le processus (OOM)
+      NODE_OPTIONS: --max-old-space-size=384
     # Durcissement : système de fichiers en lecture seule (logs sur la sortie standard)
     read_only: true
     tmpfs:
@@ -102,6 +105,7 @@ services:
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
+    # Laisse le temps à l'arrêt propre (requêtes, envois en attente, pool) avant SIGKILL
     stop_grace_period: 20s
     networks: [yobante_network]
     logging:

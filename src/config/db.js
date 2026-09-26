@@ -1,15 +1,21 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
-const { dialectOptions, pool, entier } = require('./dbOptions');
+const { dialectOptions, pool, connexionParVariables } = require('./dbOptions');
 
-const sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
-  host: process.env.DB_HOST || '127.0.0.1',
-  port: entier(process.env.DB_PORT, 5432),
+/** Connexion PostgreSQL : DATABASE_URL prioritaire, sinon DB_* (voir dbOptions.js). */
+const options = {
   dialect: 'postgres',
   logging: false,
   dialectOptions: dialectOptions(),
   pool: pool(),
   define: { freezeTableName: true },
-});
+};
+
+const sequelize = process.env.DATABASE_URL
+  ? new Sequelize(process.env.DATABASE_URL, options)
+  : (() => {
+      const { database, username, password, host, port } = connexionParVariables();
+      return new Sequelize(database, username, password, { ...options, host, port });
+    })();
 
 module.exports = sequelize;

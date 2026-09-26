@@ -1,4 +1,4 @@
-const { DataTypes, Model } = require('sequelize');
+const { DataTypes, Model, Op } = require('sequelize');
 const sequelize = require('../config/db');
 const { CODES_PAYS } = require('../config/pays');
 const { DEVISES } = require('../config/facturation');
@@ -534,8 +534,8 @@ Colis.init(
     tableName: 'colis',
     indexes: [
       { unique: true, fields: ['reference'] },
-      { fields: ['userId'] },
-      { fields: ['statut'] },
+      // userId seul et statut seul : couverts par les index composites (userId, createdAt)
+      // et (statut, dateLivraisonEstimee), dont ils sont le préfixe.
       { fields: ['serviceId'] },
       { fields: ['villeDepartId'] },
       { fields: ['villeArriveeId'] },
@@ -549,6 +549,29 @@ Colis.init(
       { fields: ['userId', 'createdAt'] },
       { fields: ['statut', 'dateLivraisonEstimee'] },
       { fields: ['createdAt'] },
+      // Onglet « Reçus » du client : rapprochement par téléphone, du plus récent au plus ancien
+      {
+        name: 'colis_destinataire_telephone_created_at',
+        fields: ['destinataireTelephone', { name: 'createdAt', order: 'DESC' }],
+      },
+      // Expéditions en retard : index partiel limité aux colis encore en cours
+      {
+        name: 'colis_en_cours_date_livraison_estimee',
+        fields: ['dateLivraisonEstimee'],
+        where: { statut: { [Op.notIn]: ['livre', 'recupere', 'retourne', 'annule'] } },
+      },
+      // Colis en souffrance en point de retrait
+      {
+        name: 'colis_disponible_retrait_date_limite',
+        fields: ['dateLimiteRetrait'],
+        where: { statut: 'disponible_retrait' },
+      },
+      // Recherche partielle par numéro de suivi (ILIKE '%…%') : index trigrammes (pg_trgm)
+      {
+        name: 'colis_reference_trgm',
+        using: 'gin',
+        fields: [{ name: 'reference', operator: 'gin_trgm_ops' }],
+      },
     ],
   }
 );

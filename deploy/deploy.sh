@@ -7,6 +7,7 @@
 # ============================================================
 set -euo pipefail
 
+# ${1:-} : sans argument, « set -u » faisait échouer le script sur "$1" non défini
 MODE="${1:-docker}"
 [[ "$MODE" == "--mode" ]] && MODE="${2:-docker}"
 
@@ -24,7 +25,7 @@ git pull --rebase origin main
 attendre_sante() {
   echo "▶ Attente de la disponibilité (migrations incluses)…"
   for _ in $(seq 1 40); do
-    if curl -fsS http://127.0.0.1:3000/health >/dev/null 2>&1; then
+    if curl -fsS http://127.0.0.1:3000/ready >/dev/null 2>&1; then
       echo "✔ API opérationnelle"
       return 0
     fi
@@ -48,7 +49,8 @@ case "$MODE" in
 
   pm2)
     echo "▶ Dépendances de production…"
-    npm ci --omit=dev --no-fund
+    # Installation reproductible depuis le lockfile, sans les hooks de développement
+    npm ci --omit=dev --ignore-scripts --no-fund
     echo "▶ Migrations…"
     set -a; . ./.env.prod; set +a
     npm run migrate

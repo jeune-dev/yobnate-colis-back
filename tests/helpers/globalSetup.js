@@ -15,6 +15,10 @@ module.exports = async () => {
   }
 
   const { sequelize } = require('../../src/models');
+  // Extensions créées en production par la migration initiale (index trigrammes de recherche)
+  await sequelize.query(
+    'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+  );
   await sequelize.sync({ force: true });
   await sequelize.close();
 };

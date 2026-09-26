@@ -51,6 +51,9 @@ const ModeleEmail = require('./modeleEmail.model');
 const DemandeSuppression = require('./demandeSuppression.model');
 const AppVersion = require('./appVersion.model');
 
+// ── Exploitation ─────────────────────────────────────────────────────────────
+const TachePlanifiee = require('./tachePlanifiee.model');
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Comptes
  * ────────────────────────────────────────────────────────────────────────── */
@@ -294,4 +297,6 @@ module.exports = {
   DemandeSuppression,
   AppVersion,
   ModeleEmail,
+  // Exploitation
+  TachePlanifiee,
 };

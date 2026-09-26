@@ -8,6 +8,9 @@
  * Sans TEST_DB_NAME, les suites qui ont besoin de la base sont ignorées.
  */
 process.env.NODE_ENV = 'test';
+// Chaque fichier repart sans DATABASE_URL : la suite e2e la positionne pour elle seule,
+// et un worker Jest réutilisé ne doit pas la transmettre aux fichiers suivants.
+delete process.env.DATABASE_URL;
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-'.padEnd(48, 'x');
 process.env.JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || 'test-jwt-refresh-secret-'.padEnd(48, 'y');

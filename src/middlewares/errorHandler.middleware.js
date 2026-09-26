@@ -104,7 +104,8 @@ const traduire = (err) => {
   if (err.name === 'SequelizeForeignKeyConstraintError') {
     return [400, { message: 'Référence invalide vers une ressource liée' }];
   }
-  if (ERREURS_CONNEXION_BASE.includes(err.name)) {
+  // Base injoignable, pool saturé, ou requête annulée par statement_timeout (57014)
+  if (ERREURS_CONNEXION_BASE.includes(err.name) || err.parent?.code === '57014') {
     return [503, { message: 'Service temporairement indisponible' }];
   }
 

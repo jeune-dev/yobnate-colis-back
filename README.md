@@ -93,7 +93,7 @@ npm ci
 cp .env.example .env
 # Remplir toutes les variables dans .env
 
-# 4. Démarrer PostgreSQL, puis lancer l'application
+# 4. Démarrer PostgreSQL, puis lancer l'application (les migrations créent le schéma)
 npm run dev
 
 # 5. Amorcer les données de référence (super admin, paramètres, villes,
@@ -104,8 +104,9 @@ npm run seed
 > **Base existante :** `npm run migrate` applique la migration additive
 > `20260925000001-cahier-des-charges-colis` (nouvelles tables, colonnes et
 > valeurs d'ENUM), puis `npm run seed` ajoute les nouveaux paramètres et la
-> grille forfaitaire. En développement, `sequelize.sync()` ne crée que les
-> tables manquantes : il ne suffit pas à mettre à jour une base existante.
+> grille forfaitaire. Le serveur n'appelle jamais `sequelize.sync()` : le schéma
+> (tables, index) est créé et mis à jour uniquement par les migrations, que
+> `npm start` et `npm run dev` exécutent avant de démarrer.
 
 ## Variables d'environnement
 
@@ -179,7 +180,7 @@ bash deploy/deploy.sh docker                       # ou : bash deploy/deploy.sh 
   doit être verte, puis le déploiement attend que le conteneur soit *healthy* ;
 - sauvegarde quotidienne : `deploy/backup-postgres.sh` (chiffrée si
   `BACKUP_ENC_KEY`), restauration : `deploy/restore-postgres.sh` ;
-- sondes : `/health` (base comprise, 503 sinon), `/health/live`.
+- sondes : `/health` (vie du processus, sans base) et `/ready` (base comprise, 503 sinon et pendant l’arrêt) — le HEALTHCHECK et le déploiement utilisent `/ready`.
 
 ## Démarrage avec Docker (développement)
 

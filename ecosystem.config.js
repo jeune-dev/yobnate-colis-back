@@ -18,8 +18,8 @@ module.exports = {
       max_memory_restart: '500M',
       restart_delay: 3000,
       max_restarts: 10,
-      // Supérieur au délai d'arrêt gracieux de l'application (SHUTDOWN_TIMEOUT_MS)
-      kill_timeout: 12000,
+      // Supérieur à l'arrêt gracieux de l'application (requêtes, envois en attente, pool)
+      kill_timeout: 15000,
       listen_timeout: 10000,
       error_file: 'logs/pm2-error.log',
       out_file: 'logs/pm2-out.log',
@@ -31,6 +31,9 @@ module.exports = {
       env_production: {
         NODE_ENV: 'production',
         DOTENV_CONFIG_PATH: '.env.prod',
+        // Chaque worker ouvre jusqu'à DB_POOL_MAX connexions : total = workers × DB_POOL_MAX,
+        // à garder sous max_connections de PostgreSQL (100 par défaut). Réglez
+        // PM2_INSTANCES et DB_POOL_MAX ensemble (ex. 4 workers × 15 = 60).
       },
     },
   ],

@@ -18,7 +18,7 @@ const {
   TourneeCollecte,
 } = require('../../../models');
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
-const { paginate, paginateResult } = require('../../../utils/paginate');
+const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const { uploadToCloudinary } = require('../../../infrastructure/uploadService');
 const suiviService = require('./suivi.service');
@@ -28,6 +28,7 @@ const notificationService = require('../../notification/service/notification.ser
 const documents = require('../../../templates/documents');
 const perimetre = require('../../../utils/perimetre');
 const { versCsv } = require('../../../utils/csv');
+const cache = require('../../../utils/cache');
 const { EVENEMENTS_SUIVI, STATUTS_COLIS } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
 const { genererCodeRetrait } = require('../../../utils/referenceGenerator');
@@ -50,9 +51,16 @@ class ColisService {
     { model: PointCollecte, as: 'pointActuel', attributes: ['id', 'code', 'nom', 'pays'] },
   ];
 
+  /**
+   * Détail complet. Les relations « 1-N » (pièces, paiements, articles douaniers,
+   * historique) sont chargées par des requêtes séparées (`separate: true`) : jointes
+   * dans une seule requête, elles se multipliaient entre elles (10 pièces × 30
+   * événements × 10 articles × 3 paiements = 9 000 lignes pour un seul colis,
+   * 1,7 s mesurées) au lieu de 53 lignes.
+   */
   static INCLUDE_DETAIL = [
     ...ColisService.INCLUDE_LISTE,
-    { model: ColisPiece, as: 'pieces' },
+    { model: ColisPiece, as: 'pieces', separate: true, order: [['ordre', 'ASC']] },
     {
       model: PointCollecte,
       as: 'pointCollecteDepart',
@@ -70,11 +78,19 @@ class ColisService {
     },
     { model: User, as: 'coursierEnlevement', attributes: ['id', 'nom', 'prenom', 'telephone'] },
     { model: User, as: 'coursierLivraison', attributes: ['id', 'nom', 'prenom', 'telephone'] },
-    { model: Facture, as: 'facture', include: [{ model: Paiement, as: 'paiements' }] },
+    {
+      model: Facture,
+      as: 'facture',
+      include: [
+        { model: Paiement, as: 'paiements', separate: true, order: [['createdAt', 'ASC']] },
+      ],
+    },
     {
       model: DeclarationDouane,
       as: 'declarationDouane',
-      include: [{ model: ArticleDouane, as: 'articles' }],
+      include: [
+        { model: ArticleDouane, as: 'articles', separate: true, order: [['createdAt', 'ASC']] },
+      ],
     },
     { model: PreuveLivraison, as: 'preuveLivraison' },
     {
@@ -87,6 +103,11 @@ class ColisService {
     {
       model: SuiviColis,
       as: 'historique',
+      separate: true,
+      order: [
+        ['dateEvenement', 'ASC'],
+        ['createdAt', 'ASC'],
+      ],
       include: [{ model: User, as: 'auteur', attributes: ['id', 'nom', 'prenom', 'role'] }],
     },
   ];
@@ -191,13 +212,12 @@ class ColisService {
     const sortOrder = filters.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Colis.findAndCountAll({
+    const { rows, count } = await listerPagine(Colis, {
       where,
       include: ColisService.INCLUDE_LISTE,
       order: [[sortBy, sortOrder]],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -208,10 +228,8 @@ class ColisService {
   };
 
   static chargerColis = async (id, include = ColisService.INCLUDE_DETAIL) => {
-    const colis = await Colis.findByPk(id, {
-      include,
-      order: [[{ model: SuiviColis, as: 'historique' }, 'dateEvenement', 'ASC']],
-    });
+    // L'ordre de l'historique est porté par son include (chargé séparément)
+    const colis = await Colis.findByPk(id, { include });
     if (!colis) throw new NotFoundError('Expédition introuvable');
     return colis;
   };
@@ -688,45 +706,58 @@ class ColisService {
 
   /* ── Statistiques et export ─────────────────────────────────────────────── */
 
-  static getStatistiques = async (filters = {}, restriction = null) => {
+  /**
+   * Un seul parcours de la table (GROUPING SETS) au lieu de quatre agrégats lancés en
+   * parallèle, qui lisaient chacun toute la sélection et occupaient quatre connexions
+   * du pool pour une seule requête HTTP. Résultat mis en cache 30 s par jeu de filtres.
+   */
+  static getStatistiques = (filters = {}, restriction = null, cleRestriction = 'tous') =>
+    // Le périmètre fait partie de la clé : un agent ne reçoit jamais les chiffres
+    // mis en cache pour un autre point ou pour un administrateur.
+    cache.memoiser(`colis:stats:${cleRestriction}:${JSON.stringify(filters)}`, 30 * 1000, () =>
+      ColisService.calculerStatistiques(filters, restriction)
+    );
+
+  static calculerStatistiques = async (filters, restriction = null) => {
     const where = perimetre.combiner(ColisService.construireFiltres(filters), restriction);
+    const col = (nom) => sequelize.col(`Colis.${nom}`);
+    const lignes = await Colis.findAll({
+      where,
+      attributes: [
+        'statut',
+        'serviceId',
+        'paysDepart',
+        'paysArrivee',
+        [sequelize.literal('GROUPING("Colis"."statut")'), 'gStatut'],
+        [sequelize.literal('GROUPING("Colis"."serviceId")'), 'gService'],
+        [sequelize.literal('GROUPING("Colis"."paysDepart", "Colis"."paysArrivee")'), 'gCorridor'],
+        [sequelize.fn('COUNT', col('id')), 'total'],
+        [sequelize.fn('SUM', col('montantTotal')), 'chiffreAffaires'],
+        [sequelize.fn('SUM', col('poidsFactureKg')), 'poids'],
+        [sequelize.fn('AVG', col('montantTotal')), 'panierMoyen'],
+      ],
+      group: [
+        sequelize.literal(
+          'GROUPING SETS (("Colis"."statut"), ("Colis"."serviceId"), ' +
+            '("Colis"."paysDepart", "Colis"."paysArrivee"), ())'
+        ),
+      ],
+      raw: true,
+    });
 
-    const [parStatut, parService, parCorridor, totaux] = await Promise.all([
-      Colis.findAll({
-        where,
-        attributes: ['statut', [sequelize.fn('COUNT', sequelize.col('id')), 'total']],
-        group: ['statut'],
-        raw: true,
-      }),
-      Colis.findAll({
-        where,
-        attributes: ['serviceId', [sequelize.fn('COUNT', sequelize.col('Colis.id')), 'total']],
-        include: [{ model: ServiceExpedition, as: 'service', attributes: ['nom'] }],
-        group: ['serviceId', 'service.id'],
-      }),
-      Colis.findAll({
-        where,
-        attributes: [
-          'paysDepart',
-          'paysArrivee',
-          [sequelize.fn('COUNT', sequelize.col('id')), 'total'],
-          [sequelize.fn('SUM', sequelize.col('poidsFactureKg')), 'poids'],
-        ],
-        group: ['paysDepart', 'paysArrivee'],
-        raw: true,
-      }),
-      Colis.findOne({
-        where,
-        attributes: [
-          [sequelize.fn('COUNT', sequelize.col('id')), 'total'],
-          [sequelize.fn('SUM', sequelize.col('montantTotal')), 'chiffreAffaires'],
-          [sequelize.fn('SUM', sequelize.col('poidsFactureKg')), 'poidsTotal'],
-          [sequelize.fn('AVG', sequelize.col('montantTotal')), 'panierMoyen'],
-        ],
-        raw: true,
-      }),
-    ]);
-
+    // GROUPING(x) = 0 : la ligne est agrégée par x ; les autres colonnes valent NULL
+    const parStatut = lignes.filter((l) => Number(l.gStatut) === 0);
+    const parCorridor = lignes.filter((l) => Number(l.gCorridor) === 0);
+    const lignesService = lignes.filter((l) => Number(l.gService) === 0);
+    // Ligne du total général : agrégée par aucun regroupement (GROUPING ≠ 0 partout)
+    const totaux =
+      lignes.find((l) => [l.gStatut, l.gService, l.gCorridor].every((g) => Number(g) !== 0)) || {};
+    const services = await ServiceExpedition.findAll({
+      where: { id: lignesService.map((l) => l.serviceId) },
+      attributes: ['id', 'nom'],
+      raw: true,
+    });
+    const nomService = Object.fromEntries(services.map((sv) => [sv.id, sv.nom]));
     const comptes = Object.fromEntries(parStatut.map((r) => [r.statut, Number(r.total)]));
 
     return {
@@ -734,12 +765,12 @@ class ColisService {
       statistiques: {
         total: Number(totaux?.total || 0),
         chiffreAffaires: Number(totaux?.chiffreAffaires || 0),
-        poidsTotalKg: Number(totaux?.poidsTotal || 0),
+        poidsTotalKg: Number(totaux?.poids || 0),
         panierMoyen: Number(Number(totaux?.panierMoyen || 0).toFixed(2)),
         parStatut: STATUTS_COLIS.map((statut) => ({ statut, total: comptes[statut] || 0 })),
-        parService: parService.map((r) => ({
-          service: r.service?.nom || 'Inconnu',
-          total: Number(r.get('total')),
+        parService: lignesService.map((r) => ({
+          service: nomService[r.serviceId] || 'Inconnu',
+          total: Number(r.total),
         })),
         parCorridor: parCorridor.map((r) => ({
           corridor: `${r.paysDepart} vers ${r.paysArrivee}`,
@@ -778,10 +809,20 @@ class ColisService {
 
   /** Export CSV de la sélection courante, plafonné pour rester exploitable. */
   static exporterCsv = async (filters = {}) => {
+    // Seules les colonnes exportées sont lues : une ligne complète pèse ~8 Ko (JSONB de
+    // tarification, photos…), soit ~80 Mo lus et désérialisés pour 10 000 lignes.
+    const champs = ColisService.COLONNES_EXPORT.map((c) => c.cle.split('.'));
     const colis = await Colis.findAll({
       where: ColisService.construireFiltres(filters),
-      include: ColisService.INCLUDE_LISTE,
-      order: [['createdAt', 'DESC']],
+      attributes: ['id', ...champs.filter((c) => c.length === 1).map(([c]) => c)],
+      include: ['service', 'villeDepart', 'villeArrivee'].map((as) => ({
+        association: as,
+        attributes: champs.filter(([rel]) => rel === as).map(([, c]) => c),
+      })),
+      order: [
+        ['createdAt', 'DESC'],
+        ['id', 'DESC'],
+      ],
       limit: 10000,
     });
 

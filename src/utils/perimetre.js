@@ -51,6 +51,10 @@ const enlevements = (user) => {
   return AUCUN;
 };
 
+/** Identifiant stable du périmètre (clé de cache) : « tous » pour un administrateur. */
+const cle = (user) =>
+  restreint(user) ? `${user.role}:${user.pointCollecteId || user.id}` : 'tous';
+
 /** Combine les filtres de la requête et la restriction de périmètre. */
 const combiner = (where, restriction) => (restriction ? { [Op.and]: [where, restriction] } : where);
 
@@ -91,4 +95,5 @@ module.exports = {
   exigerPerimetre,
   assertPoint,
   restreint,
+  cle,
 };

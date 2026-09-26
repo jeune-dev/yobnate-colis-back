@@ -8,7 +8,8 @@
 FROM node:22.20.0-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-fund --no-audit && npm cache clean --force
+# --ignore-scripts : le hook « prepare » (husky) ne sert qu'au développement
+RUN npm ci --omit=dev --ignore-scripts --no-fund --no-audit && npm cache clean --force
 
 # ── Étape 2 : image d'exécution ─────────────────────────────────────────────
 FROM node:22.20.0-slim AS runner
@@ -27,9 +28,12 @@ RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoin
 USER node
 EXPOSE 3000
 
-# Disponibilité réelle : /health répond 503 si la base est injoignable
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://127.0.0.1:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+# Disponibilité réelle : /ready répond 503 si la base est injoignable.
+# Délai de grâce large : les migrations (index CONCURRENTLY) s'exécutent au démarrage.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/ready', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
+# L'entrypoint attend PostgreSQL, applique les migrations, puis remplace le shell
+# par Node (« exec ») : Node reçoit directement SIGTERM et s'arrête proprement.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "src/server.js"]

@@ -40,6 +40,8 @@ const envoyerWhatsapp = async ({ telephone, message }) => {
     const reponse = await fetch(`https://graph.facebook.com/${VERSION_API}/${PHONE_ID}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      // Un service tiers lent ne doit pas retenir la tâche indéfiniment
+      signal: AbortSignal.timeout(10000),
       body: JSON.stringify({ messaging_product: 'whatsapp', to: destinataire, ...corps }),
     });
     if (!reponse.ok) {

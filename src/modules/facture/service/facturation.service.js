@@ -36,7 +36,13 @@ class FacturationService {
     const detail = colis.detailTarification || {};
     const lignes = [];
 
-    if (colis.lignesForfait?.length) {
+    if (colis.lignesForfait?.length && detail.ajustement) {
+      // Prix « à partir de » ajusté à la validation : les articles restent cités, au montant retenu
+      const articles = colis.lignesForfait
+        .map((l) => `${l.libelle}${l.quantite > 1 ? ` × ${l.quantite}` : ''}`)
+        .join(', ');
+      lignes.push({ libelle: `${articles} (tarif ajusté après étude)`, montant: montants.fret });
+    } else if (colis.lignesForfait?.length) {
       for (const l of colis.lignesForfait) {
         lignes.push({
           libelle: `${l.libelle}${l.quantite > 1 ? ` × ${l.quantite}` : ''} (forfait, livraison incluse)`,
@@ -130,11 +136,20 @@ class FacturationService {
     for (let tentative = 0; tentative < 3; tentative += 1) {
       try {
         const reference = await genererRefFacture(transaction);
-        const facture = await Facture.create({ ...donnees, reference }, { transaction });
+        // Sous SAVEPOINT : une violation d'unicité n'annule pas la transaction appelante
+        const facture = transaction
+          ? await Facture.sequelize.transaction({ transaction }, (sp) =>
+              Facture.create({ ...donnees, reference }, { transaction: sp })
+            )
+          : await Facture.create({ ...donnees, reference });
         return { facture, creee: true };
       } catch (err) {
-        if (err instanceof UniqueConstraintError && tentative < 2) continue;
-        throw err;
+        if (!(err instanceof UniqueConstraintError)) throw err;
+        // Facture émise au même instant par une autre requête (unicité sur colisId) :
+        // c'est elle qui fait foi, rien à recréer.
+        const concurrente = await Facture.findOne({ where: { colisId: colis.id }, transaction });
+        if (concurrente) return { facture: concurrente, creee: false };
+        if (tentative >= 2) throw err;
       }
     }
     throw new BadRequestError('Impossible de générer une référence de facture, veuillez réessayer');
