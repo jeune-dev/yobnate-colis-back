@@ -87,6 +87,34 @@ class SuiviService {
     return maj;
   };
 
+  /** Champs relus sous verrou avant d'appliquer un événement (voir enregistrerEvenement). */
+  static CHAMPS_VERROUILLES = [
+    'statut',
+    'pointActuelId',
+    'datePriseEnCharge',
+    'dateLimiteRetrait',
+    'dateLivraisonEffective',
+    'nbTentativesLivraison',
+  ];
+
+  /**
+   * Un événement purement informatif ne change pas l'état : il échappe au contrôle de
+   * transition ; tout autre passage doit être autorisé par la machine à états.
+   */
+  static verifierTransition = (statutActuel, nouveauStatut) => {
+    if (nouveauStatut === statutActuel) return;
+    if (statutEstTerminal(statutActuel)) {
+      throw new BadRequestError(
+        `L'expédition est déjà dans un état définitif (${statutActuel}) : aucune évolution n'est possible`
+      );
+    }
+    if (!transitionAutorisee(statutActuel, nouveauStatut)) {
+      throw new BadRequestError(
+        `Transition de statut invalide : ${statutActuel} vers ${nouveauStatut}`
+      );
+    }
+  };
+
   /**
    * Enregistre un événement de suivi et fait évoluer l'expédition en conséquence.
    *
@@ -120,24 +148,28 @@ class SuiviService {
     const definition = EVENEMENTS_SUIVI[codeEvenement];
     if (!definition) throw new BadRequestError(`Code d'événement inconnu : ${codeEvenement}`);
 
-    const nouveauStatut = statutForce || definition.statut || colis.statut;
-
-    // Un événement purement informatif ne change pas l'état : il échappe au contrôle
-    // de transition, tout autre passage doit être autorisé par la machine à états.
-    if (nouveauStatut !== colis.statut) {
-      if (statutEstTerminal(colis.statut)) {
-        throw new BadRequestError(
-          `L'expédition est déjà dans un état définitif (${colis.statut}) : aucune évolution n'est possible`
-        );
-      }
-      if (!transitionAutorisee(colis.statut, nouveauStatut)) {
-        throw new BadRequestError(
-          `Transition de statut invalide : ${colis.statut} vers ${nouveauStatut}`
-        );
-      }
-    }
+    // Contrôle anticipé (sans transaction) pour refuser vite une transition invalide ;
+    // il est refait sous verrou ci-dessous, sur l'état réel en base.
+    SuiviService.verifierTransition(colis.statut, statutForce || definition.statut || colis.statut);
 
     const executer = async (transaction) => {
+      // Verrou de ligne : deux événements simultanés sur le même colis (double scan,
+      // lot concurrent, tâche automatique) sont sérialisés. Sans lui, les deux lisaient
+      // le même statut, passaient le contrôle et appliquaient deux fois les mouvements
+      // de stock des points.
+      const enBase = await Colis.findByPk(colis.id, {
+        attributes: SuiviService.CHAMPS_VERROUILLES,
+        lock: transaction.LOCK.UPDATE,
+        transaction,
+      });
+      if (!enBase) throw new NotFoundError('Expédition introuvable');
+      for (const champ of SuiviService.CHAMPS_VERROUILLES) {
+        colis.set(champ, enBase.get(champ));
+        colis.changed(champ, false);
+      }
+      const nouveauStatut = statutForce || definition.statut || colis.statut;
+      SuiviService.verifierTransition(colis.statut, nouveauStatut);
+
       const ancienPointId = colis.pointActuelId;
       const pointCible = pointCollecteId === undefined ? ancienPointId : pointCollecteId;
 
@@ -179,10 +211,10 @@ class SuiviService {
         { transaction }
       );
 
-      return { evenement, point };
+      return { evenement, point, nouveauStatut };
     };
 
-    const { evenement, point } = options.transaction
+    const { evenement, point, nouveauStatut } = options.transaction
       ? await executer(options.transaction)
       : await sequelize.transaction(executer);
 

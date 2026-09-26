@@ -13,9 +13,29 @@ const anneeCourante = () => new Date().getFullYear();
 const nomSequence = (prefixe, suffixe = '') =>
   `${prefixe}${suffixe}`.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_seq';
 
+/**
+ * Séquences dont l'existence est déjà vérifiée par ce processus : le CREATE SEQUENCE
+ * (une instruction DDL, qui verrouille le catalogue) n'est plus rejoué à chaque
+ * référence générée, mais une fois par séquence et par processus.
+ */
+const sequencesConnues = new Set();
+
+const creerSequence = async (nom) => {
+  if (sequencesConnues.has(nom)) return;
+  try {
+    // Hors de la transaction appelante : idempotent, et une collision entre deux
+    // créations simultanées ne doit pas annuler la transaction métier
+    await sequelize.query(`CREATE SEQUENCE IF NOT EXISTS "${nom}" START 1`);
+  } catch (err) {
+    // 23505 / 42P07 : créée au même instant par une autre connexion
+    if (!['23505', '42P07'].includes(err.parent?.code)) throw err;
+  }
+  sequencesConnues.add(nom);
+};
+
 const prochaineValeur = async (nom, transaction = null) => {
+  await creerSequence(nom);
   const options = transaction ? { transaction } : {};
-  await sequelize.query(`CREATE SEQUENCE IF NOT EXISTS "${nom}" START 1`, options);
   const [[{ nextval }]] = await sequelize.query(`SELECT nextval('"${nom}"') AS nextval`, options);
   return Number(nextval);
 };

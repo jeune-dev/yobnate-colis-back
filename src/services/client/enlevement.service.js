@@ -1,5 +1,6 @@
 const { Op } = require('sequelize');
 const {
+  sequelize,
   DemandeEnlevement,
   Ville,
   PointCollecte,
@@ -118,18 +119,43 @@ class EnlevementService {
       }
     }
 
-    const reference = await genererRefEnlevement();
-    const demande = await DemandeEnlevement.create({
-      ...data,
-      dateSouhaitee: tournee ? tournee.dateCollecte : data.dateSouhaitee,
-      reference,
-      userId,
-      statut: 'demande',
-      fraisEnlevement: EnlevementService.calculerFrais(data.pays, data.nbColis || 1, parametres),
+    // Réservation de la place et création de la demande dans la même transaction ; la
+    // place n'est prise que si la tournée n'est pas complète au moment de l'écriture
+    // (deux inscriptions simultanées ne peuvent pas dépasser la capacité).
+    const demande = await sequelize.transaction(async (t) => {
+      if (tournee) {
+        const [reserve] = await TourneeCollecte.update(
+          { nbInscrits: sequelize.literal('"nbInscrits" + 1') },
+          {
+            where: {
+              id: tournee.id,
+              [Op.or]: [
+                { capaciteMax: null },
+                { nbInscrits: { [Op.lt]: sequelize.col('capaciteMax') } },
+              ],
+            },
+            transaction: t,
+          }
+        );
+        if (!reserve) throw new ConflictError('Cette tournée de collecte vient d’être complète');
+      }
+      return DemandeEnlevement.create(
+        {
+          ...data,
+          dateSouhaitee: tournee ? tournee.dateCollecte : data.dateSouhaitee,
+          reference: await genererRefEnlevement(t),
+          userId,
+          statut: 'demande',
+          fraisEnlevement: EnlevementService.calculerFrais(
+            data.pays,
+            data.nbColis || 1,
+            parametres
+          ),
+        },
+        { transaction: t }
+      );
     });
-    if (tournee) {
-      await TourneeCollecte.increment('nbInscrits', { by: 1, where: { id: tournee.id } });
-    }
+    const { reference } = demande;
 
     await notificationService.notifierAdmins({
       titre: `Nouvelle demande d'enlèvement ${reference}`,
