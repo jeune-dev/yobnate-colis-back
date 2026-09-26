@@ -50,13 +50,29 @@ const HOST = process.env.HOST || '0.0.0.0';
     // Une requête (envoi de photos compris) ne peut pas occuper un socket plus de 2 min
     server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS) || 120000;
 
+    // Un client qui coupe sa connexion ne met pas fin au traitement côté serveur : le
+    // serveur HTTP se croit alors vide et l'arrêt fermait le pool pendant que des
+    // requêtes écrivaient encore en base (« getConnection … after closed », observé
+    // en test de charge). On attend que le pool reste inactif 250 ms d'affilée.
+    const attendreRequetes = async (delaiMs) => {
+      const pool = sequelize.connectionManager.pool;
+      const limite = Date.now() + delaiMs;
+      let calmeDepuis = Date.now();
+      while (Date.now() < limite) {
+        if (pool.using > 0 || pool.waiting > 0) calmeDepuis = Date.now();
+        else if (Date.now() - calmeDepuis >= 250) return;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+    };
+
     // Résilience : graceful shutdown sur SIGTERM et SIGINT
     const shutdown = (signal) => {
       logger.info(`Signal ${signal} reçu — arrêt en cours…`);
       server.close(async () => {
         try {
+          await attendreRequetes(5000);
           // Laisser partir les courriels et notifications déjà confiés à la file
-          await require('./utils/arrierePlan').vider(8000);
+          await require('./utils/arrierePlan').vider(4000);
           await sequelize.close();
           logger.info('Connexion DB fermée proprement');
         } catch (_err) {
