@@ -59,3 +59,23 @@ exports.kpis = asyncHandler(async (req, res) => {
   const result = await service.getKpis(req.query);
   return ok(res, { kpis: result.kpis }, result.message);
 });
+
+exports.conversion = asyncHandler(async (req, res) => {
+  const result = await service.getConversion(req.query);
+  return ok(res, { conversion: result.conversion }, result.message);
+});
+
+exports.marketing = asyncHandler(async (req, res) => {
+  const result = await service.getMarketing(req.query);
+  return ok(res, { marketing: result.marketing }, result.message);
+});
+
+exports.evaluations = asyncHandler(async (req, res) => {
+  const result = await service.getEvaluations(req.query);
+  return ok(res, { evaluations: result.evaluations }, result.message);
+});
+
+exports.stock = asyncHandler(async (req, res) => {
+  const result = await service.getStock();
+  return ok(res, { stock: result.stock }, result.message);
+});

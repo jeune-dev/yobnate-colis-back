@@ -17,6 +17,11 @@ exports.create = asyncHandler(async (req, res) => {
   return created(res, { rotation: result.rotation }, result.message);
 });
 
+exports.repartirCout = asyncHandler(async (req, res) => {
+  const result = await service.repartirCout(req.params.id, req.body, req.user.id);
+  return ok(res, { rotation: result.rotation, nbColis: result.nbColis }, result.message);
+});
+
 exports.update = asyncHandler(async (req, res) => {
   const result = await service.updateRotation(req.params.id, req.body, req.user.id);
   return ok(res, { rotation: result.rotation }, result.message);

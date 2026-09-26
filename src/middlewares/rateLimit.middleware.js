@@ -35,6 +35,16 @@ const otpEmailRateLimit = limiteur('otp', {
   },
 });
 
+// Mesure d'audience : une page vue et une présence toutes les 30 s par visiteur au plus
+const mesureRateLimit = limiteur('mesure', {
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: _skipEnDev,
+  message: { success: false, message: 'Trop de requêtes de mesure.' },
+});
+
 // Mutations sensibles d'un compte connecté (mot de passe, suppression, export) — repris de Sign
 const mutationRateLimit = limiteur('mutation', {
   windowMs: 15 * 60 * 1000,
@@ -73,6 +83,7 @@ module.exports = {
   authRateLimit,
   otpEmailRateLimit,
   mutationRateLimit,
+  mesureRateLimit,
   envoiCodeRateLimit,
   demandePubliqueRateLimit,
 };

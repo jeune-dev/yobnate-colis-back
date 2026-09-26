@@ -54,6 +54,12 @@ const AppVersion = require('./appVersion.model');
 // ── Exploitation ─────────────────────────────────────────────────────────────
 const TachePlanifiee = require('./tachePlanifiee.model');
 
+// ── Satisfaction et mesure d'audience ────────────────────────────────────────
+const Avis = require('./avis.model');
+const Faq = require('./faq.model');
+const SimulationDevis = require('./simulationDevis.model');
+const Visite = require('./visite.model');
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Comptes
  * ────────────────────────────────────────────────────────────────────────── */
@@ -251,6 +257,17 @@ User.hasMany(ActivityLog, { foreignKey: 'userId', onDelete: 'SET NULL' });
 ActivityLog.belongsTo(User, { foreignKey: 'userId' });
 
 Annonce.belongsTo(User, { foreignKey: 'creePar', as: 'auteur' });
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * Satisfaction et mesure d'audience
+ * ────────────────────────────────────────────────────────────────────────── */
+
+User.hasMany(Avis, { foreignKey: 'userId', as: 'avis', onDelete: 'CASCADE' });
+Avis.belongsTo(User, { foreignKey: 'userId', as: 'client' });
+Avis.belongsTo(Colis, { foreignKey: 'colisId', as: 'colis', onDelete: 'SET NULL' });
+Avis.belongsTo(User, { foreignKey: 'moderePar', as: 'moderateur' });
+Faq.belongsTo(User, { foreignKey: 'modifiePar', as: 'auteur' });
+SimulationDevis.belongsTo(Colis, { foreignKey: 'colisId', as: 'colis', onDelete: 'SET NULL' });
 ModeleEmail.belongsTo(User, { foreignKey: 'modifiePar', as: 'auteur' });
 
 module.exports = {
@@ -299,4 +316,9 @@ module.exports = {
   ModeleEmail,
   // Exploitation
   TachePlanifiee,
+  // Satisfaction et audience
+  Avis,
+  Faq,
+  SimulationDevis,
+  Visite,
 };

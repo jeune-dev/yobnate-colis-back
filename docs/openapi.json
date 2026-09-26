@@ -1666,6 +1666,191 @@
         }
       }
     },
+    "/public/avis": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "GET /public/avis",
+        "description": "Route publique.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/faq": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "GET /public/faq",
+        "description": "Route publique.",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/visites": {
+      "post": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "POST /public/visites",
+        "description": "Route publique.",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "visiteurId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "plateforme": {
+                    "default": "web",
+                    "type": "string",
+                    "enum": [
+                      "web",
+                      "android",
+                      "ios"
+                    ]
+                  },
+                  "evenement": {
+                    "default": "page",
+                    "type": "string",
+                    "enum": [
+                      "page",
+                      "ping"
+                    ]
+                  },
+                  "page": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "referent": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "utmSource": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "utmMedium": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 80
+                  },
+                  "utmCampagne": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "sessionId",
+                  "visiteurId"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/app-version": {
       "get": {
         "tags": [
@@ -2148,6 +2333,11 @@
                 "type": "object",
                 "properties": {
                   "serviceId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "simulationId": {
+                    "nullable": true,
                     "type": "string",
                     "format": "uuid"
                   },
@@ -6301,6 +6491,220 @@
         }
       }
     },
+    "/client/avis": {
+      "get": {
+        "tags": [
+          "Client — Avis"
+        ],
+        "summary": "GET /client/avis",
+        "description": "Authentification requise.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Client — Avis"
+        ],
+        "summary": "POST /client/avis",
+        "description": "Authentification requise.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "titre": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "commentaire": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "colisId": {
+                    "nullable": true,
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "note"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client/avis/{id}": {
+      "delete": {
+        "tags": [
+          "Client — Avis"
+        ],
+        "summary": "DELETE /client/avis/:id",
+        "description": "Authentification requise.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/client/reclamations": {
       "get": {
         "tags": [
@@ -6792,6 +7196,310 @@
           "Admin — Tableau de bord"
         ],
         "summary": "GET /admin/dashboard/kpis",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dashboard/conversion": {
+      "get": {
+        "tags": [
+          "Admin — Tableau de bord"
+        ],
+        "summary": "GET /admin/dashboard/conversion",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dashboard/marketing": {
+      "get": {
+        "tags": [
+          "Admin — Tableau de bord"
+        ],
+        "summary": "GET /admin/dashboard/marketing",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dashboard/evaluations": {
+      "get": {
+        "tags": [
+          "Admin — Tableau de bord"
+        ],
+        "summary": "GET /admin/dashboard/evaluations",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/dashboard/stock": {
+      "get": {
+        "tags": [
+          "Admin — Tableau de bord"
+        ],
+        "summary": "GET /admin/dashboard/stock",
         "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
         "security": [
           {
@@ -9264,6 +9972,103 @@
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/colis/{id}/cout-revient": {
+      "patch": {
+        "tags": [
+          "Admin — Colis"
+        ],
+        "summary": "PATCH /admin/colis/:id/cout-revient",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "coutRevient": {
+                    "nullable": true,
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "required": [
+                  "coutRevient"
+                ]
               }
             }
           }
@@ -16359,6 +17164,110 @@
         }
       }
     },
+    "/admin/rotations/{id}/cout": {
+      "post": {
+        "tags": [
+          "Admin — Rotations"
+        ],
+        "summary": "POST /admin/rotations/:id/cout",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "coutTotal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "devise": {
+                    "type": "string",
+                    "enum": [
+                      "EUR",
+                      "XOF"
+                    ]
+                  }
+                },
+                "required": [
+                  "coutTotal",
+                  "devise"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/rotations/{id}/colis": {
       "post": {
         "tags": [
@@ -17205,6 +18114,110 @@
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/conteneurs/{id}/cout": {
+      "post": {
+        "tags": [
+          "Admin — Rotations"
+        ],
+        "summary": "POST /admin/conteneurs/:id/cout",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur. Alias d’une autre route (même comportement).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "coutTotal": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "devise": {
+                    "type": "string",
+                    "enum": [
+                      "EUR",
+                      "XOF"
+                    ]
+                  }
+                },
+                "required": [
+                  "coutTotal",
+                  "devise"
+                ]
               }
             }
           }
@@ -24264,6 +25277,664 @@
           },
           "403": {
             "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/avis": {
+      "get": {
+        "tags": [
+          "Admin — Avis clients"
+        ],
+        "summary": "GET /admin/avis",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en_attente",
+                "publie",
+                "rejete"
+              ]
+            }
+          },
+          {
+            "name": "note",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/avis/{id}/moderation": {
+      "patch": {
+        "tags": [
+          "Admin — Avis clients"
+        ],
+        "summary": "PATCH /admin/avis/:id/moderation",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "statut": {
+                    "type": "string",
+                    "enum": [
+                      "publie",
+                      "rejete"
+                    ]
+                  },
+                  "motifRejet": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "reponse": {
+                    "nullable": true,
+                    "type": "string",
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "statut"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/avis/{id}": {
+      "delete": {
+        "tags": [
+          "Admin — Avis clients"
+        ],
+        "summary": "DELETE /admin/avis/:id",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/faq": {
+      "get": {
+        "tags": [
+          "Admin — FAQ"
+        ],
+        "summary": "GET /admin/faq",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "rubrique",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "general",
+                "expedition",
+                "tarifs",
+                "paiement",
+                "suivi",
+                "douane",
+                "compte"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin — FAQ"
+        ],
+        "summary": "POST /admin/faq",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 255
+                  },
+                  "reponse": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 5000
+                  },
+                  "rubrique": {
+                    "default": "general",
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "expedition",
+                      "tarifs",
+                      "paiement",
+                      "suivi",
+                      "douane",
+                      "compte"
+                    ]
+                  },
+                  "ordre": {
+                    "default": 0,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "isActive": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "question",
+                  "reponse"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/faq/{id}": {
+      "put": {
+        "tags": [
+          "Admin — FAQ"
+        ],
+        "summary": "PUT /admin/faq/:id",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 5,
+                    "maxLength": 255
+                  },
+                  "reponse": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 5000
+                  },
+                  "rubrique": {
+                    "type": "string",
+                    "enum": [
+                      "general",
+                      "expedition",
+                      "tarifs",
+                      "paiement",
+                      "suivi",
+                      "douane",
+                      "compte"
+                    ]
+                  },
+                  "ordre": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin — FAQ"
+        ],
+        "summary": "DELETE /admin/faq/:id",
+        "description": "Authentification requise — rôles : Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ressource introuvable",
             "content": {
               "application/json": {
                 "schema": {

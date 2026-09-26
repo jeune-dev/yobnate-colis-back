@@ -471,4 +471,58 @@ decrire('Parcours complets (base réelle)', () => {
     // Créneau déjà pris : personne ne le réobtient avant la période suivante
     expect(await taches.reserver('test_cluster', new Date(Date.now() - 60 * 1000))).toBe(false);
   });
+
+  test('taux de conversion : simulation sans compte, puis commande rattachée à cette simulation', async () => {
+    const visiteurId = require('crypto').randomUUID();
+    const simulation = await request(app)
+      .post('/public/devis')
+      .set('X-Visiteur-Id', visiteurId)
+      .send({
+        villeDepartId: donnees.paris.id,
+        villeArriveeId: donnees.dakar.id,
+        categorie: 'documents',
+      });
+    expect(simulation.status).toBe(200);
+    const { simulationId } = simulation.body.data.devis;
+    expect(simulationId).toBeDefined();
+    const enregistree = await m.SimulationDevis.findByPk(simulationId);
+    expect(enregistree).toMatchObject({ visiteurId, userId: null, colisId: null });
+
+    const commande = await request(app)
+      .post('/client/colis')
+      .set(auth(donnees.parrain))
+      .set('X-Visiteur-Id', visiteurId)
+      .field('serviceId', donnees.std.id)
+      .field('expediteurNom', 'Papa Ndiaye')
+      .field('expediteurTelephone', '+33612340001')
+      .field('villeDepartId', donnees.paris.id)
+      .field('destinataireNom', 'Moussa Fall')
+      .field('destinataireTelephone', '+221771234567')
+      .field('villeArriveeId', donnees.dakar.id)
+      .field('modeLivraison', 'livraison_domicile')
+      .field('adresseLivraison', 'Rue 10, Médina')
+      .field('conditionsAcceptees', 'true')
+      .field('categorie', 'documents')
+      .field('typeDocument', 'Acte')
+      .field('modeDepot', 'envoi_postal')
+      .field('simulationId', simulationId)
+      .attach('photos', JPEG, { filename: 'p.jpg', contentType: 'image/jpeg' });
+    expect(commande.status).toBe(201);
+
+    await enregistree.reload();
+    expect(enregistree.colisId).toBe(commande.body.data.colis.id);
+    expect(enregistree.userId).toBeTruthy();
+
+    const kpis = await request(app)
+      .get('/admin/dashboard/conversion')
+      .query({ dateDebut: '2000-01-01', dateFin: '2099-12-31' })
+      .set(auth(donnees.admin));
+    expect(kpis.status).toBe(200);
+    const c = kpis.body.data.conversion;
+    expect(c.simulationsConverties).toBeGreaterThanOrEqual(1);
+    expect(c.tauxConversionSimulations).toBeCloseTo(
+      (c.simulationsConverties / c.simulations) * 100,
+      1
+    );
+  });
 });

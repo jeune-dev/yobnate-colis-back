@@ -1,5 +1,5 @@
 const Joi = require('joi');
-const { pays } = require('../../../validations/common');
+const { pays, devise } = require('../../../validations/common');
 const { MODES_TRANSPORT } = require('../../../config/reseau');
 
 const createRotationSchema = Joi.object({
@@ -49,7 +49,14 @@ const changerStatutSchema = Joi.object({
   commentaire: Joi.string().max(500).allow('', null),
 });
 
+/** Coût total du conteneur ou du vol, réparti ensuite sur les colis embarqués. */
+const repartirCoutSchema = Joi.object({
+  coutTotal: Joi.number().min(0).precision(2).required(),
+  devise: devise.required(),
+});
+
 module.exports = {
+  repartirCoutSchema,
   createRotationSchema,
   updateRotationSchema,
   chargerColisSchema,

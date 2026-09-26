@@ -509,6 +509,27 @@ class ColisService {
   };
 
   /**
+   * Coût de revient d'une expédition (fret, dédouanement, livraison), dans sa
+   * devise : base de la marge moyenne du tableau de bord. Modifiable même une fois
+   * l'expédition terminée, puisque les frais réels arrivent souvent après.
+   */
+  static definirCoutRevient = async (id, coutRevient, adminId) => {
+    const colis = await Colis.findByPk(id, {
+      attributes: ['id', 'reference', 'devise', 'montantTotal', 'coutRevient'],
+    });
+    if (!colis) throw new NotFoundError('Expédition introuvable');
+    await colis.update({ coutRevient });
+    await logActivity({
+      userId: adminId,
+      action: 'admin.colis.cout_revient',
+      entite: 'Colis',
+      entiteId: colis.id,
+      details: { coutRevient, devise: colis.devise },
+    });
+    return { message: 'Coût de revient enregistré.', colis };
+  };
+
+  /**
    * Réaffecte le point de retrait d'une expédition.
    * Utile quand le point initial est saturé, fermé, ou à la demande du destinataire.
    */

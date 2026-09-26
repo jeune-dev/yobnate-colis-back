@@ -50,6 +50,11 @@ exports.corrigerPesee = asyncHandler(async (req, res) => {
   return ok(res, { colis: result.colis, devis: result.devis, ecart: result.ecart }, result.message);
 });
 
+exports.coutRevient = asyncHandler(async (req, res) => {
+  const result = await service.definirCoutRevient(req.params.id, req.body.coutRevient, req.user.id);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
 exports.update = asyncHandler(async (req, res) => {
   const result = await service.updateColis(req.params.id, req.body, req.user.id);
   return ok(res, { colis: result.colis }, result.message);

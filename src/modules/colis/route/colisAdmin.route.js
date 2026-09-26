@@ -6,6 +6,7 @@ const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware
 const validate = require('../../../middlewares/validate.middleware');
 const { upload } = require('../../../middlewares/upload.middleware');
 const {
+  coutRevientSchema,
   updateColisSchema,
   corrigerPeseeSchema,
   enregistrerEvenementSchema,
@@ -39,6 +40,14 @@ router.get('/recherche/:numero', ctrl.rechercher);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/etiquettes', validate(uuidParam, 'params'), ctrl.etiquettes);
 router.get('/:id/bordereau', validate(uuidParam, 'params'), ctrl.bordereau);
+// Coût de revient (marge moyenne) : réservé aux administrateurs
+router.patch(
+  '/:id/cout-revient',
+  admin,
+  validate(uuidParam, 'params'),
+  validate(coutRevientSchema),
+  ctrl.coutRevient
+);
 
 router.post(
   '/:id/evenements',

@@ -107,6 +107,12 @@ class ParametreService {
       categorie: 'exploitation',
       libelle: 'Délai de garde en point de retrait (jours)',
     },
+    seuil_alerte_stock_emballages: {
+      valeur: '5',
+      type: 'nombre',
+      categorie: 'exploitation',
+      libelle: 'Seuil d alerte de stock des emballages (tableau de bord)',
+    },
     delai_paiement_jours: {
       valeur: '7',
       type: 'nombre',

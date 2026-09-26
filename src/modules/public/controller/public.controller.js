@@ -12,6 +12,8 @@ const annonceService = require('../../catalogue/service/annonce.service');
 const { REGLES_CATEGORIE } = require('../../../config/colis');
 const asyncHandler = require('../../../middlewares/asyncHandler');
 const { ok } = require('../../../utils/response');
+const { lireVisiteurId } = require('../../../utils/visiteur');
+const visiteService = require('../../mesure/service/visite.service');
 
 exports.suivi = asyncHandler(async (req, res) => {
   const result = await suiviService.getSuiviPublic(req.params.reference);
@@ -34,7 +36,12 @@ exports.villes = asyncHandler(async (req, res) => {
 });
 
 exports.devis = asyncHandler(async (req, res) => {
-  const result = await colisService.simulerDevis(req.body, null);
+  // Tarif sans avantage de compte ; la simulation est seulement rattachée au visiteur
+  // (et au compte s'il est connecté) pour mesurer le taux de conversion.
+  const result = await colisService.simulerDevis(req.body, null, {
+    visiteurId: lireVisiteurId(req),
+    suiviUserId: req.user?.id || null,
+  });
   return ok(res, { devis: result.devis }, result.message);
 });
 
@@ -129,4 +136,13 @@ exports.emballages = asyncHandler(async (req, res) => {
 exports.desabonner = asyncHandler(async (req, res) => {
   const result = await notificationService.desabonner(req.params.jeton);
   return ok(res, { resilie: result.resilie }, result.message);
+});
+
+/**
+ * Mesure d'audience : ouverture ou prolongation d'une session de visite. Rattachée
+ * au compte si un jeton valide accompagne la requête (visiteur « connu »).
+ */
+exports.visite = asyncHandler(async (req, res) => {
+  const result = await visiteService.enregistrer(req.body, req.user?.id || null);
+  return ok(res, result, result.enregistree ? 'Visite enregistrée' : 'Session expirée');
 });

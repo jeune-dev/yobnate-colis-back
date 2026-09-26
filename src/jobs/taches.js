@@ -5,6 +5,8 @@ const suiviService = require('../modules/colis/service/suivi.service');
 const notificationService = require('../modules/notification/service/notification.service');
 const factureService = require('../modules/facture/service/facture.service');
 const { cleanupExpiredTokens } = require('./cleanupExpiredTokens.job');
+const visiteService = require('../modules/mesure/service/visite.service');
+const simulationService = require('../modules/mesure/service/simulation.service');
 
 /**
  * Tâches automatiques du parcours d'expédition.
@@ -159,7 +161,14 @@ const TACHES_HORAIRES = {
   cloturerTourneesPassees,
   purgerJetons,
 };
-const TACHES_QUOTIDIENNES = { relancerFacturesEchues, signalerColisEnSouffrance };
+/**
+ * Mesure d'audience et de conversion : conservation limitée à 13 mois (pas de
+ * donnée personnelle, mais aucune raison de garder un historique illimité).
+ */
+const purgerMesures = async () =>
+  (await visiteService.purger()) + (await simulationService.purger());
+
+const TACHES_QUOTIDIENNES = { relancerFacturesEchues, signalerColisEnSouffrance, purgerMesures };
 /** Heure locale du serveur à laquelle partent les tâches quotidiennes. */
 const HEURE_QUOTIDIENNE = 8;
 

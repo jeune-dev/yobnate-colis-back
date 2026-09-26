@@ -368,6 +368,12 @@ Colis.init(
       defaultValue: 0,
     },
     /**
+     * Coût de revient de l'expédition (fret, dédouanement, livraison), dans la devise
+     * du colis. Saisi par l'administrateur ou réparti depuis le coût d'un conteneur ;
+     * sert au calcul de la marge moyenne du tableau de bord. Null = non renseigné.
+     */
+    coutRevient: { type: DataTypes.DECIMAL(12, 2), allowNull: true, validate: { min: 0 } },
+    /**
      * Articles de la grille forfaitaire retenus (catégories 1 et 2), figés à la
      * commande : [{ articleTarifId, code, libelle, quantite, prixUnitaire, montant }].
      */

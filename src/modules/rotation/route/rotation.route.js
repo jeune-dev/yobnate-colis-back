@@ -5,6 +5,7 @@ const { admin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
 const {
+  repartirCoutSchema,
   createRotationSchema,
   updateRotationSchema,
   chargerColisSchema,
@@ -21,6 +22,13 @@ router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/manifeste', validate(uuidParam, 'params'), ctrl.manifeste);
 router.post('/', validate(createRotationSchema), ctrl.create);
 router.put('/:id', validate(uuidParam, 'params'), validate(updateRotationSchema), ctrl.update);
+// Coût du conteneur réparti sur les colis au prorata du poids (marge moyenne)
+router.post(
+  '/:id/cout',
+  validate(uuidParam, 'params'),
+  validate(repartirCoutSchema),
+  ctrl.repartirCout
+);
 router.post(
   '/:id/colis',
   validate(uuidParam, 'params'),

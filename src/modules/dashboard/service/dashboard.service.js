@@ -1,5 +1,18 @@
 const { Op } = require('sequelize');
-const { sequelize, User, Colis, Ville, ActivityLog, Facture } = require('../../../models');
+const {
+  sequelize,
+  User,
+  Colis,
+  Ville,
+  ActivityLog,
+  Facture,
+  Emballage,
+  PointCollecte,
+} = require('../../../models');
+const parametreService = require('../../parametre/service/parametre.service');
+const avisService = require('../../avis/service/avis.service');
+const visiteService = require('../../mesure/service/visite.service');
+const simulationService = require('../../mesure/service/simulation.service');
 const cache = require('../../../utils/cache');
 const { STATUTS_COLIS } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
@@ -29,11 +42,17 @@ class DashboardService {
    * fidélisation, part des commandes passées par de nouveaux clients, répartition
    * par catégorie et demandes en attente d'étude.
    */
-  static getKpis = ({ dateDebut, dateFin } = {}) => {
+  /** Période d'analyse : 30 derniers jours par défaut. */
+  static periode = ({ dateDebut, dateFin } = {}) => {
     const fin = dateFin ? new Date(dateFin) : new Date();
     const debut = dateDebut ? new Date(dateDebut) : new Date(fin.getTime() - 30 * 24 * 3600 * 1000);
-    const cle = `dashboard:kpis:${debut.toISOString().slice(0, 10)}:${fin.toISOString().slice(0, 10)}`;
-    return cache.memoiser(cle, DashboardService.STATS_TTL, () =>
+    const cle = `${debut.toISOString().slice(0, 10)}:${fin.toISOString().slice(0, 10)}`;
+    return { debut, fin, cle };
+  };
+
+  static getKpis = (filtres = {}) => {
+    const { debut, fin, cle } = DashboardService.periode(filtres);
+    return cache.memoiser(`dashboard:kpis:${cle}`, DashboardService.STATS_TTL, () =>
       DashboardService.calculerKpis(debut, fin)
     );
   };
@@ -42,7 +61,7 @@ class DashboardService {
     const replacements = { debut, fin };
     const valides = `c."statut" NOT IN ('annule', 'refuse') AND c."createdAt" BETWEEN :debut AND :fin`;
 
-    const [[ventes], [clients], [categories], [etude]] = await Promise.all([
+    const [[ventes], [clients], [categories], [etude], [marges], conversion] = await Promise.all([
       sequelize.query(
         `SELECT c."devise", COUNT(*)::int AS "commandes",
                 COALESCE(SUM(c."montantTotal"), 0)::float AS "chiffreAffaires",
@@ -79,6 +98,20 @@ class DashboardService {
                 COUNT(*) FILTER (WHERE "statut" = 'devis_propose')::int AS "propositionsEnAttente"
            FROM colis`
       ),
+      // Marge sur le chiffre d'affaires hors TVA et hors droits de douane (refacturés),
+      // calculée sur les seules expéditions dont le coût de revient est renseigné
+      sequelize.query(
+        `SELECT c."devise",
+                COUNT(*) FILTER (WHERE c."coutRevient" IS NOT NULL)::int AS "colisAvecCout",
+                COUNT(*)::int AS "colis",
+                COALESCE(SUM(c."montantTotal" - c."montantTva" - c."montantDroitsDouane" - c."coutRevient")
+                  FILTER (WHERE c."coutRevient" IS NOT NULL), 0)::float AS "margeTotale",
+                COALESCE(SUM(c."montantTotal" - c."montantTva" - c."montantDroitsDouane")
+                  FILTER (WHERE c."coutRevient" IS NOT NULL), 0)::float AS "chiffreHt"
+           FROM colis c WHERE ${valides} GROUP BY c."devise"`,
+        { replacements }
+      ),
+      simulationService.statistiques({ debut, fin }),
     ]);
 
     const c = clients[0] || {};
@@ -97,10 +130,115 @@ class DashboardService {
         partCommandesNouveauxClients: taux(c.commandesNouveauxClients, c.commandes),
         parCategorie: categories,
         etude: etude[0],
+        marge: marges.map((m) => ({
+          devise: m.devise,
+          margeMoyenne: m.colisAvecCout
+            ? Number((m.margeTotale / m.colisAvecCout).toFixed(2))
+            : null,
+          tauxMarge: m.chiffreHt ? Number(((m.margeTotale / m.chiffreHt) * 100).toFixed(1)) : null,
+          margeTotale: Number(m.margeTotale.toFixed(2)),
+          // Couverture : part des expéditions dont le coût de revient est connu
+          colisAvecCout: m.colisAvecCout,
+          couverture: taux(m.colisAvecCout, m.colis),
+        })),
+        tauxConversion: conversion.tauxConversionSimulations,
+        tauxConversionVisiteurs: conversion.tauxConversionVisiteurs,
       },
     };
     return result;
   };
+
+  /** Taux de conversion détaillé : simulations, commandes, visiteurs. */
+  static getConversion = (filtres = {}) => {
+    const { debut, fin, cle } = DashboardService.periode(filtres);
+    return cache.memoiser(`dashboard:conversion:${cle}`, DashboardService.STATS_TTL, async () => ({
+      message: 'Taux de conversion',
+      conversion: await simulationService.statistiques({ debut, fin }),
+    }));
+  };
+
+  /** Indicateurs marketing : trafic, visiteurs connus, temps passé, sources. */
+  static getMarketing = (filtres = {}) => {
+    const { debut, fin, cle } = DashboardService.periode(filtres);
+    return cache.memoiser(`dashboard:marketing:${cle}`, DashboardService.STATS_TTL, async () => ({
+      message: 'Indicateurs marketing',
+      marketing: await visiteService.statistiques({ debut, fin }),
+    }));
+  };
+
+  /** Nombre et qualité des évaluations clients. */
+  static getEvaluations = (filtres = {}) => {
+    const { debut, fin, cle } = DashboardService.periode(filtres);
+    return cache.memoiser(`dashboard:evaluations:${cle}`, DashboardService.STATS_TTL, async () => ({
+      message: 'Évaluations clients',
+      evaluations: await avisService.statistiques({ debut, fin }),
+    }));
+  };
+
+  /**
+   * Niveau de stock : emballages vendus (stock suivi) avec alerte sous le seuil
+   * paramétré, et occupation des points de collecte (colis physiquement présents).
+   */
+  static getStock = () =>
+    cache.memoiser('dashboard:stock', DashboardService.STATS_TTL, async () => {
+      const [parametres, emballages, points] = await Promise.all([
+        parametreService.chargerTous(),
+        Emballage.findAll({
+          where: { stock: { [Op.ne]: null } },
+          attributes: ['id', 'code', 'libelle', 'type', 'stock', 'isActive'],
+          order: [
+            ['stock', 'ASC'],
+            ['libelle', 'ASC'],
+          ],
+        }),
+        PointCollecte.findAll({
+          where: { isActive: true },
+          attributes: ['id', 'code', 'nom', 'pays', 'colisEnStock', 'capaciteMaxColis'],
+          order: [['colisEnStock', 'DESC']],
+        }),
+      ]);
+      const seuil = Number(parametres.seuil_alerte_stock_emballages ?? 5);
+      const etat = (stock) => (stock <= 0 ? 'rupture' : stock <= seuil ? 'faible' : 'ok');
+      const lignes = emballages.map((e) => ({
+        id: e.id,
+        code: e.code,
+        libelle: e.libelle,
+        type: e.type,
+        isActive: e.isActive,
+        stock: e.stock,
+        etat: etat(e.stock),
+      }));
+      return {
+        message: 'Niveau de stock',
+        stock: {
+          seuilAlerte: seuil,
+          emballages: {
+            suivis: lignes.length,
+            enRupture: lignes.filter((l) => l.etat === 'rupture').length,
+            sousLeSeuil: lignes.filter((l) => l.etat === 'faible').length,
+            unitesEnStock: lignes.reduce((n, l) => n + Math.max(0, l.stock), 0),
+            articles: lignes,
+          },
+          pointsCollecte: {
+            colisEnStock: points.reduce((n, p) => n + Number(p.colisEnStock || 0), 0),
+            satures: points.filter(
+              (p) => p.capaciteMaxColis && p.colisEnStock >= p.capaciteMaxColis
+            ).length,
+            points: points.map((p) => ({
+              id: p.id,
+              code: p.code,
+              nom: p.nom,
+              pays: p.pays,
+              colisEnStock: p.colisEnStock,
+              capaciteMaxColis: p.capaciteMaxColis,
+              tauxOccupation: p.capaciteMaxColis
+                ? Number(((p.colisEnStock / p.capaciteMaxColis) * 100).toFixed(1))
+                : null,
+            })),
+          },
+        },
+      };
+    });
 
   static computeColisParStatut = async () => {
     const rows = await Colis.findAll({

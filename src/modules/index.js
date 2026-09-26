@@ -70,6 +70,12 @@ const ROUTES = [
     routeur: r('adresse', 'adresse'),
   },
   {
+    chemin: '/client/avis',
+    espace: 'client',
+    tag: 'Client — Avis',
+    routeur: r('avis', 'avisClient'),
+  },
+  {
     chemin: '/client/reclamations',
     espace: 'client',
     tag: 'Client — Réclamations',
@@ -232,6 +238,13 @@ const ROUTES = [
     tag: 'Admin — Inventaire',
     routeur: r('inventaire', 'inventaire'),
   },
+  {
+    chemin: '/admin/avis',
+    espace: 'admin',
+    tag: 'Admin — Avis clients',
+    routeur: r('avis', 'avisAdmin'),
+  },
+  { chemin: '/admin/faq', espace: 'admin', tag: 'Admin — FAQ', routeur: r('faq', 'faq') },
   {
     chemin: '/admin/app-version',
     espace: 'admin',

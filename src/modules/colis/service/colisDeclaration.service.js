@@ -35,6 +35,7 @@ const parametreService = require('../../parametre/service/parametre.service');
 const facturationService = require('../../facture/service/facturation.service');
 const { estCorridorAutorise, PAYS } = require('../../../config/pays');
 const { REGLES_CATEGORIE, NUMEROS_CATEGORIE } = require('../../../config/colis');
+const simulationService = require('../../mesure/service/simulation.service');
 
 /**
  * Déclaration d'une expédition et devis.
@@ -340,7 +341,12 @@ class ColisDeclarationService {
    * compte. Pour un client identifié, les remises et crédits du compte sont pris
    * en compte.
    */
-  static simulerDevis = async (params, userId = null) => {
+  /**
+   * @param {object} contexte  Mesure de conversion : `visiteurId` (en-tête X-Visiteur-Id)
+   *   et `suiviUserId`, compte à qui rattacher la simulation sans modifier le tarif
+   *   (le devis public reste calculé sans avantages de compte).
+   */
+  static simulerDevis = async (params, userId = null, contexte = {}) => {
     const parametres = await parametreService.chargerTous();
     const user = userId ? await User.findByPk(userId) : null;
     const avantages = await ColisDeclarationService.calculerAvantages(user, parametres);
@@ -350,22 +356,31 @@ class ColisDeclarationService {
 
     const regles = REGLES_CATEGORIE[params.categorie] || REGLES_CATEGORIE.colis_moyen;
 
+    const devis = {
+      origine: { id: villeDepart.id, nom: villeDepart.nom, pays: villeDepart.pays },
+      destination: { id: villeArrivee.id, nom: villeArrivee.nom, pays: villeArrivee.pays },
+      international: villeDepart.pays !== villeArrivee.pays,
+      categorie: { code: params.categorie || 'colis_moyen', ...regles },
+      remiseContractuelle: avantages.remiseContractuelle,
+      remiseParrainagePourcent: avantages.remiseParrainagePourcent,
+      offres,
+      servicesIndisponibles: indisponibles,
+      // La simulation se fait sans compte : l'inscription n'est demandée qu'à la commande
+      compteRequisPourCommander: !userId,
+    };
+    // Conservée pour le taux de conversion ; à renvoyer à la commande (`simulationId`)
+    devis.simulationId = await simulationService.enregistrer({
+      userId: userId || contexte.suiviUserId || null,
+      visiteurId: contexte.visiteurId || null,
+      params,
+      devis,
+    });
+
     return {
       message: offres.length
         ? `${offres.length} offre(s) disponible(s) pour ${villeDepart.nom} vers ${villeArrivee.nom}`
         : 'Aucune offre disponible pour ce trajet',
-      devis: {
-        origine: { id: villeDepart.id, nom: villeDepart.nom, pays: villeDepart.pays },
-        destination: { id: villeArrivee.id, nom: villeArrivee.nom, pays: villeArrivee.pays },
-        international: villeDepart.pays !== villeArrivee.pays,
-        categorie: { code: params.categorie || 'colis_moyen', ...regles },
-        remiseContractuelle: avantages.remiseContractuelle,
-        remiseParrainagePourcent: avantages.remiseParrainagePourcent,
-        offres,
-        servicesIndisponibles: indisponibles,
-        // La simulation se fait sans compte : l'inscription n'est demandée qu'à la commande
-        compteRequisPourCommander: !userId,
-      },
+      devis,
     };
   };
 
@@ -816,6 +831,14 @@ class ColisDeclarationService {
       villeArrivee,
       parametres,
       destinataireEmail: data.destinataireEmail,
+    });
+
+    // Taux de conversion : la simulation à l'origine de cette commande est marquée convertie
+    await simulationService.rattacher({
+      colisId: colis.id,
+      userId,
+      visiteurId: contexte.visiteurId || null,
+      simulationId: data.simulationId || null,
     });
 
     await logActivity({

@@ -134,6 +134,8 @@ const devisSchema = Joi.object({ ...baseSimulation, serviceId: uuid }).custom(
 
 const declarerColisSchema = Joi.object({
   serviceId: uuid.required(),
+  /** Simulation à l'origine de la commande (taux de conversion), renvoyée par le devis. */
+  simulationId: uuid.allow(null),
   referenceClient: Joi.string().max(50).allow('', null),
 
   categorie: categorieSchema,
@@ -322,7 +324,13 @@ const abonnerSuiviSchema = Joi.object({
   profil: Joi.string().valid('expediteur', 'destinataire', 'tiers').default('destinataire'),
 });
 
+/** Coût de revient d'une expédition, dans sa devise (marge moyenne du tableau de bord). */
+const coutRevientSchema = Joi.object({
+  coutRevient: Joi.number().min(0).precision(2).allow(null).required(),
+});
+
 module.exports = {
+  coutRevientSchema,
   modifierColisClientSchema,
   repondrePropositionSchema,
   validerDemandeSchema,

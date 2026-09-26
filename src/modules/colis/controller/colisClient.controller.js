@@ -2,9 +2,12 @@ const service = require('../service/colisClient.service');
 const declarationService = require('../service/colisDeclaration.service');
 const asyncHandler = require('../../../middlewares/asyncHandler');
 const { ok, created } = require('../../../utils/response');
+const { lireVisiteurId } = require('../../../utils/visiteur');
 
 exports.devis = asyncHandler(async (req, res) => {
-  const result = await declarationService.simulerDevis(req.body, req.user?.id || null);
+  const result = await declarationService.simulerDevis(req.body, req.user?.id || null, {
+    visiteurId: lireVisiteurId(req),
+  });
   return ok(res, { devis: result.devis }, result.message);
 });
 
@@ -12,7 +15,8 @@ exports.declarer = asyncHandler(async (req, res) => {
   const result = await declarationService.declarerExpedition(
     req.user.id,
     req.body,
-    req.files || []
+    req.files || [],
+    { visiteurId: lireVisiteurId(req) }
   );
   return created(
     res,

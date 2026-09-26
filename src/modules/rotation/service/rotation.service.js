@@ -8,6 +8,7 @@ const parametreService = require('../../parametre/service/parametre.service');
 const documents = require('../../../templates/documents');
 const { genererRefRotation, genererNumeroManifeste } = require('../../../utils/referenceGenerator');
 const { estInternational, PAYS } = require('../../../config/pays');
+const { arrondir, convertir } = require('../../../utils/devise');
 
 /**
  * Rotations : les départs groupés qui relient physiquement les deux pays.
@@ -127,6 +128,67 @@ class RotationService {
       details: { reference, corridor: `${data.paysDepart}-${data.paysArrivee}` },
     });
     return { message: `Conteneur n° ${String(numeroOrdre).padStart(2, '0')} créé.`, rotation };
+  };
+
+  /**
+   * Répartit le coût total d'un conteneur (ou d'un vol) sur les colis embarqués, au
+   * prorata de leur poids facturé, converti dans la devise de chaque colis : c'est
+   * la base de la marge moyenne du tableau de bord. L'arrondi résiduel est porté par
+   * le colis le plus lourd, pour que la somme retombe exactement sur le coût saisi.
+   */
+  static repartirCout = async (id, { coutTotal, devise }, adminId) => {
+    const parametres = await parametreService.chargerTous();
+    const resultat = await sequelize.transaction(async (t) => {
+      const rotation = await Rotation.findByPk(id, { lock: t.LOCK.UPDATE, transaction: t });
+      if (!rotation) throw new NotFoundError('Rotation introuvable');
+      const colisList = await Colis.findAll({
+        where: { rotationId: id },
+        attributes: ['id', 'poidsFactureKg', 'devise'],
+        order: [
+          ['poidsFactureKg', 'DESC'],
+          ['id', 'ASC'],
+        ],
+        transaction: t,
+      });
+      const poidsTotal = colisList.reduce((n, c) => n + Number(c.poidsFactureKg || 0), 0);
+      if (!colisList.length || poidsTotal <= 0) {
+        throw new BadRequestError('Aucun colis pesé sur cette rotation : rien à répartir');
+      }
+
+      // Parts dans la devise du coût saisi, arrondies, résidu sur le plus lourd
+      const parts = colisList.map((c) =>
+        arrondir((Number(coutTotal) * Number(c.poidsFactureKg || 0)) / poidsTotal, devise)
+      );
+      parts[0] = arrondir(
+        parts[0] + (Number(coutTotal) - parts.reduce((n, p) => n + p, 0)),
+        devise
+      );
+      const couts = colisList.map((c, i) =>
+        convertir(parts[i], devise, c.devise, parametres.taux_change_eur_xof)
+      );
+
+      await sequelize.query(
+        `UPDATE colis c SET "coutRevient" = v.cout, "updatedAt" = NOW()
+           FROM unnest(ARRAY[:ids]::uuid[], ARRAY[:couts]::numeric[]) AS v(id, cout)
+          WHERE c.id = v.id`,
+        { replacements: { ids: colisList.map((c) => c.id), couts }, transaction: t }
+      );
+      await rotation.update({ coutTotal, coutDevise: devise }, { transaction: t });
+      return { rotation, nbColis: colisList.length };
+    });
+
+    await logActivity({
+      userId: adminId,
+      action: 'admin.rotation.cout',
+      entite: 'Rotation',
+      entiteId: id,
+      details: { coutTotal, devise, nbColis: resultat.nbColis },
+    });
+    return {
+      message: `Coût réparti sur ${resultat.nbColis} colis au prorata du poids.`,
+      rotation: resultat.rotation,
+      nbColis: resultat.nbColis,
+    };
   };
 
   static updateRotation = async (id, data, adminId) => {

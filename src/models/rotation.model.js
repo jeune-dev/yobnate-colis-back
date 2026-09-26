@@ -1,5 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
+const { DEVISES } = require('../config/facturation');
 const { CODES_PAYS } = require('../config/pays');
 const { STATUTS_ROTATION, MODES_TRANSPORT } = require('../config/reseau');
 
@@ -46,6 +47,9 @@ Rotation.init(
     dateArriveePrevue: { type: DataTypes.DATE, allowNull: false },
     dateArriveeEffective: { type: DataTypes.DATE, allowNull: true },
     capacitePoidsKg: { type: DataTypes.DECIMAL(10, 2), allowNull: true, validate: { min: 1 } },
+    /** Coût total du conteneur ou du vol (fret, port, dédouanement), réparti sur les colis. */
+    coutTotal: { type: DataTypes.DECIMAL(12, 2), allowNull: true, validate: { min: 0 } },
+    coutDevise: { type: DataTypes.ENUM(...DEVISES), allowNull: true },
     capaciteColis: { type: DataTypes.INTEGER, allowNull: true, validate: { min: 1 } },
     /** Compteurs maintenus à chaque affectation ou retrait de colis. */
     poidsCharge: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },

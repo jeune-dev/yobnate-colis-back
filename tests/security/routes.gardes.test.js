@@ -43,6 +43,12 @@ const PUBLIQUES = new Map([
   ['GET /public/tournees-collecte', 'tournées ouvertes à l’inscription'],
   ['GET /public/tarifs', 'grille tarifaire publique'],
   ['GET /public/emballages', 'catalogue des emballages'],
+  ['GET /public/avis', 'avis clients publiés (modérés), noms abrégés (cahier des charges)'],
+  ['GET /public/faq', 'FAQ du site vitrine (cahier des charges)'],
+  [
+    'POST /public/visites',
+    'mesure d’audience anonyme (UUID aléatoires, ni IP ni agent), débit limité',
+  ],
   ['GET /app-version', 'lu par l’application mobile avant toute connexion'],
   ['POST /suppression-compte', 'exigence Google Play : joignable sans connexion ni application'],
 ]);
