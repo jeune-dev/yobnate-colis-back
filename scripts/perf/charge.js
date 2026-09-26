@@ -26,11 +26,24 @@ const appel = async (chemin, options = {}) => {
   return r.json();
 };
 
+/** Temps CPU cumulé du processus (utime + stime, en ticks) lu dans /proc. */
+const tempsCpu = () => {
+  const champs = require('fs').readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' ');
+  return Number(champs[11]) + Number(champs[12]);
+};
+const TICKS = 100; // CLK_TCK usuel sous Linux
+
 const echantillonner = () => {
   const mesures = [];
+  let precedent = { cpu: tempsCpu(), t: Date.now() };
   const minuteur = setInterval(() => {
     try {
-      const [cpu, rss] = execSync(`ps -o %cpu=,rss= -p ${pid}`).toString().trim().split(/\s+/);
+      const courant = { cpu: tempsCpu(), t: Date.now() };
+      // % d'un cœur sur l'intervalle (et non la moyenne depuis le démarrage de ps)
+      const cpu =
+        ((courant.cpu - precedent.cpu) / TICKS / ((courant.t - precedent.t) / 1000)) * 100;
+      precedent = courant;
+      const rss = execSync(`ps -o rss= -p ${pid}`).toString().trim();
       const connexions = PSQL
         ? Number(
             execSync(
@@ -40,7 +53,7 @@ const echantillonner = () => {
               .trim()
           )
         : null;
-      mesures.push({ cpu: Number(cpu), rssMo: Number(rss) / 1024, connexions });
+      mesures.push({ cpu, rssMo: Number(rss) / 1024, connexions });
     } catch (_e) {
       /* serveur arrêté */
     }
@@ -101,7 +114,8 @@ const echantillonner = () => {
   ];
 
   const resultats = [];
-  for (const sc of scenarios) {
+  const filtre = process.env.SCENARIO; // exécuter un seul scénario (serveur neuf à chaque fois)
+  for (const sc of scenarios.filter((x) => !filtre || x.nom === filtre)) {
     for (const connexions of sc.niveaux || NIVEAUX) {
       const arreter = echantillonner();
       const r = await autocannon({
@@ -132,7 +146,10 @@ const echantillonner = () => {
       resultats.push(ligne);
     }
   }
-  require('fs').writeFileSync(sortie, JSON.stringify(resultats, null, 2));
+  const precedents = require('fs').existsSync(sortie)
+    ? JSON.parse(require('fs').readFileSync(sortie, 'utf8'))
+    : [];
+  require('fs').writeFileSync(sortie, JSON.stringify([...precedents, ...resultats], null, 2));
 })().catch((e) => {
   console.error(e);
   process.exit(1);
