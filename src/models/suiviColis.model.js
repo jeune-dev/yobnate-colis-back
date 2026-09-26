@@ -1,4 +1,4 @@
-const { DataTypes, Model } = require('sequelize');
+const { DataTypes, Model, Op } = require('sequelize');
 const sequelize = require('../config/db');
 const { CODES_PAYS } = require('../constants/pays');
 const { STATUTS_COLIS, CODES_EVENEMENTS } = require('../constants/colis');
@@ -84,9 +84,14 @@ SuiviColis.init(
     updatedAt: false,
     indexes: [
       { fields: ['colisId', 'dateEvenement'] },
-      { fields: ['colisId', 'createdAt'] },
       { fields: ['codeEvenement'] },
       { fields: ['pointCollecteId'] },
+      // Clé étrangère vers colis_pieces : sans index, supprimer une pièce parcourt tout l'historique
+      {
+        name: 'suivi_colis_colis_piece_id',
+        fields: ['colisPieceId'],
+        where: { colisPieceId: { [Op.ne]: null } },
+      },
     ],
   }
 );

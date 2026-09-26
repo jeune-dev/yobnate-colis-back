@@ -72,6 +72,10 @@ decrire('Parcours complets (base réelle)', () => {
   beforeAll(async () => {
     m = require('../../src/models');
     await m.sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    // Extensions créées par la migration initiale (index trigrammes de recherche)
+    await m.sequelize.query(
+      'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"; CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+    );
     await m.sequelize.sync();
     await require('../../src/services/parametre.service').initialiser();
     app = require('../../src/app');
@@ -274,16 +278,13 @@ decrire('Parcours complets (base réelle)', () => {
     const recus = await request(app).get('/client/colis/recus').set(auth(donnees.filleul));
     expect(recus.status).toBe(200);
 
-    const rot = await request(app)
-      .post('/admin/conteneurs')
-      .set(auth(donnees.admin))
-      .send({
-        modeTransport: 'maritime',
-        paysDepart: 'FR',
-        paysArrivee: 'SN',
-        dateDepartPrevue: '2026-10-10T08:00:00Z',
-        dateArriveePrevue: '2026-11-01T08:00:00Z',
-      });
+    const rot = await request(app).post('/admin/conteneurs').set(auth(donnees.admin)).send({
+      modeTransport: 'maritime',
+      paysDepart: 'FR',
+      paysArrivee: 'SN',
+      dateDepartPrevue: '2026-10-10T08:00:00Z',
+      dateArriveePrevue: '2026-11-01T08:00:00Z',
+    });
     const rotationId = rot.body.data.rotation.id;
     await request(app)
       .post(`/admin/conteneurs/${rotationId}/colis`)

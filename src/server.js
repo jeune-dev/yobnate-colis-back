@@ -28,18 +28,12 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 (async () => {
   try {
-    // En production : ne jamais altérer le schéma au démarrage — utiliser des migrations.
-    // En développement : on utilise sync() simple (création des tables manquantes).
-    //   NB : on n'utilise PAS { alter: true } car il génère un SQL invalide sur PostgreSQL
-    //   pour les colonnes `unique` (erreur "syntax error at or near UNIQUE", bug Sequelize 6).
-    //   Pour faire évoluer un schéma existant, passez par une migration ou recréez la base de dev.
-    const isProd = process.env.NODE_ENV === 'production';
-    await sequelize.sync({ force: false });
-    logger.info(
-      isProd
-        ? 'DB connectée (mode production — schéma non altéré)'
-        : 'DB synchronisée (création des tables manquantes)'
-    );
+    // Le schéma est géré exclusivement par les migrations (`npm start` les exécute).
+    // Pas de sequelize.sync() ici : sur PostgreSQL, chaque sync() recréait les
+    // contraintes UNIQUE des colonnes (users_email_key1, _key2…), soit 21 index en
+    // double à chaque démarrage, qui ralentissaient toutes les écritures.
+    await sequelize.authenticate();
+    logger.info('Connexion PostgreSQL établie');
 
     startPurgeJob();
     // Propositions expirées, délais d'étude, tournées passées, relances de factures…

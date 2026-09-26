@@ -534,8 +534,8 @@ Colis.init(
     tableName: 'colis',
     indexes: [
       { unique: true, fields: ['reference'] },
-      { fields: ['userId'] },
-      { fields: ['statut'] },
+      // userId seul et statut seul : couverts par les index composites (userId, createdAt)
+      // et (statut, dateLivraisonEstimee), dont ils sont le préfixe.
       { fields: ['serviceId'] },
       { fields: ['villeDepartId'] },
       { fields: ['villeArriveeId'] },
@@ -549,6 +549,17 @@ Colis.init(
       { fields: ['userId', 'createdAt'] },
       { fields: ['statut', 'dateLivraisonEstimee'] },
       { fields: ['createdAt'] },
+      // Onglet « Reçus » du client : rapprochement par téléphone, du plus récent au plus ancien
+      {
+        name: 'colis_destinataire_telephone_created_at',
+        fields: ['destinataireTelephone', { name: 'createdAt', order: 'DESC' }],
+      },
+      // Recherche partielle par numéro de suivi (ILIKE '%…%') : index trigrammes (pg_trgm)
+      {
+        name: 'colis_reference_trgm',
+        using: 'gin',
+        fields: [{ name: 'reference', operator: 'gin_trgm_ops' }],
+      },
     ],
   }
 );
