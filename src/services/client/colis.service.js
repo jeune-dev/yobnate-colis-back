@@ -19,7 +19,7 @@ const {
   DemandeEnlevement,
 } = require('../../models');
 const { BadRequestError, NotFoundError } = require('../../errors/AppError');
-const { paginate, paginateResult } = require('../../utils/paginate');
+const { paginate, paginateResult, listerPagine } = require('../../utils/paginate');
 const {
   genererNumeroSuiviYobnate,
   genererNumeroPiece,
@@ -68,9 +68,10 @@ class ColisService {
     },
   ];
 
+  /** Relations « 1-N » chargées séparément : voir admin/colis.service (produit cartésien). */
   static INCLUDE_DETAIL = [
     ...ColisService.INCLUDE_LISTE,
-    { model: ColisPiece, as: 'pieces' },
+    { model: ColisPiece, as: 'pieces', separate: true, order: [['ordre', 'ASC']] },
     {
       model: PointCollecte,
       as: 'pointCollecteDepart',
@@ -81,11 +82,19 @@ class ColisService {
       as: 'pointRetrait',
       attributes: ['id', 'code', 'nom', 'adresse', 'telephone', 'horaires'],
     },
-    { model: Facture, as: 'facture', include: [{ model: Paiement, as: 'paiements' }] },
+    {
+      model: Facture,
+      as: 'facture',
+      include: [
+        { model: Paiement, as: 'paiements', separate: true, order: [['createdAt', 'ASC']] },
+      ],
+    },
     {
       model: DeclarationDouane,
       as: 'declarationDouane',
-      include: [{ model: ArticleDouane, as: 'articles' }],
+      include: [
+        { model: ArticleDouane, as: 'articles', separate: true, order: [['createdAt', 'ASC']] },
+      ],
     },
     { model: PreuveLivraison, as: 'preuveLivraison' },
     {
@@ -938,13 +947,12 @@ class ColisService {
     }
 
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Colis.findAndCountAll({
+    const { rows, count } = await listerPagine(Colis, {
       where,
       include: ColisService.INCLUDE_LISTE,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -971,13 +979,12 @@ class ColisService {
     }
 
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Colis.findAndCountAll({
+    const { rows, count } = await listerPagine(Colis, {
       where,
       include: ColisService.INCLUDE_LISTE,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -987,10 +994,16 @@ class ColisService {
     };
   };
 
-  static chargerExpeditionDuClient = async (userId, colisId) => {
+  static chargerExpeditionDuClient = async (
+    userId,
+    colisId,
+    include = ColisService.INCLUDE_DETAIL
+  ) => {
     const colis = await Colis.findOne({
       where: { id: colisId, userId },
-      include: ColisService.INCLUDE_DETAIL,
+      include,
+      // Simple contrôle de propriété : inutile de rapatrier la ligne complète
+      ...(include.length ? {} : { attributes: ['id'] }),
     });
     if (!colis) throw new NotFoundError('Expédition introuvable');
     return colis;
@@ -1020,7 +1033,7 @@ class ColisService {
   };
 
   static getSuivi = async (userId, colisId) => {
-    await ColisService.chargerExpeditionDuClient(userId, colisId);
+    await ColisService.chargerExpeditionDuClient(userId, colisId, []);
     return suiviService.getHistorique(colisId, { inclureInternes: false });
   };
 
@@ -1288,7 +1301,7 @@ class ColisService {
 
   /** Inscrit une adresse aux alertes de suivi de l'expédition. */
   static abonnerAuSuivi = async (userId, colisId, { canal, destination, profil }) => {
-    await ColisService.chargerExpeditionDuClient(userId, colisId);
+    await ColisService.chargerExpeditionDuClient(userId, colisId, []);
     const abonnement = await notificationService.abonner({ colisId, canal, destination, profil });
     return {
       message: `Les alertes de suivi seront envoyées à ${destination}.`,

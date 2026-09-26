@@ -10,6 +10,22 @@ const { Sequelize } = require('sequelize');
  * - sinon DB_HOST, DB_PORT, DB_NAME, DB_USER et DB_PASSWORD (Docker, poste local).
  * En production, la connexion passe en SSL.
  */
+const entier = (valeur, defaut) => {
+  const n = Number(valeur);
+  return Number.isInteger(n) && n >= 0 ? n : defaut;
+};
+
+/**
+ * Pool de connexions.
+ * - DB_POOL_MAX (défaut 10) : connexions par processus. Avec PM2 en cluster, le
+ *   total est DB_POOL_MAX × nombre de workers : il doit rester sous le
+ *   max_connections de PostgreSQL (100 par défaut), marge d'administration comprise.
+ * - acquire : une requête qui n'obtient pas de connexion en 15 s échoue (503) au lieu
+ *   de s'empiler indéfiniment derrière un pool saturé.
+ * - statement_timeout : aucune requête SQL ne peut monopoliser une connexion plus de
+ *   DB_STATEMENT_TIMEOUT_MS (défaut 30 s) ; idle_in_transaction_session_timeout libère
+ *   une transaction laissée ouverte par erreur.
+ */
 const options = {
   dialect: 'postgres',
   logging: false,
@@ -18,8 +34,18 @@ const options = {
       process.env.NODE_ENV === 'production'
         ? { require: true, rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false' }
         : false,
+    application_name: 'yobnate-colis-api',
+    statement_timeout: entier(process.env.DB_STATEMENT_TIMEOUT_MS, 30000),
+    idle_in_transaction_session_timeout: entier(process.env.DB_IDLE_TX_TIMEOUT_MS, 60000),
+    keepAlive: true,
   },
-  pool: { max: 10, min: 0, acquire: 30000, idle: 10000 },
+  pool: {
+    max: entier(process.env.DB_POOL_MAX, 10) || 10,
+    min: entier(process.env.DB_POOL_MIN, 0),
+    acquire: entier(process.env.DB_POOL_ACQUIRE_MS, 15000),
+    idle: 10000,
+    evict: 5000,
+  },
   define: { freezeTableName: true },
 };
 

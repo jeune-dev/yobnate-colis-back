@@ -13,7 +13,8 @@
  *    - colis ("destinataireTelephone", "createdAt" DESC) — onglet « Reçus » : 20 ms → 0,1 ms ;
  *    - colis reference (GIN pg_trgm) — recherche partielle : 83 ms → 0,6 ms ;
  *    - suivi_colis ("colisPieceId") partiel — clé étrangère : supprimer 3 pièces
- *      parcourait tout l'historique (239 ms → 0,4 ms).
+ *      parcourait tout l'historique (239 ms → 0,4 ms) ;
+ *    - colis en retard / en souffrance (index partiels) et activity_logs ("createdAt").
  *
  * Les index sont créés avec CONCURRENTLY (sans bloquer les écritures en production) :
  * cette migration ne doit donc pas s'exécuter dans une transaction (comportement
@@ -32,6 +33,20 @@ const NOUVEAUX_INDEX = [
     nom: 'suivi_colis_colis_piece_id',
     sql: 'ON suivi_colis ("colisPieceId") WHERE "colisPieceId" IS NOT NULL',
   },
+  // Colis en retard (dashboard, filtre enRetard, points d'attention) : index partiel
+  // limité aux expéditions en cours, petit puisque la plupart des colis sont terminés.
+  {
+    nom: 'colis_en_cours_date_livraison_estimee',
+    sql: `ON colis ("dateLivraisonEstimee")
+          WHERE statut NOT IN ('livre', 'recupere', 'retourne', 'annule')`,
+  },
+  // Colis en souffrance en point de retrait (tâche quotidienne, dashboard, stock)
+  {
+    nom: 'colis_disponible_retrait_date_limite',
+    sql: `ON colis ("dateLimiteRetrait") WHERE statut = 'disponible_retrait'`,
+  },
+  // Journal d'activité et « dernières activités » : tri antichronologique
+  { nom: 'activity_logs_created_at', sql: 'ON activity_logs ("createdAt")' },
 ];
 
 const INDEX_REDONDANTS = ['colis_user_id', 'colis_statut', 'suivi_colis_colis_id_created_at'];

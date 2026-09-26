@@ -1,4 +1,4 @@
-const { DataTypes, Model } = require('sequelize');
+const { DataTypes, Model, Op } = require('sequelize');
 const sequelize = require('../config/db');
 const { CODES_PAYS } = require('../constants/pays');
 const { DEVISES } = require('../constants/facturation');
@@ -553,6 +553,18 @@ Colis.init(
       {
         name: 'colis_destinataire_telephone_created_at',
         fields: ['destinataireTelephone', { name: 'createdAt', order: 'DESC' }],
+      },
+      // Expéditions en retard : index partiel limité aux colis encore en cours
+      {
+        name: 'colis_en_cours_date_livraison_estimee',
+        fields: ['dateLivraisonEstimee'],
+        where: { statut: { [Op.notIn]: ['livre', 'recupere', 'retourne', 'annule'] } },
+      },
+      // Colis en souffrance en point de retrait
+      {
+        name: 'colis_disponible_retrait_date_limite',
+        fields: ['dateLimiteRetrait'],
+        where: { statut: 'disponible_retrait' },
       },
       // Recherche partielle par numéro de suivi (ILIKE '%…%') : index trigrammes (pg_trgm)
       {

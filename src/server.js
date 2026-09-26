@@ -42,6 +42,13 @@ const HOST = process.env.HOST || '0.0.0.0';
     const server = app.listen(PORT, HOST, () => {
       logger.info(`Serveur démarré sur ${HOST}:${PORT} [${process.env.NODE_ENV || 'development'}]`);
     });
+    // Derrière Nginx (keepalive vers l'upstream) : le keep-alive Node doit durer plus
+    // longtemps que celui du proxy (60 s), sinon Node ferme une connexion que Nginx
+    // réutilise au même instant, d'où des 502 intermittents. Défaut Node : 5 s.
+    server.keepAliveTimeout = Number(process.env.HTTP_KEEPALIVE_TIMEOUT_MS) || 65000;
+    server.headersTimeout = server.keepAliveTimeout + 1000;
+    // Une requête (envoi de photos compris) ne peut pas occuper un socket plus de 2 min
+    server.requestTimeout = Number(process.env.HTTP_REQUEST_TIMEOUT_MS) || 120000;
 
     // Résilience : graceful shutdown sur SIGTERM et SIGINT
     const shutdown = (signal) => {

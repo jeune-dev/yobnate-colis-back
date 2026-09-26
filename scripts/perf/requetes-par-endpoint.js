@@ -39,9 +39,10 @@ const mesurer = async (nom, req) => {
 (async () => {
   const cache = require('../../src/config/cache');
   const admin = await m.User.findOne({ where: { role: 'super_admin' } });
+  // Client propriétaire du colis « lourd » du seed (10 pièces, 30 événements, douane, paiements)
   const [[client]] = await m.sequelize.query(
-    `SELECT u.email, u.id FROM users u JOIN colis c ON c."userId" = u.id
-      WHERE u.role = 'client' GROUP BY u.id ORDER BY count(*) DESC LIMIT 1`
+    `SELECT u.email, u.id, c.id AS "colisId" FROM declarations_douane d
+       JOIN colis c ON c.id = d."colisId" JOIN users u ON u.id = c."userId" LIMIT 1`
   );
   const login = async (email) =>
     (await request(app).post('/auth/login').send({ identifiant: email, password: PASSWORD })).body
@@ -49,10 +50,7 @@ const mesurer = async (nom, req) => {
   const jetonAdmin = await login(admin.email);
   const jetonClient = await login(client.email);
   if (!jetonAdmin || !jetonClient) throw new Error('Connexion impossible (seed ?)');
-  const colis = await m.Colis.findOne({
-    where: { userId: client.id },
-    order: [['createdAt', 'DESC']],
-  });
+  const colis = await m.Colis.findByPk(client.colisId);
   const A = { Authorization: `Bearer ${jetonAdmin}` };
   const C = { Authorization: `Bearer ${jetonClient}` };
   const get = (url, h) =>
