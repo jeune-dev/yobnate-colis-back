@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { DEVISES } = require('../constants/facturation');
+const { CODES_PAYS } = require('../config/pays');
+const { DEVISES } = require('../config/facturation');
 const {
   STATUTS_COLIS,
   TYPES_CONTENU,
@@ -15,7 +15,7 @@ const {
   REGLES_CATEGORIE,
   ETATS_MARCHANDISE,
   STATUTS_MODIFIABLES_CLIENT,
-} = require('../constants/colis');
+} = require('../config/colis');
 
 /**
  * Expédition — la lettre de transport (LTA) du réseau Yobnate Express.

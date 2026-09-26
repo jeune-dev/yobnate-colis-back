@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { STATUTS_ENLEVEMENT, CRENEAUX_ENLEVEMENT } = require('../constants/reseau');
+const { CODES_PAYS } = require('../config/pays');
+const { STATUTS_ENLEVEMENT, CRENEAUX_ENLEVEMENT } = require('../config/reseau');
 
 /**
  * Demande d'enlèvement à domicile.

@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { EMPLACEMENTS_ANNONCE } = require('../constants/reseau');
+const { EMPLACEMENTS_ANNONCE } = require('../config/reseau');
 
 /**
  * Message publié par l'administrateur sur la page d'accueil de l'application :

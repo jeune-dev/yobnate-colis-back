@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { STATUTS_COLIS, CODES_EVENEMENTS } = require('../constants/colis');
+const { CODES_PAYS } = require('../config/pays');
+const { STATUTS_COLIS, CODES_EVENEMENTS } = require('../config/colis');
 
 /**
  * Événement de suivi — une ligne du fil de traçabilité d'une expédition.

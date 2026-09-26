@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
+const { CODES_PAYS } = require('../config/pays');
 
 /**
  * Carnet d'adresses du client : expéditeurs et destinataires enregistrés,

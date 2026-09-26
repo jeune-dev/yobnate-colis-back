@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { DEVISES, METHODES_PAIEMENT, STATUTS_PAIEMENT } = require('../constants/facturation');
+const { DEVISES, METHODES_PAIEMENT, STATUTS_PAIEMENT } = require('../config/facturation');
 
 /**
  * Règlement, total ou partiel, d'une facture.

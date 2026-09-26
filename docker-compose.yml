@@ -1,81 +1,50 @@
+# ============================================================
+#  Yobante Colis API — Docker Compose DÉVELOPPEMENT
+#  Usage : cp .env.example .env (puis le remplir) ; docker compose up --build
+#  Toutes les valeurs viennent de .env : aucun secret par défaut dans ce fichier.
+# ============================================================
+
 services:
 
-  # ─────────────────────────────────────────
-  # Base de données PostgreSQL
-  # ─────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    container_name: yobnate_colis_db
+    container_name: yobante_colis_db_dev
     restart: unless-stopped
     environment:
-      POSTGRES_DB:        ${DB_NAME:-yobnate_colis}
-      POSTGRES_USER:      ${DB_USER:-yobnate}
-      POSTGRES_PASSWORD:  ${DB_PASSWORD:-yobante_password}
+      POSTGRES_DB:       ${DB_NAME:?DB_NAME manquant dans .env}
+      POSTGRES_USER:     ${DB_USER:?DB_USER manquant dans .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant dans .env}
+    # Publié sur la boucle locale uniquement (outils de développement)
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-yobnate} -d ${DB_NAME:-yobnate_colis}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-
-  # ─────────────────────────────────────────
-  # Backend Node.js
-  # ─────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: yobnate_colis
+    container_name: yobante_colis_dev
     restart: unless-stopped
-
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "${PORT:-3000}:3000"
+      - "127.0.0.1:${PORT:-3000}:3000"
+    env_file:
+      - .env
     environment:
-      NODE_ENV:  ${NODE_ENV:-development}
-      PORT:      3000
-      HOST:      0.0.0.0
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-
-      # Base de données — pointe vers le service postgres ci-dessus
-      DB_HOST:      postgres
-      DB_PORT:      5432
-      DB_NAME:      ${DB_NAME:-yobnate_colis}
-      DB_USER:      ${DB_USER:-yobnate}
-      DB_PASSWORD:  ${DB_PASSWORD:-yobante_password}
-
-      # JWT — les 2 secrets doivent être définis et différents (voir config/security.js)
-      JWT_SECRET:          ${JWT_SECRET}
-      JWT_EXPIRES_IN:      ${JWT_EXPIRES_IN:-1h}
-      JWT_REFRESH_SECRET:  ${JWT_REFRESH_SECRET}
-
-      # CORS
-      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
-
-      # Super admin (utilisé par npm run seed — PAS de fallback hardcodé)
-      SUPER_ADMIN_EMAIL:    ${SUPER_ADMIN_EMAIL}
-      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD}
-      SUPER_ADMIN_NOM:      ${SUPER_ADMIN_NOM:-Admin}
-      SUPER_ADMIN_PRENOM:   ${SUPER_ADMIN_PRENOM:-Yobnate}
-
-      # Email — SMTP (nodemailer)
-      SMTP_HOST:     ${SMTP_HOST}
-      SMTP_PORT:     ${SMTP_PORT:-587}
-      SMTP_SECURE:   ${SMTP_SECURE:-false}
-      SMTP_USER:     ${SMTP_USER}
-      SMTP_PASSWORD: ${SMTP_PASSWORD}
-      MAIL_FROM:     ${MAIL_FROM}
-
-      # Cloudinary (upload images)
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
-      CLOUDINARY_API_KEY:    ${CLOUDINARY_API_KEY}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3000
+      HOST: 0.0.0.0
+      DB_HOST: postgres
+      DB_PORT: 5432
 
 volumes:
   postgres_data:

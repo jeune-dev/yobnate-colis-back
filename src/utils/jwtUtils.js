@@ -11,7 +11,7 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { jwtConfig } = require('../config/security');
 const { UnauthorizedError, ForbiddenError } = require('../errors/AppError');
-const cache = require('../config/cache');
+const cache = require('./cache');
 const { User, TokenBlacklist } = require('../models');
 
 const CACHE_TTL_MS = 30 * 1000;
@@ -37,7 +37,7 @@ class JWTUtils {
    */
   static verifyToken(token) {
     try {
-      return jwt.verify(token, jwtConfig.secret);
+      return jwt.verify(token, jwtConfig.secret, { algorithms: [jwtConfig.algorithm] });
     } catch (err) {
       const message = err.name === 'TokenExpiredError' ? 'Token expiré' : 'Token invalide';
       throw new UnauthorizedError(message);
@@ -72,12 +72,42 @@ class JWTUtils {
     const cached = cache.get(cacheKey);
     if (cached) return cached;
 
-    const user = await User.findByPk(userId, { attributes: ['id', 'role', 'isActive'] });
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'role', 'isActive', 'pointCollecteId', 'tokenVersion'],
+    });
     if (!user) throw new UnauthorizedError('Utilisateur introuvable');
 
-    const userObj = { id: user.id, role: user.role, isActive: user.isActive };
+    const userObj = {
+      id: user.id,
+      role: user.role,
+      isActive: user.isActive,
+      pointCollecteId: user.pointCollecteId,
+      tokenVersion: user.tokenVersion,
+    };
     cache.set(cacheKey, userObj, CACHE_TTL_MS);
     return userObj;
+  }
+
+  /**
+   * Oublie l'utilisateur mis en cache : à appeler après toute modification qui
+   * doit prendre effet immédiatement (désactivation, rôle, mot de passe).
+   * Le cache étant propre à chaque processus, un autre worker PM2 peut conserver
+   * l'ancienne version jusqu'à CACHE_TTL_MS.
+   */
+  static invaliderCache(userId) {
+    cache.del(`auth:${userId}`);
+  }
+
+  /**
+   * Un changement ou une réinitialisation de mot de passe incrémente
+   * `tokenVersion` : les jetons d'accès signés auparavant sont alors refusés,
+   * y compris celui d'un éventuel attaquant. Un jeton sans `tv` (émis avant
+   * l'introduction du champ) vaut la version 0 et vit jusqu'à son expiration.
+   */
+  static assertVersionCourante(payload, user) {
+    if ((payload.tv ?? 0) !== (user.tokenVersion ?? 0)) {
+      throw new UnauthorizedError('Session expirée, veuillez vous reconnecter');
+    }
   }
 
   /**
@@ -90,6 +120,7 @@ class JWTUtils {
     await this.assertNotBlacklisted(token);
 
     const user = await this.verifyAndCache(payload.sub);
+    this.assertVersionCourante(payload, user);
     this.assertRoleAllowed(user.role, allowedRoles);
     return user;
   }

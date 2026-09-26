@@ -1,60 +1,120 @@
+# ============================================================
+#  Yobante Colis API — Docker Compose PRODUCTION
+#
+#  Toujours lancer avec le fichier de secrets de l'hôte :
+#    docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+#  (--env-file alimente les ${…} ci-dessous ; env_file les transmet au backend)
+#
+#  Prérequis : .env.prod rempli (copie de .env.example), Nginx + certificats sur l'hôte.
+# ============================================================
+
 services:
 
+  # ── PostgreSQL ────────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
-    restart: always
+    container_name: yobante_colis_postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_DB:       ${DB_NAME}
-      POSTGRES_USER:     ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB:          ${DB_NAME:?DB_NAME manquant dans .env.prod}
+      POSTGRES_USER:        ${DB_USER:?DB_USER manquant dans .env.prod}
+      POSTGRES_PASSWORD:    ${DB_PASSWORD:?DB_PASSWORD manquant dans .env.prod}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./deploy/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    # Aucun port publié : joignable uniquement sur le réseau Docker
+    expose:
+      - "5432"
+    # Durcissement : l'entrypoint officiel démarre en root puis bascule vers
+    # l'utilisateur postgres (chown + setuid) — seules ces capacités sont gardées.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER, DAC_OVERRIDE, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    networks: [yobante_network]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
-    expose:
-      - "5432"
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits: { memory: 512M }
 
+  # ── Redis : compteurs partagés des limiteurs de débit ─────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: yobante_colis_redis
+    restart: unless-stopped
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+    expose:
+      - "6379"
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    networks: [yobante_network]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    deploy:
+      resources:
+        limits: { memory: 96M }
+
+  # ── API Node.js ───────────────────────────────────────────────────────────
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    restart: always
-    env_file:
-      - .env.prod
+    image: yobante-colis-api:latest
+    container_name: yobante_colis_backend
+    restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # Publié sur la boucle locale de l'hôte uniquement : Nginx seul y accède
     ports:
       - "127.0.0.1:3000:3000"
+    env_file:
+      - .env.prod
     environment:
       NODE_ENV: production
+      PORT: 3000
+      # En conteneur, l'écoute DOIT être 0.0.0.0 (l'isolation vient de la publication 127.0.0.1)
+      HOST: 0.0.0.0
       DB_HOST: postgres
-    healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          memory: 128M
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379
+    # Durcissement : système de fichiers en lecture seule (logs sur la sortie standard)
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 20s
+    networks: [yobante_network]
     logging:
       driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    volumes:
-      - logs_data:/app/logs
+      options: { max-size: "20m", max-file: "5" }
+    deploy:
+      resources:
+        limits: { cpus: "1", memory: 512M }
+        reservations: { memory: 128M }
+
+networks:
+  yobante_network:
+    driver: bridge
 
 volumes:
   postgres_data:
-  logs_data:

@@ -1,8 +1,8 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { DEVISES } = require('../constants/facturation');
-const { INCOTERMS, TYPES_CONTENU } = require('../constants/colis');
+const { CODES_PAYS } = require('../config/pays');
+const { DEVISES } = require('../config/facturation');
+const { INCOTERMS, TYPES_CONTENU } = require('../config/colis');
 
 /**
  * Déclaration douanière rattachée à une expédition internationale.

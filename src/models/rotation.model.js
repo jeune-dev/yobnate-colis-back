@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { STATUTS_ROTATION, MODES_TRANSPORT } = require('../constants/reseau');
+const { CODES_PAYS } = require('../config/pays');
+const { STATUTS_ROTATION, MODES_TRANSPORT } = require('../config/reseau');
 
 /**
  * Rotation — départ groupé reliant les deux pays.

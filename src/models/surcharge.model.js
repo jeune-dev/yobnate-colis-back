@@ -1,12 +1,12 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
+const { CODES_PAYS } = require('../config/pays');
 const {
   TYPES_SURCHARGE,
   MODES_SURCHARGE,
   ASSIETTES_SURCHARGE,
   DEVISES,
-} = require('../constants/facturation');
+} = require('../config/facturation');
 
 /**
  * Frais annexes appliqués au-dessus du fret : surcharge carburant, zone éloignée,

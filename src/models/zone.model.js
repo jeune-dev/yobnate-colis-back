@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
+const { CODES_PAYS } = require('../config/pays');
 
 /**
  * Zone tarifaire : regroupement de villes d'un même pays partageant le même

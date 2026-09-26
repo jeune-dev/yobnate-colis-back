@@ -13,11 +13,14 @@
     "migrate:status": "sequelize-cli db:migrate:status",
     "seed": "node src/seeders/adminSeeder.js",
     "test": "jest",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "format": "prettier --write \"src/**/*.js\"",
-    "format:check": "prettier --check \"src/**/*.js\"",
-    "prepare": "husky"
+    "lint": "eslint src/ scripts/",
+    "lint:fix": "eslint src/ scripts/ --fix",
+    "format": "prettier --write \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\"",
+    "format:check": "prettier --check \"src/**/*.js\" \"tests/**/*.js\" \"scripts/**/*.js\"",
+    "prepare": "husky",
+    "docs:openapi": "node scripts/exporterOpenApi.js",
+    "schema:verifier": "node scripts/verifierSchema.js",
+    "test:integration": "jest tests/integration"
   },
   "lint-staged": {
     "src/**/*.js": [
@@ -35,14 +38,18 @@
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
+    "ioredis": "^5.8.2",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.11",
-    "multer": "^1.4.5-lts.1",
-    "nodemailer": "^7.0.0",
+    "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^10.0.10",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",
+    "rate-limit-redis": "^4.3.1",
     "sequelize": "^6.37.5",
+    "sequelize-cli": "^6.6.5",
     "streamifier": "^0.1.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
@@ -56,10 +63,12 @@
     "lint-staged": "^17.3.0",
     "nodemon": "^3.1.9",
     "prettier": "^3.9.6",
-    "sequelize-cli": "^6.6.2",
     "supertest": "^7.2.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
   }
 }

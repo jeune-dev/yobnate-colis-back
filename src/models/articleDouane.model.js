@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { ETATS_MARCHANDISE } = require('../constants/colis');
+const { CODES_PAYS } = require('../config/pays');
+const { ETATS_MARCHANDISE } = require('../config/colis');
 
 /**
  * Ligne d'une déclaration douanière — un article de la facture commerciale.

@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { ROLES } = require('../constants/roles');
+const { CODES_PAYS } = require('../config/pays');
+const { ROLES } = require('../config/roles');
 
 /**
  * Compte utilisateur : client particulier ou professionnel, personnel opérationnel
@@ -12,7 +12,7 @@ const { ROLES } = require('../constants/roles');
  */
 class User extends Model {
   toSafeJSON() {
-    const { password: _password, ...safe } = this.toJSON();
+    const { password: _password, tokenVersion: _tokenVersion, ...safe } = this.toJSON();
     return safe;
   }
 
@@ -109,6 +109,20 @@ User.init(
     avatarUrl: { type: DataTypes.STRING(255), allowNull: true },
     avatarPublicId: { type: DataTypes.STRING(150), allowNull: true },
     lastLoginAt: { type: DataTypes.DATE, allowNull: true },
+    /**
+     * Version des jetons d'accès, portée par le claim `tv` : incrémentée à chaque
+     * changement ou réinitialisation de mot de passe, elle périme immédiatement
+     * les jetons émis auparavant.
+     */
+    tokenVersion: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    /** Numéro de téléphone prouvé par un code : condition d'accès aux colis reçus. */
+    telephoneVerifie: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    /**
+     * Date de suppression du compte à la demande de son titulaire : les données
+     * personnelles sont alors pseudonymisées, les expéditions et factures conservées
+     * (obligations comptables).
+     */
+    supprimeLe: { type: DataTypes.DATE, allowNull: true },
 
     // ── Notifications push (mobile) ────────────────────────────────────────
     /** Dernier token FCM connu de l'appareil du client, pour l'envoi de push. */

@@ -43,6 +43,13 @@ class ValidationError extends AppError {
   }
 }
 
+/** Dépendance externe indisponible ou non configurée (canal d'envoi, prestataire). */
+class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service temporairement indisponible') {
+    super(message, 503);
+  }
+}
+
 module.exports = {
   AppError,
   BadRequestError,
@@ -51,4 +58,5 @@ module.exports = {
   NotFoundError,
   ConflictError,
   ValidationError,
+  ServiceUnavailableError,
 };

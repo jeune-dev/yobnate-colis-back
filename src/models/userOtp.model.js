@@ -19,7 +19,7 @@ UserOtp.init(
       allowNull: false,
     },
     type: {
-      type: DataTypes.ENUM('reset_password', 'verification_email'),
+      type: DataTypes.ENUM('reset_password', 'verification_email', 'verification_telephone'),
       allowNull: false,
     },
     expiresAt: {
@@ -30,6 +30,12 @@ UserOtp.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
+    },
+    /** Codes erronés déjà soumis : au-delà du plafond, le code est invalidé. */
+    tentatives: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
   },
   {

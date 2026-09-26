@@ -14,11 +14,24 @@ if (!_jwtRefreshSecret || _jwtRefreshSecret.length < 32) {
     '[SECURITY] JWT_REFRESH_SECRET manquant ou inférieur à 32 caractères — démarrage bloqué.'
   );
 }
+// Un même secret permettrait de présenter un refresh token comme jeton d'accès
+if (_jwtSecret === _jwtRefreshSecret) {
+  throw new Error(
+    '[SECURITY] JWT_SECRET et JWT_REFRESH_SECRET doivent être distincts — démarrage bloqué.'
+  );
+}
+// En production, l'origine autorisée doit être déclarée : le repli localhost
+// bloquerait silencieusement le back-office réel.
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
+  throw new Error('[SECURITY] CORS_ORIGIN doit être défini en production — démarrage bloqué.');
+}
 
 /**
  * Configuration JWT
  */
 const jwtConfig = {
+  // Algorithme imposé à la vérification : un jeton signé autrement est refusé
+  algorithm: 'HS256',
   secret: _jwtSecret,
   expiresIn: process.env.JWT_EXPIRES_IN || '1h',
   refreshSecret: _jwtRefreshSecret,
@@ -64,7 +77,9 @@ const authRateLimitConfig = {
 
 // CORS sécurisé
 const corsConfig = {
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
+  origin: process.env.CORS_ORIGIN?.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean) || ['http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
   credentials: true,

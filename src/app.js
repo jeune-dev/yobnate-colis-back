@@ -2,66 +2,36 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const compression = require('compression'); // PERF-01 : compression gzip
-const { randomUUID } = require('crypto');
+const compression = require('compression');
 
 const { corsConfig } = require('./config/security');
-const logger = require('./config/logger');
+const sequelize = require('./config/db');
+const redis = require('./config/redis');
+const logger = require('./utils/logger');
+const masquerUrl = require('./utils/masquerUrl');
+const etatApplication = require('./utils/etatApplication');
+const requestId = require('./middlewares/requestId.middleware');
 const { globalRateLimit } = require('./middlewares/rateLimit.middleware');
-const errorMiddleware = require('./middlewares/error.middleware');
-
-const authRoutes = require('./routes/auth.route');
-const publicRoutes = require('./routes/public.route');
-
-const clientColisRoutes = require('./routes/client/colis.route');
-const clientProfilRoutes = require('./routes/client/profil.route');
-const clientNotificationRoutes = require('./routes/client/notification.route');
-const clientPaiementRoutes = require('./routes/client/paiement.route');
-const clientEnlevementRoutes = require('./routes/client/enlevement.route');
-const clientAdresseRoutes = require('./routes/client/adresse.route');
-const clientReclamationRoutes = require('./routes/client/reclamation.route');
-
-const adminDashboardRoutes = require('./routes/admin/dashboard.route');
-const adminUserRoutes = require('./routes/admin/user.route');
-const adminPersonnelRoutes = require('./routes/admin/personnel.route');
-const adminAdminRoutes = require('./routes/admin/admin.route');
-const adminColisRoutes = require('./routes/admin/colis.route');
-const adminVilleRoutes = require('./routes/admin/ville.route');
-const adminZoneRoutes = require('./routes/admin/zone.route');
-const adminPointCollecteRoutes = require('./routes/admin/pointCollecte.route');
-const adminServiceExpeditionRoutes = require('./routes/admin/serviceExpedition.route');
-const adminTarifRoutes = require('./routes/admin/tarif.route');
-const adminSurchargeRoutes = require('./routes/admin/surcharge.route');
-const adminJourFerieRoutes = require('./routes/admin/jourFerie.route');
-const adminRotationRoutes = require('./routes/admin/rotation.route');
-const adminEnlevementRoutes = require('./routes/admin/enlevement.route');
-const adminDouaneRoutes = require('./routes/admin/douane.route');
-const adminReclamationRoutes = require('./routes/admin/reclamation.route');
-const adminFactureRoutes = require('./routes/admin/facture.route');
-const adminPaiementRoutes = require('./routes/admin/paiement.route');
-const adminParametreRoutes = require('./routes/admin/parametre.route');
-const adminActivityLogRoutes = require('./routes/admin/activityLog.route');
-const adminArticleTarifRoutes = require('./routes/admin/articleTarif.route');
-const adminEmballageRoutes = require('./routes/admin/emballage.route');
-const adminTourneeCollecteRoutes = require('./routes/admin/tourneeCollecte.route');
-const adminAnnonceRoutes = require('./routes/admin/annonce.route');
-const adminModeleEmailRoutes = require('./routes/admin/modeleEmail.route');
-const adminInventaireRoutes = require('./routes/admin/inventaire.route');
-const adminParrainageRoutes = require('./routes/admin/parrainage.route');
+const errorHandler = require('./middlewares/errorHandler.middleware');
+const { ROUTES } = require('./modules');
 
 const app = express();
-
-app.set('trust proxy', 1);
-
 const isProd = process.env.NODE_ENV === 'production';
 
-// F-02 : Helmet avec CSP personnalisée + HSTS explicite
+/** Préfixe versionné de l'API (comme Widjila). Les chemins historiques sans préfixe restent servis. */
+const PREFIXE_API = '/api/v1';
+
+app.set('trust proxy', 1);
+app.disable('x-powered-by');
+
+app.use(requestId);
+
+// Helmet : CSP stricte (l'API ne sert pas de HTML, hors Swagger UI en développement)
 app.use(
   helmet({
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        // unsafe-inline restreint à dev (Swagger UI) ; en prod on n'expose pas l'UI Swagger
         scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
         styleSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'],
@@ -69,107 +39,134 @@ app.use(
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         frameSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'none'"],
       },
     },
-    hsts: {
-      maxAge: 31536000, // 1 an
-      includeSubDomains: true,
-      preload: true,
-    },
+    hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   })
 );
-app.use(cors(corsConfig));
-
-// LOW-03 : X-Request-ID pour le tracing distribué
 app.use((req, res, next) => {
-  req.requestId = req.headers['x-request-id'] || randomUUID();
-  res.setHeader('X-Request-ID', req.requestId);
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   next();
 });
+app.use(cors(corsConfig));
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 app.use(cookieParser());
-
-// PERF-01 : compression gzip/brotli
 app.use(compression());
 
-app.use(globalRateLimit);
-
-// Logger HTTP structuré avec Request ID
+// Journal HTTP structuré : URL masquée (jetons), identifiant de corrélation et utilisateur
 app.use((req, res, next) => {
-  const start = Date.now();
+  const debut = Date.now();
   res.on('finish', () => {
     logger.info('http', {
       requestId: req.requestId,
       method: req.method,
-      url: req.originalUrl,
+      url: masquerUrl(req.originalUrl),
       status: res.statusCode,
-      ms: Date.now() - start,
+      ms: Date.now() - debut,
       ip: req.ip,
+      utilisateur: req.user?.id,
     });
   });
   next();
 });
 
-// R-02 : Swagger UI désactivé en production
-if (process.env.NODE_ENV !== 'production') {
-  const swaggerUi = require('swagger-ui-express');
-  const swaggerSpec = require('./config/swagger');
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+/* ── Sondes de santé ─────────────────────────────────────────────────────── */
+
+const DELAI_SONDE_MS = 3000;
+const DUREE_CACHE_SANTE_MS = 5000;
+let bilan = null;
+let bilanLe = 0;
+
+const avecDelai = (promesse, ms) => {
+  let minuteur;
+  const delai = new Promise((_, rejeter) => {
+    minuteur = setTimeout(() => rejeter(new Error('délai dépassé')), ms);
+    minuteur.unref();
+  });
+  return Promise.race([promesse, delai]).finally(() => clearTimeout(minuteur));
+};
+
+/** Bilan mis en cache quelques secondes : une rafale de sondes ne sature pas la base. */
+const evaluerSante = async () => {
+  if (bilan && Date.now() - bilanLe < DUREE_CACHE_SANTE_MS) return bilan;
+  const dbOk = await avecDelai(sequelize.authenticate(), DELAI_SONDE_MS).then(
+    () => true,
+    () => false
+  );
+  const redisEtat = redis ? redis.status : 'non configuré';
+  bilan = {
+    dbOk,
+    corps: {
+      success: dbOk,
+      status: dbOk && (!redis || redis.status === 'ready') ? 'ok' : 'degraded',
+      message: dbOk ? 'Yobante Colis API opérationnelle' : 'Base de données injoignable',
+      db: dbOk ? 'connected' : 'disconnected',
+      redis: redisEtat,
+      uptime: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+    },
+  };
+  bilanLe = Date.now();
+  return bilan;
+};
+
+/** Vivacité : le processus répond (redémarrage par l'orchestrateur sinon). */
+const vivacite = (req, res) =>
+  res.json({ success: true, status: 'ok', uptime: Math.round(process.uptime()) });
+
+/** Disponibilité : base joignable et processus hors arrêt ; 503 sinon. */
+const disponibilite = async (req, res) => {
+  const { dbOk, corps } = await evaluerSante();
+  const enArret = etatApplication.estEnArret();
+  res.setHeader('Cache-Control', 'no-store');
+  res
+    .status(dbOk && !enArret ? 200 : 503)
+    .json(enArret ? { ...corps, success: false, status: 'arret en cours' } : corps);
+};
+
+for (const base of ['', PREFIXE_API]) {
+  app.get(`${base}/health`, disponibilite);
+  app.get(`${base}/health/ready`, disponibilite);
+  app.get(`${base}/health/live`, vivacite);
 }
 
-// LOW-08 : health check
-app.get('/health', (req, res) =>
-  res.json({ success: true, message: 'Yobnate Express API opérationnelle' })
+/* ── Documentation (hors production) ────────────────────────────────────── */
+
+if (!isProd) {
+  // Générée à la première consultation seulement : inutile de la construire à
+  // chaque démarrage (ni dans chaque suite de tests).
+  let spec = null;
+  const documentation = () => {
+    spec = spec || require('./config/openapi').genererOpenApi(ROUTES, { prefixe: PREFIXE_API });
+    return spec;
+  };
+  const swaggerUi = require('swagger-ui-express');
+  app.get('/api-docs.json', (req, res) => res.json(documentation()));
+  app.use('/api-docs', swaggerUi.serve, (req, res, next) =>
+    swaggerUi.setup(documentation())(req, res, next)
+  );
+}
+
+/* ── Routes ──────────────────────────────────────────────────────────────── */
+
+app.use(globalRateLimit);
+
+// Montage sous /api/v1 (chemin canonique) et à la racine (clients existants)
+for (const { chemin, routeur } of ROUTES) {
+  app.use(`${PREFIXE_API}${chemin}`, routeur);
+  app.use(chemin, routeur);
+}
+
+app.use((req, res) =>
+  res.status(404).json({ success: false, message: 'Route introuvable', requestId: req.requestId })
 );
+app.use(errorHandler);
 
-// Routes publiques (aucune authentification)
-app.use('/auth', authRoutes);
-app.use('/public', publicRoutes);
-
-// Espace client
-app.use('/client/colis', clientColisRoutes);
-app.use('/client/profil', clientProfilRoutes);
-app.use('/client/notifications', clientNotificationRoutes);
-app.use('/client/paiements', clientPaiementRoutes);
-app.use('/client/enlevements', clientEnlevementRoutes);
-app.use('/client/adresses', clientAdresseRoutes);
-app.use('/client/reclamations', clientReclamationRoutes);
-
-// Back-office
-app.use('/admin/dashboard', adminDashboardRoutes);
-app.use('/admin/users', adminUserRoutes);
-app.use('/admin/personnel', adminPersonnelRoutes);
-app.use('/admin/admins', adminAdminRoutes);
-app.use('/admin/colis', adminColisRoutes);
-app.use('/admin/villes', adminVilleRoutes);
-app.use('/admin/zones', adminZoneRoutes);
-app.use('/admin/points-collecte', adminPointCollecteRoutes);
-app.use('/admin/services', adminServiceExpeditionRoutes);
-app.use('/admin/tarifs', adminTarifRoutes);
-app.use('/admin/surcharges', adminSurchargeRoutes);
-app.use('/admin/jours-feries', adminJourFerieRoutes);
-app.use('/admin/rotations', adminRotationRoutes);
-// Alias métier : une rotation maritime est un conteneur
-app.use('/admin/conteneurs', adminRotationRoutes);
-app.use('/admin/enlevements', adminEnlevementRoutes);
-app.use('/admin/douane', adminDouaneRoutes);
-app.use('/admin/reclamations', adminReclamationRoutes);
-app.use('/admin/factures', adminFactureRoutes);
-app.use('/admin/paiements', adminPaiementRoutes);
-app.use('/admin/parametres', adminParametreRoutes);
-app.use('/admin/activity-logs', adminActivityLogRoutes);
-app.use('/admin/articles-tarif', adminArticleTarifRoutes);
-app.use('/admin/emballages', adminEmballageRoutes);
-app.use('/admin/tournees-collecte', adminTourneeCollecteRoutes);
-app.use('/admin/annonces', adminAnnonceRoutes);
-app.use('/admin/modeles-emails', adminModeleEmailRoutes);
-app.use('/admin/inventaire', adminInventaireRoutes);
-app.use('/admin/parrainage', adminParrainageRoutes);
-
-// R-04 : Gestionnaire d'erreurs global — DERNIER middleware
-app.use((_req, res) => res.status(404).json({ success: false, message: 'Route introuvable' }));
-app.use(errorMiddleware);
-
+app.PREFIXE_API = PREFIXE_API;
 module.exports = app;

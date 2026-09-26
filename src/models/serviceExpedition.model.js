@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { MODES_TRANSPORT } = require('../constants/reseau');
-const { TYPES_CONTENU } = require('../constants/colis');
+const { MODES_TRANSPORT } = require('../config/reseau');
+const { TYPES_CONTENU } = require('../config/colis');
 
 /**
  * Produit commercial proposé au client (Express, Standard, Économique…).

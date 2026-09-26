@@ -47,6 +47,10 @@ const ActivityLog = require('./activityLog.model');
 const Annonce = require('./annonce.model');
 const ModeleEmail = require('./modeleEmail.model');
 
+// ── Comptes : cycle de vie et application mobile ────────────────────────────
+const DemandeSuppression = require('./demandeSuppression.model');
+const AppVersion = require('./appVersion.model');
+
 /* ────────────────────────────────────────────────────────────────────────────
  * Comptes
  * ────────────────────────────────────────────────────────────────────────── */
@@ -287,5 +291,7 @@ module.exports = {
   Notification,
   ActivityLog,
   Annonce,
+  DemandeSuppression,
+  AppVersion,
   ModeleEmail,
 };

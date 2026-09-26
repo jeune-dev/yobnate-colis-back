@@ -11,9 +11,9 @@
  * l'exécuter une fois via une migration lui donne une trace versionnée et la
  * possibilité d'être rejouée sur un environnement de production vierge.
  *
- * Aucune contrainte de clé étrangère n'est déclarée au niveau base de données
- * dans ces modèles (les associations Sequelize restent logiques) : l'ordre de
- * création des tables n'a donc pas d'incidence.
+ * Les associations `belongsTo` des modèles produisent de vraies clés étrangères
+ * (68 contraintes sur une base vierge) ; sync() ordonne lui-même la création
+ * des tables selon ces dépendances.
  *
  * @type {import('sequelize-cli').Migration}
  */

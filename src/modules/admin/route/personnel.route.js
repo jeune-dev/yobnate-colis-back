@@ -1,0 +1,25 @@
+const router = require('express').Router();
+const ctrl = require('../controller/personnel.controller');
+const auth = require('../../../middlewares/auth.middleware');
+const { admin } = require('../../../middlewares/requireRole.middleware');
+const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
+const validate = require('../../../middlewares/validate.middleware');
+const { createPersonnelSchema, updatePersonnelSchema } = require('../validation/user.validation');
+const { uuidParam, statutActifSchema } = require('../../../validations/common');
+
+/** Coursiers et agents de point de collecte. */
+router.use(auth, checkActiveUser, admin);
+
+router.get('/', ctrl.getAll);
+router.get('/coursiers-disponibles', ctrl.coursiersDisponibles);
+router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
+router.post('/', validate(createPersonnelSchema), ctrl.create);
+router.put('/:id', validate(uuidParam, 'params'), validate(updatePersonnelSchema), ctrl.update);
+router.patch(
+  '/:id/statut',
+  validate(uuidParam, 'params'),
+  validate(statutActifSchema),
+  ctrl.toggle
+);
+
+module.exports = router;

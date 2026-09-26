@@ -1,22 +1,37 @@
 node_modules
 npm-debug.log
+.git
+.gitignore
+.gitattributes
+.github
+.husky
+.kilo
+.claude
+.vscode
+.idea
+
+# Secrets : injectés à l'exécution par env_file, jamais copiés dans l'image
 .env
 .env.*
 !.env.example
-.git
-.gitignore
-*.md
-uploads/
-logs/
 
-# Tests et couverture — inutiles en prod
+# Hors exécution : tests, documentation, déploiement de l'hôte
 tests/
 coverage/
+docs/
+deploy/
+*.md
 .eslintcache
+eslint.config.js
+.prettierrc
+.prettierignore
+.editorconfig
+jest.config.js
+docker-compose*.yml
+Dockerfile
+logs/
+uploads/
 
-# OS / IDE
+# OS
 .DS_Store
 Thumbs.db
-.vscode/
-.idea/
-.claude/

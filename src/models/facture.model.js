@@ -1,7 +1,7 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { DEVISES, STATUTS_FACTURE } = require('../constants/facturation');
-const { PAYEURS } = require('../constants/colis');
+const { DEVISES, STATUTS_FACTURE } = require('../config/facturation');
+const { PAYEURS } = require('../config/colis');
 
 /**
  * Facture d'expédition.

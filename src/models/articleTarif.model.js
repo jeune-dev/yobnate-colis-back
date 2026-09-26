@@ -1,9 +1,9 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
-const { DEVISES } = require('../constants/facturation');
-const { CATEGORIES_COLIS } = require('../constants/colis');
-const { MODES_TRANSPORT } = require('../constants/reseau');
+const { CODES_PAYS } = require('../config/pays');
+const { DEVISES } = require('../config/facturation');
+const { CATEGORIES_COLIS } = require('../config/colis');
+const { MODES_TRANSPORT } = require('../config/reseau');
 
 /**
  * Article de la grille forfaitaire (« Nature du colis »).

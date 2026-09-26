@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { DEVISES } = require('../constants/facturation');
+const { DEVISES } = require('../config/facturation');
 
 /**
  * Emballage proposé à la vente ou prestation d'emballage.

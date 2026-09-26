@@ -5,36 +5,100 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Appelé par deploy.yml : aucun déploiement sans CI verte
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
-    name: Lint
+    name: Lint et formatage
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: npm
+      - run: npm ci --no-fund
+      - run: npm run lint
+      - run: npm run format:check
 
-      - name: Install dependencies
-        run: npm ci
+  test:
+    name: Tests (unitaires, sécurité, intégration PostgreSQL)
+    runs-on: ubuntu-latest
+    # Base jetable : son nom doit se terminer par _test (garde-fou de tests/helpers/globalSetup.js)
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yobtest
+          POSTGRES_PASSWORD: yobtest
+          POSTGRES_DB: yobante_colis_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U yobtest"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DB_NAME: yobante_colis_test
+      TEST_DB_HOST: 127.0.0.1
+      TEST_DB_PORT: 5432
+      TEST_DB_USER: yobtest
+      TEST_DB_PASSWORD: yobtest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-fund
+      - run: npm test
 
-      - name: Lint
-        run: npm run lint
+  migrations:
+    name: Migrations sur base vierge + conformité du schéma
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: yobmigr
+          POSTGRES_PASSWORD: yobmigr
+          POSTGRES_DB: yobante_colis_migrations
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U yobmigr"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      NODE_ENV: production
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_USER: yobmigr
+      DB_PASSWORD: yobmigr
+      DB_NAME: yobante_colis_migrations
+      # Valeurs factices, valables uniquement ici (config/security.js les exige au chargement)
+      JWT_SECRET: ci_uniquement_secret_acces_jamais_utilise_en_production
+      JWT_REFRESH_SECRET: ci_uniquement_secret_refresh_jamais_utilise_en_production
+      CORS_ORIGIN: http://localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --omit=dev --no-fund
+      - name: Appliquer les migrations
+        run: npm run migrate
+      - name: Idempotence (second passage sans effet)
+        run: npm run migrate
+      - name: Schéma conforme aux modèles
+        run: node scripts/verifierSchema.js
 
   docker-build:
-    name: Docker Build Check
+    name: Construction de l'image Docker
     runs-on: ubuntu-latest
-    needs: lint
-
+    needs: [lint, test, migrations]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build Docker image
-        run: docker build -t yobnate-colis-back:ci .
+      - uses: actions/checkout@v4
+      - run: docker build -t yobante-colis-api:ci .

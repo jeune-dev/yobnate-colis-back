@@ -1,4 +1,4 @@
-# Yobnate Express — Backend API
+# Yobante Colis — Backend API
 
 API REST de transport express de colis entre la **France** et le **Sénégal**,
 inspirée du fonctionnement d'un intégrateur comme DHL Express : réseau de
@@ -8,7 +8,7 @@ formalités douanières, facturation multi-devise et service après-vente.
 
 ## Stack technique
 
-- **Runtime :** Node.js ≥ 18
+- **Runtime :** Node.js 22
 - **Framework :** Express 4
 - **ORM :** Sequelize 6
 - **Base de données :** PostgreSQL 16
@@ -17,7 +17,8 @@ formalités douanières, facturation multi-devise et service après-vente.
 - **Email :** Nodemailer (SMTP), gabarits HTML en français
 - **Documents :** étiquettes et bordereaux HTML imprimables avec code-barres
   Code 128 généré en interne (aucune dépendance externe)
-- **Documentation :** Swagger UI (désactivée en production)
+- **Documentation :** OpenAPI générée à partir des routes réelles (Swagger UI hors production)
+- **Cache partagé :** Redis (compteurs des limiteurs de débit), facultatif
 - **Conteneurisation :** Docker + Docker Compose
 
 ## Périmètre métier
@@ -72,8 +73,9 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
 
 ## Prérequis
 
-- Node.js ≥ 18
+- Node.js 22
 - PostgreSQL 16
+- Redis 7 (facultatif ; fourni par docker-compose.prod.yml)
 - Compte Cloudinary
 - Compte SMTP (Gmail ou autre)
 
@@ -84,8 +86,8 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
 git clone <url-du-repo>
 cd yobnate-colis-back
 
-# 2. Installer les dépendances
-npm install
+# 2. Installer les dépendances (versions verrouillées)
+npm ci
 
 # 3. Configurer les variables d'environnement
 cp .env.example .env
@@ -123,44 +125,111 @@ ils vivent en base (`ParametreSysteme`) et se pilotent depuis
 | `npm start` | Démarrage production |
 | `npm run dev` | Démarrage développement (nodemon) |
 | `npm run seed` | Données de référence : super admin, paramètres, villes, services, tarifs, points de collecte |
-| `npm run migrate` | Exécuter les migrations Sequelize |
-| `npm run migrate:undo` | Annuler la dernière migration |
-| `npm test` | Lancer les tests |
-| `npm run lint` | Vérification ESLint |
+| `npm run migrate` | Appliquer les migrations (`migrate:status`, `migrate:undo`) |
+| `npm run schema:verifier` | Vérifier que la base migrée contient toutes les colonnes des modèles |
+| `npm test` | Tests unitaires, sécurité et intégration |
+| `npm run lint` · `npm run format:check` | ESLint et Prettier |
+| `npm run docs:openapi` | Écrire la documentation OpenAPI dans `docs/openapi.json` |
 
-## Démarrage avec Docker
+## Tests
+
+```
+tests/
+├── unit/          # logique pure, modèles simulés, aucune base
+├── security/      # garde-fous transverses (chaque route protégée, garde de rôle)
+├── integration/   # API réelle (supertest) sur une base PostgreSQL JETABLE
+└── helpers/       # environnement, fabriques de données, préparation de la base
+```
+
+Les suites d'intégration ne s'exécutent que si `TEST_DB_NAME` est défini (sinon
+elles sont signalées « skipped »). La base est **vidée et recréée** à chaque
+exécution : son nom doit se terminer par `_test`, et les variables `DB_*` du
+`.env` ne sont jamais utilisées pour les tests.
 
 ```bash
-# Copier et remplir les variables d'environnement
-cp .env.example .env
+TEST_DB_NAME=yobante_colis_test TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=5432 \
+TEST_DB_USER=postgres TEST_DB_PASSWORD=... npm test
+```
 
-# Démarrer la stack complète
-docker compose up -d
+La CI (`.github/workflows/ci.yml`) les exécute sur un service PostgreSQL dédié.
 
-# Initialiser les données
+## Migrations en production
+
+Le schéma de production est porté exclusivement par les migrations (le
+serveur ne fait jamais de `sync()` en production) :
+
+- **Docker** : `docker-entrypoint.sh` attend PostgreSQL puis lance
+  `sequelize-cli db:migrate` avant de démarrer ; un échec empêche le démarrage ;
+- **PM2** : `bash deploy/deploy.sh pm2` lance `npm run migrate`.
+
+La CI applique les migrations sur une base vierge, vérifie leur idempotence et
+la conformité du schéma aux modèles (`scripts/verifierSchema.js`).
+
+## Déploiement
+
+```bash
+# Première installation du VPS : bash deploy/setup-server.sh (puis suivre ses instructions)
+cp .env.example .env.prod && chmod 600 .env.prod   # remplir les secrets
+bash deploy/deploy.sh docker                       # ou : bash deploy/deploy.sh pm2
+```
+
+- toutes les commandes Docker de production utilisent
+  `docker compose --env-file .env.prod -f docker-compose.prod.yml …` ;
+- un push sur `main` déclenche `.github/workflows/deploy.yml` : la CI complète
+  doit être verte, puis le déploiement attend que le conteneur soit *healthy* ;
+- sauvegarde quotidienne : `deploy/backup-postgres.sh` (chiffrée si
+  `BACKUP_ENC_KEY`), restauration : `deploy/restore-postgres.sh` ;
+- sondes : `/health` (base comprise, 503 sinon), `/health/live`.
+
+## Démarrage avec Docker (développement)
+
+```bash
+cp .env.example .env        # remplir DB_* et les secrets JWT
+docker compose up -d --build
 docker compose exec backend npm run seed
 ```
 
 ## Structure du projet
 
+Organisation par modules, sur le modèle de Widjila :
+
 ```
 src/
-├── app.js              # Configuration Express et montage des routes
-├── server.js           # Point d'entrée, démarrage et graceful shutdown
-├── config/              # Configuration (DB, JWT, Cloudinary, Swagger…)
-├── constants/           # Référentiels métier (pays, statuts, rôles, réseau, facturation)
-├── controllers/         # Handlers HTTP (admin/, client/, public/)
-├── middlewares/          # Auth, rôles, validation, rate limit, upload, erreurs
-├── models/              # Modèles Sequelize et associations (28 entités)
-├── routes/               # Définition des routes (admin/, client/, public.route.js)
-├── services/             # Logique métier (admin/, client/, moteur de tarification, suivi…)
-├── utils/                # ApiError, mailer, documents HTML, code-barres, devise, délais…
-├── validations/          # Schémas Joi
-└── seeders/              # Données de référence
-deploy/
-├── nginx.conf            # Configuration Nginx (reverse proxy TLS)
-└── init.sql              # Extensions PostgreSQL initiales
+├── app.js               # Express : sécurité, journal HTTP, santé, montage des routes
+├── server.js            # Démarrage, tâches planifiées, arrêt gracieux
+├── modules/
+│   ├── index.js         # Table unique des routes (montage, tests de sécurité, OpenAPI)
+│   └── <module>/        # auth, colis, paiement, facture, compte, admin, pointCollecte…
+│       ├── controller/  # Handlers HTTP (minces)
+│       ├── route/       # Routes + gardes (auth, rôle, validation)
+│       ├── service/     # Logique métier et accès aux données
+│       └── validation/  # Schémas Joi
+├── config/              # DB, sécurité, Redis, OpenAPI, référentiels (rôles, pays, colis…)
+├── errors/              # AppError et erreurs typées
+├── infrastructure/      # Email, Cloudinary, WhatsApp, push
+├── jobs/                # Tâches planifiées (node-cron)
+├── middlewares/         # Auth, rôles, périmètre, validation, débit, upload, erreurs
+├── migrations/          # Migrations Sequelize
+├── models/              # Modèles et associations
+├── seeders/             # Données de référence
+├── templates/           # Documents HTML (étiquettes, bordereaux, factures)
+├── utils/               # Logger, cache, pagination, périmètre, inventaire des routes…
+└── validations/         # Schémas Joi communs
+deploy/                  # Nginx, déploiement, sauvegarde/restauration, installation du VPS
+scripts/                 # Vérification du schéma, export OpenAPI, super admin
 ```
+
+## Rôles et périmètres
+
+| Rôle | Périmètre |
+|---|---|
+| `client` | Ses propres expéditions, factures, adresses, réclamations |
+| `agent_point` | Colis, encaissements et caisse de **son** point de collecte |
+| `coursier` | Enlèvements et livraisons qui lui sont **affectés**, ses encaissements |
+| `admin` · `super_admin` | Tout le back-office (`super_admin` : paramètres système) |
+
+Une ressource hors périmètre répond 404. Les routes publiques et leurs raisons
+sont listées dans `tests/security/routes.gardes.test.js`.
 
 ## Routes principales
 
@@ -173,7 +242,9 @@ deploy/
 | `/client/adresses` | Client | Carnet d'adresses |
 | `/client/paiements` | Client | Factures, règlements, encours |
 | `/client/reclamations` | Client | Ouverture et suivi des réclamations |
-| `/client/profil` | Client | Profil, préférences, avatar |
+| `/client/profil` | Client | Profil, préférences, avatar, vérification du téléphone |
+| `/client/compte` | Client | Export RGPD, suppression du compte |
+| `/app-version` · `/suppression-compte` | Public | Version de l’app mobile, demande de suppression (Google Play) |
 | `/client/notifications` | Client | Notifications |
 | `/admin/dashboard` | Admin | Statistiques globales et par pays |
 | `/admin/points-collecte` | Admin | Réseau de points de collecte |
@@ -194,10 +265,17 @@ deploy/
 | `/admin/parrainage` · `/admin/dashboard/kpis` | Admin | Parrainage et indicateurs commerciaux |
 | `/admin/parametres` | Super Admin | Réglages du moteur métier |
 | `/admin/activity-logs` | Admin | Journal d'activité |
+| `/admin/app-version` · `/admin/suppressions-compte` | Admin | Version de l’app, demandes de suppression |
 
 ## Documentation API
 
-Disponible en développement sur : `http://localhost:<PORT>/api-docs`
+Générée à partir des routes réellement montées (authentification, rôles et
+schémas Joi du code) :
+
+- développement : `http://localhost:<PORT>/api-docs` et `/api-docs.json` ;
+- fichier : `npm run docs:openapi` → `docs/openapi.json`.
+
+Chemin canonique : `/api/v1/…` ; les chemins sans préfixe restent servis.
 
 ## Licence
 

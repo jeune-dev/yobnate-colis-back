@@ -1,12 +1,12 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { CODES_PAYS } = require('../constants/pays');
+const { CODES_PAYS } = require('../config/pays');
 const {
   TYPES_POINT,
   SERVICES_POINT,
   JOURS_SEMAINE,
   HORAIRES_PAR_DEFAUT,
-} = require('../constants/reseau');
+} = require('../config/reseau');
 
 /**
  * Point de collecte du réseau — pièce maîtresse du dispositif Yobnate Express.

@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- script en ligne de commande : la sortie standard est son interface */
 /**
  * Script CLI pour promouvoir un utilisateur en super_admin.
  * Usage : node scripts/grant-superadmin.js email@example.com

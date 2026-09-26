@@ -1,4 +1,4 @@
-const { DECIMALES_DEVISE, SYMBOLES_DEVISE } = require('../constants/facturation');
+const { DECIMALES_DEVISE, SYMBOLES_DEVISE } = require('../config/facturation');
 
 /**
  * Arrondit un montant selon la précision de sa devise.

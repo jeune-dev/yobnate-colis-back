@@ -2,11 +2,13 @@ require('dotenv').config();
 
 const app = require('./app');
 const sequelize = require('./config/db');
-const logger = require('./config/logger');
+const redis = require('./config/redis');
+const logger = require('./utils/logger');
+const etatApplication = require('./utils/etatApplication');
+const { demarrerJobs, arreterJobs } = require('./jobs');
 
 // Charger toutes les associations de modèles
-require('./models/index');
-const { startPurgeJob } = require('./utils/purgeExpiredTokens');
+require('./models');
 
 process.on('unhandledRejection', (reason) => {
   logger.error('unhandledRejection', {
@@ -22,51 +24,67 @@ process.on('uncaughtException', (err) => {
 });
 
 const PORT = process.env.PORT || 5000;
-// MED-06 : adresse bind configurable via env (127.0.0.1 derrière un proxy, 0.0.0.0 en direct)
+// Adresse d'écoute : 127.0.0.1 derrière un proxy en direct sur l'hôte, 0.0.0.0 en conteneur
 const HOST = process.env.HOST || '0.0.0.0';
+/** Délai laissé aux requêtes en cours et au proxy pour constater l'arrêt (503 sur /health). */
+const DELAI_ARRET_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 10000;
 
 (async () => {
   try {
-    // En production : ne jamais altérer le schéma au démarrage — utiliser des migrations.
-    // En développement : on utilise sync() simple (création des tables manquantes).
-    //   NB : on n'utilise PAS { alter: true } car il génère un SQL invalide sur PostgreSQL
-    //   pour les colonnes `unique` (erreur "syntax error at or near UNIQUE", bug Sequelize 6).
-    //   Pour faire évoluer un schéma existant, passez par une migration ou recréez la base de dev.
+    // En production, le schéma appartient aux migrations (docker-entrypoint.sh,
+    // deploy.sh) : sync() y créait des tables hors migrations, en concurrence
+    // entre les workers PM2 du mode cluster, sans jamais ajouter de colonne.
+    // En développement, sync() crée les tables manquantes (jamais { alter: true },
+    // qui produit un SQL invalide sur PostgreSQL pour les colonnes `unique`).
     const isProd = process.env.NODE_ENV === 'production';
-    await sequelize.sync({ force: false });
+    if (isProd) {
+      await sequelize.authenticate();
+    } else {
+      await sequelize.sync({ force: false });
+    }
     logger.info(
       isProd
-        ? 'DB connectée (mode production — schéma non altéré)'
+        ? 'DB connectée (mode production — schéma géré par les migrations)'
         : 'DB synchronisée (création des tables manquantes)'
     );
 
-    startPurgeJob();
+    const taches = demarrerJobs();
 
     const server = app.listen(PORT, HOST, () => {
       logger.info(`Serveur démarré sur ${HOST}:${PORT} [${process.env.NODE_ENV || 'development'}]`);
     });
+    // Garde les connexions keep-alive plus longtemps que le proxy (nginx : 65 s)
+    server.keepAliveTimeout = 70000;
+    server.headersTimeout = 71000;
 
-    // Résilience : graceful shutdown sur SIGTERM et SIGINT
-    const shutdown = (signal) => {
+    // Arrêt gracieux : /health passe en 503, les requêtes en cours se terminent,
+    // puis la base et Redis sont fermés proprement.
+    let arretEnCours = false;
+    const arreter = (signal) => {
+      if (arretEnCours) return;
+      arretEnCours = true;
       logger.info(`Signal ${signal} reçu — arrêt en cours…`);
+      etatApplication.signalerArret();
+      arreterJobs(taches);
+
       server.close(async () => {
         try {
           await sequelize.close();
-          logger.info('Connexion DB fermée proprement');
+          if (redis) await redis.quit();
+          logger.info('Connexions fermées proprement');
         } catch (_err) {
-          /* ignore */
+          /* arrêt de toute façon */
         }
         process.exit(0);
       });
-      // Forcer l'arrêt après 10s si le serveur ne se ferme pas
       setTimeout(() => {
-        logger.error('Arrêt forcé après timeout de 10s');
+        logger.error(`Arrêt forcé après ${DELAI_ARRET_MS} ms`);
         process.exit(1);
-      }, 10000);
+      }, DELAI_ARRET_MS).unref();
     };
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => arreter('SIGTERM'));
+    process.on('SIGINT', () => arreter('SIGINT'));
   } catch (err) {
     logger.error('Erreur lors du démarrage', { message: err.message, stack: err.stack });
     process.exit(1);

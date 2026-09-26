@@ -12,8 +12,8 @@ const {
   Emballage,
 } = require('../models');
 const { bcryptConfig } = require('../config/security');
-const logger = require('../config/logger');
-const parametreService = require('../services/parametre.service');
+const logger = require('../utils/logger');
+const parametreService = require('../modules/parametre/service/parametre.service');
 
 /**
  * Amorçage des données de référence indispensables au démarrage du service :

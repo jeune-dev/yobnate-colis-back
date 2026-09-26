@@ -1,6 +1,6 @@
 const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
-const { TYPES_EMBALLAGE } = require('../constants/colis');
+const { TYPES_EMBALLAGE } = require('../config/colis');
 
 /**
  * Pièce physique d'une expédition.
