@@ -1056,10 +1056,20 @@ class ColisService {
 
   /** Export CSV de la sélection courante, plafonné pour rester exploitable. */
   static exporterCsv = async (filters = {}) => {
+    // Seules les colonnes exportées sont lues : une ligne complète pèse ~8 Ko (JSONB de
+    // tarification, photos…), soit ~80 Mo lus et désérialisés pour 10 000 lignes.
+    const champs = ColisService.COLONNES_EXPORT.map((c) => c.cle.split('.'));
     const colis = await Colis.findAll({
       where: ColisService.construireFiltres(filters),
-      include: ColisService.INCLUDE_LISTE,
-      order: [['createdAt', 'DESC']],
+      attributes: ['id', ...champs.filter((c) => c.length === 1).map(([c]) => c)],
+      include: ['service', 'villeDepart', 'villeArrivee'].map((as) => ({
+        association: as,
+        attributes: champs.filter(([rel]) => rel === as).map(([, c]) => c),
+      })),
+      order: [
+        ['createdAt', 'DESC'],
+        ['id', 'DESC'],
+      ],
       limit: 10000,
     });
 

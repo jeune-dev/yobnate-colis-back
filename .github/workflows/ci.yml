@@ -22,15 +22,76 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint
         run: npm run lint
 
+      - name: Format
+        run: npm run format:check
+
+  test:
+    name: Tests (unitaires, migrations, bout en bout)
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: yobnate
+          POSTGRES_PASSWORD: yobnate
+          POSTGRES_DB: yobnate_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U yobnate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      JWT_SECRET: ci_jwt_secret_0123456789abcdef0123456789
+      JWT_REFRESH_SECRET: ci_refresh_secret_0123456789abcdef012345
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Create databases
+        env:
+          PGPASSWORD: yobnate
+        run: |
+          psql -h localhost -U yobnate -d yobnate_ci -c 'CREATE DATABASE yobnate_migrations'
+          psql -h localhost -U yobnate -d yobnate_ci -c 'CREATE DATABASE yobnate_e2e'
+
+      # Base vierge : toutes les migrations, puis retour arrière et rejeu de la dernière
+      - name: Migrations
+        env:
+          DATABASE_URL: postgres://yobnate:yobnate@localhost:5432/yobnate_migrations
+        run: |
+          npm run migrate
+          npm run migrate:undo
+          npm run migrate
+
+      - name: Tests
+        env:
+          E2E_DATABASE_URL: postgres://yobnate:yobnate@localhost:5432/yobnate_e2e
+        run: npx jest --runInBand
+
   docker-build:
     name: Docker Build Check
     runs-on: ubuntu-latest
-    needs: lint
+    needs: test
 
     steps:
       - name: Checkout

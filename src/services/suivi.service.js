@@ -306,10 +306,15 @@ class SuiviService {
   /** Enregistre plusieurs événements sur des colis distincts (scan par lot). */
   static enregistrerEvenementsEnLot = async (colisIds, params, options = {}) => {
     const resultats = { traites: [], erreurs: [] };
+    // Un seul chargement pour tout le lot (au lieu d'une requête par colis) ; chaque
+    // événement reste appliqué sous son propre verrou, dans sa propre transaction.
+    const parId = new Map(
+      (await Colis.findAll({ where: { id: colisIds } })).map((colis) => [colis.id, colis])
+    );
 
     for (const colisId of colisIds) {
       try {
-        const colis = await Colis.findByPk(colisId);
+        const colis = parId.get(colisId);
         if (!colis) throw new NotFoundError(`Colis ${colisId} introuvable`);
         await SuiviService.enregistrerEvenement(colis, params, options);
         resultats.traites.push({ id: colis.id, reference: colis.reference });

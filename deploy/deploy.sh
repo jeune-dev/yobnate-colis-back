@@ -3,8 +3,9 @@
 # Usage : bash deploy/deploy.sh [--mode docker|pm2]
 set -euo pipefail
 
+# ${1:-} : sans argument, « set -u » faisait échouer le script sur "$1" non défini
 MODE="${1:-docker}"
-if [[ "$1" == "--mode" ]]; then MODE="$2"; fi
+if [[ "${1:-}" == "--mode" ]]; then MODE="${2:-docker}"; fi
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
@@ -22,7 +23,8 @@ if [[ "$MODE" == "docker" ]]; then
 
 elif [[ "$MODE" == "pm2" ]]; then
   echo "▶ Installation des dépendances…"
-  npm install --omit=dev
+  # Installation reproductible depuis le lockfile, sans les hooks de développement
+  npm ci --omit=dev --ignore-scripts
   echo "▶ Migrations…"
   npm run migrate
   echo "▶ Rechargement PM2…"

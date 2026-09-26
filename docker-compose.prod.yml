@@ -24,6 +24,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: always
+    # Laisse le temps à l'arrêt propre (serveur, envois en attente, pool) avant SIGKILL
+    stop_grace_period: 20s
     env_file:
       - .env.prod
     depends_on:
@@ -34,12 +36,16 @@ services:
     environment:
       NODE_ENV: production
       DB_HOST: postgres
+      # Tas V8 borné sous la limite mémoire du conteneur (512 Mo) : le GC se déclenche
+      # avant que le noyau ne tue le processus (OOM)
+      NODE_OPTIONS: --max-old-space-size=384
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 20s
+      # Les migrations (index CONCURRENTLY) s'exécutent au démarrage : délai de grâce large
+      start_period: 120s
     deploy:
       resources:
         limits:
