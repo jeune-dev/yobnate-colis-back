@@ -46,7 +46,11 @@ const updatePersonnelSchema = Joi.object({
   isActive: Joi.boolean(),
 }).min(1);
 
+/** Le pays est indispensable : sans lui la requête SQL échouait (500 au lieu de 400). */
+const coursiersDisponiblesQuery = Joi.object({ pays: pays.required() });
+
 module.exports = {
+  coursiersDisponiblesQuery,
   createAdminSchema,
   updateAdminSchema,
   conditionsCommercialesSchema,

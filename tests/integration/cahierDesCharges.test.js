@@ -454,4 +454,19 @@ describeDb('Cahier des charges — avis, FAQ, mesure, marge, stock (base réelle
       expect(p.tauxOccupation).toBe(90);
     });
   });
+
+  describe('Validation des requêtes du back-office', () => {
+    test('coursiers disponibles : pays manquant → 400 (et non 500), pays fourni → 200', async () => {
+      await request(app)
+        .get('/admin/personnel/coursiers-disponibles')
+        .set('Authorization', jetonAdmin)
+        .expect(400);
+      const res = await request(app)
+        .get('/admin/personnel/coursiers-disponibles')
+        .query({ pays: 'SN' })
+        .set('Authorization', jetonAdmin);
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data.coursiers)).toBe(true);
+    });
+  });
 });
