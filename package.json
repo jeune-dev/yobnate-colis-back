@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "private": true,
   "scripts": {
-    "start": "node src/server.js",
+    "start": "npm run migrate && node src/server.js",
+    "start:sans-migration": "node src/server.js",
     "dev": "nodemon src/server.js",
     "migrate": "sequelize-cli db:migrate",
     "migrate:undo": "sequelize-cli db:migrate:undo",
@@ -17,7 +18,7 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write \"src/**/*.js\"",
     "format:check": "prettier --check \"src/**/*.js\"",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "lint-staged": {
     "src/**/*.js": [
@@ -39,10 +40,11 @@
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.11",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^7.0.0",
+    "nodemailer": "^10.0.10",
     "pg": "^8.13.1",
     "pg-hstore": "^2.3.4",
     "sequelize": "^6.37.5",
+    "sequelize-cli": "^6.6.2",
     "streamifier": "^0.1.1",
     "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
@@ -56,7 +58,6 @@
     "lint-staged": "^17.3.0",
     "nodemon": "^3.1.9",
     "prettier": "^3.9.6",
-    "sequelize-cli": "^6.6.2",
     "supertest": "^7.2.2"
   },
   "engines": {

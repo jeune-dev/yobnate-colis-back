@@ -36,7 +36,13 @@ class FacturationService {
     const detail = colis.detailTarification || {};
     const lignes = [];
 
-    if (colis.lignesForfait?.length) {
+    if (colis.lignesForfait?.length && detail.ajustement) {
+      // Prix « à partir de » ajusté à la validation : les articles restent cités, au montant retenu
+      const articles = colis.lignesForfait
+        .map((l) => `${l.libelle}${l.quantite > 1 ? ` × ${l.quantite}` : ''}`)
+        .join(', ');
+      lignes.push({ libelle: `${articles} (tarif ajusté après étude)`, montant: montants.fret });
+    } else if (colis.lignesForfait?.length) {
       for (const l of colis.lignesForfait) {
         lignes.push({
           libelle: `${l.libelle}${l.quantite > 1 ? ` × ${l.quantite}` : ''} (forfait, livraison incluse)`,

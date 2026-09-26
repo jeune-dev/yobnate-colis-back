@@ -3,6 +3,7 @@ const { Facture, Paiement, Colis, Ville } = require('../../models');
 const { NotFoundError } = require('../../errors/AppError');
 const { paginate, paginateResult } = require('../../utils/paginate');
 const parametreService = require('../parametre.service');
+const facturationService = require('../facturation.service');
 const documents = require('../../utils/documents');
 const { METHODES_PAR_PAYS } = require('../../constants/facturation');
 
@@ -26,6 +27,16 @@ class PaiementService {
     { model: Paiement, as: 'paiements' },
   ];
 
+  /** Facture telle que présentée au client, avec son lien de paiement tant qu'elle est due. */
+  static versClient = (facture, parametres) => ({
+    ...facture.toJSON(),
+    soldeDu: facture.soldeDu,
+    estEchue: facture.estEchue,
+    lienPaiement: ['en_attente', 'partiellement_payee'].includes(facture.statut)
+      ? facturationService.lienPaiement(facture, parametres)
+      : null,
+  });
+
   static getMesFactures = async (userId, filters = {}, pagination = {}) => {
     const where = { userId };
     if (filters.statut) where.statut = filters.statut;
@@ -34,6 +45,7 @@ class PaiementService {
     }
 
     const { limit, offset } = paginate(pagination);
+    const parametres = await parametreService.chargerTous();
     const { rows, count } = await Facture.findAndCountAll({
       where,
       include: PaiementService.INCLUDE_DETAIL,
@@ -45,7 +57,7 @@ class PaiementService {
 
     return {
       message: 'Vos factures',
-      factures: rows.map((f) => ({ ...f.toJSON(), soldeDu: f.soldeDu, estEchue: f.estEchue })),
+      factures: rows.map((f) => PaiementService.versClient(f, parametres)),
       pagination: paginateResult(count, pagination.page, pagination.limit),
     };
   };
@@ -61,9 +73,10 @@ class PaiementService {
 
   static getFactureById = async (userId, factureId) => {
     const facture = await PaiementService.chargerFactureDuClient(userId, factureId);
+    const parametres = await parametreService.chargerTous();
     return {
       message: 'Détail de la facture',
-      facture: { ...facture.toJSON(), soldeDu: facture.soldeDu, estEchue: facture.estEchue },
+      facture: PaiementService.versClient(facture, parametres),
     };
   };
 

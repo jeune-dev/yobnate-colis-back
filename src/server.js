@@ -7,6 +7,7 @@ const logger = require('./config/logger');
 // Charger toutes les associations de modèles
 require('./models/index');
 const { startPurgeJob } = require('./utils/purgeExpiredTokens');
+const { demarrerTaches } = require('./jobs/taches');
 
 process.on('unhandledRejection', (reason) => {
   logger.error('unhandledRejection', {
@@ -41,6 +42,8 @@ const HOST = process.env.HOST || '0.0.0.0';
     );
 
     startPurgeJob();
+    // Propositions expirées, délais d'étude, tournées passées, relances de factures…
+    demarrerTaches();
 
     const server = app.listen(PORT, HOST, () => {
       logger.info(`Serveur démarré sur ${HOST}:${PORT} [${process.env.NODE_ENV || 'development'}]`);

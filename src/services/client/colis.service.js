@@ -958,8 +958,11 @@ class ColisService {
    * Expéditions dont l'utilisateur connecté est le destinataire (rapprochement
    * par numéro de téléphone, aucun lien `userId` n'existe côté destinataire).
    */
-  static getMesReceptions = async (telephone, filters = {}, pagination = {}) => {
-    const where = { destinataireTelephone: telephone };
+  static getMesReceptions = async (userId, filters = {}, pagination = {}) => {
+    // Le jeton d'accès ne porte que l'identifiant : le téléphone est lu en base
+    const utilisateur = await User.findByPk(userId, { attributes: ['telephone'] });
+    if (!utilisateur) throw new NotFoundError('Utilisateur introuvable');
+    const where = { destinataireTelephone: utilisateur.telephone };
     if (filters.statut) where.statut = filters.statut;
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
@@ -1028,6 +1031,24 @@ class ColisService {
    * la tournée de collecte, stock d'emballages.
    */
   static liberRessources = async (colis, transaction = null) => {
+    // Première expédition d'un filleul annulée : bonus et récompense du parrain sont repris
+    if (Number(colis.detailTarification?.montants?.remiseParrainage || 0) > 0) {
+      const [filleul, parametres] = await Promise.all([
+        User.findByPk(colis.userId, { attributes: ['id', 'parrainId'], transaction }),
+        parametreService.chargerTous(),
+      ]);
+      if (filleul?.parrainId) {
+        const parrain = await User.findByPk(filleul.parrainId, { transaction });
+        const gain = Number(parametres.parrainage_gain_parrain_eur || 0);
+        if (parrain) {
+          await parrain.update(
+            { creditParrainage: Math.max(0, Number(parrain.creditParrainage) - gain) },
+            { transaction }
+          );
+        }
+        await filleul.update({ parrainageRecompense: false }, { transaction });
+      }
+    }
     if (Number(colis.creditParrainageUtilise) > 0) {
       await User.increment('creditParrainage', {
         by: Number(colis.creditParrainageUtilise),

@@ -4,7 +4,8 @@ FROM node:22-slim AS deps
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+# --ignore-scripts : le hook « prepare » (husky) ne sert qu'au développement
+RUN npm ci --omit=dev --ignore-scripts
 
 # ── Stage 2 : image finale légère ─────────────────────────────────────────────
 FROM node:22-slim
@@ -27,4 +28,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
-CMD ["node", "src/server.js"]
+# Migrations (additives) puis démarrage : le schéma est à jour à chaque déploiement
+CMD ["npm", "start"]

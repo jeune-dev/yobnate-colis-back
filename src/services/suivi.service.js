@@ -218,12 +218,14 @@ class SuiviService {
           entite: 'Colis',
           entiteId: colis.id,
           lienCible: `/colis/${colis.id}`,
-          email: client?.notificationsEmail
-            ? () =>
-                codeEvenement === 'DISPO'
-                  ? sendColisDisponibleEmail(client.email, colis, point, client.prenom)
-                  : sendColisStatutEmail(client, colis, evenement)
-            : null,
+          email:
+            client?.notificationsEmail &&
+            !SuiviService.EVENEMENTS_EMAIL_DEDIE.includes(codeEvenement)
+              ? () =>
+                  codeEvenement === 'DISPO'
+                    ? sendColisDisponibleEmail(client.email, colis, point, client.prenom)
+                    : sendColisStatutEmail(client, colis, evenement)
+              : null,
         }),
         { colisId: colis.id }
       );
@@ -256,6 +258,18 @@ class SuiviService {
     const { facture, creee } = await facturationService.emettreFactureColis(colis, { auteurId });
     if (creee) await facturationService.envoyerLienPaiement(colis, facture);
   };
+
+  /**
+   * Événements qui déclenchent déjà leur propre courriel (accusé de réception,
+   * validation, proposition, refus, facture) : pas de second courriel de statut.
+   */
+  static EVENEMENTS_EMAIL_DEDIE = [
+    'SOUMIS',
+    'VALIDE',
+    'DEVIS_PROPOSE',
+    'DEVIS_ACCEPTE',
+    'DEMANDE_REFUSEE',
+  ];
 
   /** Enregistre plusieurs événements sur des colis distincts (scan par lot). */
   static enregistrerEvenementsEnLot = async (colisIds, params, options = {}) => {

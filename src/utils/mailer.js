@@ -48,6 +48,18 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
   </table>
 </body></html>`;
 
+/**
+ * Le SMTP est-il réellement configuré ? Tant qu'il ne l'est pas (valeurs vides
+ * ou d'exemple), aucun courriel ne peut partir : les parcours qui en dépendent,
+ * comme la confirmation d'email, doivent alors se dégrader proprement.
+ */
+const smtpConfigure = () => {
+  const hote = String(process.env.SMTP_HOST || '').trim();
+  const utilisateur = String(process.env.SMTP_USER || '').trim();
+  const exemple = (v) => !v || /A_RENSEIGNER|example\.com|^your_/i.test(v);
+  return !exemple(hote) && !exemple(utilisateur);
+};
+
 const sendMail = async ({ to, subject, html, texte = null }) => {
   if (!to) return;
   try {
@@ -351,6 +363,7 @@ const envoyerModele = async (code, to, variables = {}) => {
 
 module.exports = {
   sendMail,
+  smtpConfigure,
   gabarit,
   MODELES_PAR_DEFAUT,
   envoyerModele,

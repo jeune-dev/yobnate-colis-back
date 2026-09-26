@@ -15,6 +15,7 @@ const {
   sendOtpEmail,
   sendBienvenueEmail,
   envoyerModele,
+  smtpConfigure,
   URL_PUBLIQUE,
 } = require('../utils/mailer');
 const { genererCodeParrainage } = require('../utils/referenceGenerator');
@@ -189,7 +190,8 @@ class AuthService {
     if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé');
     if (user.role === 'client' && !user.emailVerifie) {
       const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
-      if (obligatoire) {
+      // Sans SMTP configuré, le lien ne peut pas être reçu : la vérification ne bloque pas
+      if (obligatoire && smtpConfigure()) {
         throw new ForbiddenError(
           'Adresse email non confirmée : cliquez sur le lien reçu par email (ou demandez-en un nouveau).'
         );

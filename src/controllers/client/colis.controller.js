@@ -30,7 +30,7 @@ exports.getMes = asyncHandler(async (req, res) => {
 });
 
 exports.getRecus = asyncHandler(async (req, res) => {
-  const result = await service.getMesReceptions(req.user.telephone, req.query, req.query);
+  const result = await service.getMesReceptions(req.user.id, req.query, req.query);
   return ok(res, { colis: result.colis, pagination: result.pagination }, result.message);
 });
 

@@ -1,0 +1,371 @@
+/**
+ * Parcours complets contre une vraie base PostgreSQL : comptes, catégories 1, 2 et 3,
+ * conteneur, inventaire, tournées, et tâches automatiques.
+ *
+ * La base indiquée est ENTIÈREMENT VIDÉE puis reconstruite : n'utiliser qu'une base
+ * dédiée aux tests. Exécution :
+ *   E2E_DATABASE_URL=postgres://user:mdp@localhost:5432/yobnate_e2e npx jest tests/e2e
+ * Sans E2E_DATABASE_URL, la suite est ignorée.
+ */
+const URL_BASE = process.env.E2E_DATABASE_URL;
+const decrire = URL_BASE ? describe : describe.skip;
+
+process.env.DATABASE_URL = URL_BASE || 'postgres://ignore:ignore@localhost:1/ignore';
+process.env.NODE_ENV = 'test';
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'j'.repeat(40);
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'r'.repeat(40);
+process.env.SMTP_HOST = 'smtp.test.local';
+process.env.SMTP_USER = 'test';
+process.env.APP_PUBLIC_URL = 'https://app.test';
+
+// Services externes interceptés : mockEmails capturés, téléversements simulés
+const mockEmails = [];
+jest.mock('nodemailer', () => ({
+  createTransport: () => ({ sendMail: async (m) => mockEmails.push(m) }),
+}));
+jest.mock('../../src/utils/uploadService', () => {
+  let n = 0;
+  return {
+    uploadToCloudinary: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `f${n}` }),
+    deleteFromCloudinary: async () => {},
+  };
+});
+
+const request = require('supertest');
+const bcrypt = require('bcrypt');
+
+jest.setTimeout(60000);
+
+decrire('Parcours complets (base réelle)', () => {
+  let app;
+  let m;
+  let taches;
+  const donnees = {};
+  const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 1, 0, 0, 1]);
+  const auth = (jeton) => ({ Authorization: `Bearer ${jeton}` });
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+  const dernierEmail = (to, motif) =>
+    [...mockEmails].reverse().find((e) => e.to === to && (!motif || motif.test(e.subject)));
+
+  const declarer = (jeton, champs, nbPhotos) => {
+    let req = request(app).post('/client/colis').set(auth(jeton));
+    for (const [k, v] of Object.entries(champs)) {
+      req = req.field(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+    }
+    for (let i = 0; i < nbPhotos; i += 1) {
+      req = req.attach('photos', JPEG, { filename: `p${i}.jpg`, contentType: 'image/jpeg' });
+    }
+    return req;
+  };
+
+  const inscrire = async (champs) => {
+    const r = await request(app).post('/auth/register').send(champs);
+    expect(r.status).toBe(201);
+    await attendre(30);
+    const jeton = dernierEmail(champs.email, /Confirmez/)?.html.match(
+      /(?:token=|verify-email\/)([a-f0-9]{64})/
+    )?.[1];
+    expect(jeton).toBeDefined();
+    return jeton;
+  };
+
+  beforeAll(async () => {
+    m = require('../../src/models');
+    await m.sequelize.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
+    await m.sequelize.sync();
+    await require('../../src/services/parametre.service').initialiser();
+    app = require('../../src/app');
+    taches = require('../../src/jobs/taches');
+
+    // Référentiel minimal : villes, service maritime, point de dépôt, grille, admin
+    const [paris, dakar, thies] = await m.Ville.bulkCreate([
+      { nom: 'Paris', pays: 'FR' },
+      { nom: 'Dakar', pays: 'SN', zoneTarifDakar: true },
+      { nom: 'Thiès', pays: 'SN' },
+    ]);
+    const std = await m.ServiceExpedition.create({
+      code: 'STD',
+      nom: 'Standard',
+      modeTransport: 'maritime',
+      delaiMinJours: 15,
+      delaiMaxJours: 30,
+      coefficientVolumetrique: 5000,
+      poidsMinKg: 0.5,
+      poidsMaxKg: 100,
+      isActive: true,
+    });
+    const point = await m.PointCollecte.create({
+      code: 'FR-PAR-01',
+      nom: 'Agence Paris',
+      type: 'agence',
+      pays: 'FR',
+      villeId: paris.id,
+      adresse: '10 rue de la Paix',
+      telephone: '+33100000002',
+      services: ['depot', 'retrait', 'paiement'],
+      visiblePublic: true,
+      isActive: true,
+    });
+    const articles = await m.ArticleTarif.bulkCreate([
+      {
+        code: 'DOC',
+        libelle: 'Enveloppe',
+        categorie: 'documents',
+        prixDakar: 25,
+        prixAutresRegions: 30,
+        poidsMaxKg: 0.5,
+      },
+      {
+        code: 'VALISE-23',
+        libelle: 'Valise 23 kg',
+        categorie: 'colis_moyen',
+        prixDakar: 40,
+        prixAutresRegions: 50,
+        poidsMaxKg: 23,
+      },
+    ]);
+    await m.User.create({
+      nom: 'Admin',
+      prenom: 'Test',
+      email: 'admin@test.fr',
+      password: await bcrypt.hash('Admin_Test_1234!', 4),
+      telephone: '+221770000001',
+      role: 'super_admin',
+      emailVerifie: true,
+    });
+    Object.assign(donnees, { paris, dakar, thies, std, point, valise: articles[1] });
+
+    const r = await request(app)
+      .post('/auth/login')
+      .send({ identifiant: 'admin@test.fr', password: 'Admin_Test_1234!' });
+    donnees.admin = r.body.data.accessToken;
+  });
+
+  afterAll(async () => {
+    if (m) await m.sequelize.close();
+  });
+
+  test('simulation sans compte : forfait Dakar et autres régions', async () => {
+    const devis = (villeArriveeId) =>
+      request(app)
+        .post('/public/devis')
+        .send({
+          villeDepartId: donnees.paris.id,
+          villeArriveeId,
+          categorie: 'colis_moyen',
+          articles: [{ articleTarifId: donnees.valise.id }],
+        });
+    expect((await devis(donnees.dakar.id)).body.data.devis.offres[0].montants.total).toBe(40);
+    expect((await devis(donnees.thies.id)).body.data.devis.offres[0].montants.total).toBe(50);
+  });
+
+  test('comptes : confirmation d’email obligatoire, connexion par téléphone, parrainage', async () => {
+    const jetonA = await inscrire({
+      nom: 'Ndiaye',
+      prenom: 'Papa',
+      email: 'parrain@test.fr',
+      telephone: '+33612340001',
+      password: 'Motdepasse1!',
+      pays: 'FR',
+    });
+    let r = await request(app)
+      .post('/auth/login')
+      .send({ identifiant: 'parrain@test.fr', password: 'Motdepasse1!' });
+    expect(r.status).toBe(403);
+    await request(app).post('/auth/verify-email').send({ token: jetonA }).expect(200);
+    r = await request(app)
+      .post('/auth/login')
+      .send({ identifiant: '+33612340001', password: 'Motdepasse1!' });
+    expect(r.status).toBe(200);
+    donnees.parrain = r.body.data.accessToken;
+    const code = (await request(app).get('/client/profil/parrainage').set(auth(donnees.parrain)))
+      .body.data.parrainage.code;
+
+    const jetonB = await inscrire({
+      nom: 'Diop',
+      prenom: 'Awa',
+      email: 'filleul@test.fr',
+      telephone: '+33612340002',
+      password: 'Motdepasse1!',
+      pays: 'FR',
+      codeParrainage: code,
+    });
+    await request(app).post('/auth/verify-email').send({ token: jetonB }).expect(200);
+    r = await request(app)
+      .post('/auth/login')
+      .send({ identifiant: 'filleul@test.fr', password: 'Motdepasse1!' });
+    donnees.filleul = r.body.data.accessToken;
+  });
+
+  const base = () => ({
+    serviceId: donnees.std.id,
+    expediteurNom: 'Awa Diop',
+    expediteurTelephone: '+33612340002',
+    villeDepartId: donnees.paris.id,
+    destinataireNom: 'Moussa Fall',
+    destinataireTelephone: '+221771234567',
+    villeArriveeId: donnees.dakar.id,
+    modeLivraison: 'livraison_domicile',
+    adresseLivraison: 'Rue 10, Médina',
+    conditionsAcceptees: true,
+  });
+  const adresseSn = {
+    destinataireQuartier: 'Médina',
+    destinataireArrondissement: 'Dakar Plateau',
+    destinataireDepartement: 'Dakar',
+    destinatairePointRepere: 'Face à la mosquée',
+  };
+
+  test('catégorie 1 : facture immédiate, remise filleul, crédit du parrain repris à l’annulation', async () => {
+    const r = await declarer(
+      donnees.filleul,
+      { ...base(), categorie: 'documents', typeDocument: 'Acte', modeDepot: 'envoi_postal' },
+      1
+    );
+    expect(r.status).toBe(201);
+    expect(r.body.data.colis.reference).toMatch(/^PNCO\d{10}ADI01$/);
+    expect(Number(r.body.data.colis.montantTotal)).toBe(22.5);
+    expect(r.body.data.facture).toBeTruthy();
+
+    const parrain = await m.User.findOne({ where: { email: 'parrain@test.fr' } });
+    expect(Number(parrain.creditParrainage)).toBe(5);
+
+    await request(app)
+      .patch(`/client/colis/${r.body.data.colis.id}/annuler`)
+      .set(auth(donnees.filleul))
+      .send({})
+      .expect(200);
+    await parrain.reload();
+    expect(Number(parrain.creditParrainage)).toBe(0);
+  });
+
+  test('catégorie 2 : adresse sénégalaise bloquante, validation, facture à la réception, conteneur et inventaire', async () => {
+    const champs = {
+      ...base(),
+      categorie: 'colis_moyen',
+      etatMarchandise: 'neuf',
+      valeurDeclaree: 300,
+      articles: [{ articleTarifId: donnees.valise.id }],
+      articlesDouane: [
+        { designation: 'Chaussures', quantite: 4, valeurUnitaire: 50, etat: 'neuf' },
+      ],
+      modeDepot: 'point_collecte',
+      pointCollecteDepartId: donnees.point.id,
+    };
+    expect((await declarer(donnees.filleul, champs, 3)).status).toBe(400);
+    const r = await declarer(donnees.filleul, { ...champs, ...adresseSn }, 3);
+    expect(r.status).toBe(201);
+    const id = r.body.data.colis.id;
+    expect(r.body.data.colis.statut).toBe('en_attente_validation');
+
+    await request(app)
+      .post(`/admin/colis/${id}/valider`)
+      .set(auth(donnees.admin))
+      .send({})
+      .expect(200);
+    await request(app)
+      .post(`/admin/colis/${id}/evenements`)
+      .set(auth(donnees.admin))
+      .send({ codeEvenement: 'RECEPTION', pointCollecteId: donnees.point.id })
+      .expect(200);
+    await attendre(200);
+    expect(await m.Facture.findOne({ where: { colisId: id } })).toBeTruthy();
+
+    const recus = await request(app).get('/client/colis/recus').set(auth(donnees.filleul));
+    expect(recus.status).toBe(200);
+
+    const rot = await request(app)
+      .post('/admin/conteneurs')
+      .set(auth(donnees.admin))
+      .send({
+        modeTransport: 'maritime',
+        paysDepart: 'FR',
+        paysArrivee: 'SN',
+        dateDepartPrevue: '2026-10-10T08:00:00Z',
+        dateArriveePrevue: '2026-11-01T08:00:00Z',
+      });
+    const rotationId = rot.body.data.rotation.id;
+    await request(app)
+      .post(`/admin/conteneurs/${rotationId}/colis`)
+      .set(auth(donnees.admin))
+      .send({ colisIds: [id] })
+      .expect(200);
+    const inv = await request(app)
+      .get(`/admin/inventaire?rotationId=${rotationId}`)
+      .set(auth(donnees.admin));
+    expect(inv.body.data.inventaire.synthese).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ produit: 'Chaussures', quantite: 4, etat: 'neuf' }),
+      ])
+    );
+  });
+
+  test('catégorie 3 : proposition acceptée, et proposition expirée clôturée par la tâche automatique', async () => {
+    const champs = {
+      ...base(),
+      ...adresseSn,
+      categorie: 'colis_xxl',
+      description: 'Réfrigérateur',
+      pieces: [{ poidsKg: 90, longueurCm: 180, largeurCm: 80, hauteurCm: 70 }],
+      modeDepot: 'point_collecte',
+      pointCollecteDepartId: donnees.point.id,
+    };
+    const accepte = (await declarer(donnees.parrain, champs, 1)).body.data.colis;
+    await request(app)
+      .post(`/admin/colis/${accepte.id}/proposition`)
+      .set(auth(donnees.admin))
+      .send({ montantTotal: 180 })
+      .expect(200);
+    const r = await request(app)
+      .post(`/client/colis/${accepte.id}/proposition/accepter`)
+      .set(auth(donnees.parrain));
+    expect(Number(r.body.data.facture.montantTotal)).toBe(180);
+
+    const expire = (await declarer(donnees.parrain, champs, 1)).body.data.colis;
+    await request(app)
+      .post(`/admin/colis/${expire.id}/proposition`)
+      .set(auth(donnees.admin))
+      .send({ montantTotal: 150 })
+      .expect(200);
+    await m.Colis.update(
+      { propositionExpireAt: new Date(Date.now() - 1000) },
+      { where: { id: expire.id } }
+    );
+    expect(await taches.expirerPropositions()).toBe(1);
+    expect((await m.Colis.findByPk(expire.id)).statut).toBe('refuse');
+  });
+
+  test('tâches automatiques : études en retard, tournées passées, relances', async () => {
+    const champs = {
+      ...base(),
+      ...adresseSn,
+      categorie: 'colis_moyen',
+      etatMarchandise: 'neuf',
+      valeurDeclaree: 100,
+      articles: [{ articleTarifId: donnees.valise.id }],
+      modeDepot: 'point_collecte',
+      pointCollecteDepartId: donnees.point.id,
+    };
+    const c = (await declarer(donnees.parrain, champs, 3)).body.data.colis;
+    await m.Colis.update(
+      { dateLimiteEtude: new Date(Date.now() - 60 * 1000) },
+      { where: { id: c.id } }
+    );
+    expect(await taches.alerterEtudesEnRetard()).toBe(1);
+
+    await m.TourneeCollecte.create({
+      reference: 'TRN-TEST-1',
+      titre: 'Passée',
+      pays: 'FR',
+      dateCollecte: '2020-01-01',
+      statut: 'ouverte',
+    });
+    expect(await taches.cloturerTourneesPassees()).toBe(1);
+
+    const facture = await m.Facture.findOne({ where: { statut: 'en_attente' } });
+    await facture.update({
+      dateLimitePaiement: new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10),
+    });
+    expect(await taches.relancerFacturesEchues()).toBeGreaterThanOrEqual(1);
+  });
+});

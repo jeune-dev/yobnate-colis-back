@@ -200,6 +200,7 @@ class VilleService {
         'region',
         'codesPostaux',
         'isZoneEloignee',
+        'zoneTarifDakar',
         'livraisonDomicileDisponible',
         'enlevementDomicileDisponible',
       ],
