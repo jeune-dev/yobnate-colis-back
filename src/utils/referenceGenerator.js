@@ -1,4 +1,5 @@
 const sequelize = require('../config/db');
+const { apresCommit } = require('./transactions');
 
 /**
  * Génération des références métier.
@@ -20,12 +21,23 @@ const nomSequence = (prefixe, suffixe = '') =>
  */
 const sequencesConnues = new Set();
 
-const creerSequence = async (nom) => {
+const creerSequence = async (nom, transaction = null) => {
   if (sequencesConnues.has(nom)) return;
+  const sql = `CREATE SEQUENCE IF NOT EXISTS "${nom}" START 1`;
   try {
-    // Hors de la transaction appelante : idempotent, et une collision entre deux
-    // créations simultanées ne doit pas annuler la transaction métier
-    await sequelize.query(`CREATE SEQUENCE IF NOT EXISTS "${nom}" START 1`);
+    if (transaction) {
+      // Dans la transaction appelante, sous point de sauvegarde : prendre une seconde
+      // connexion pendant que la transaction tient la sienne pouvait épuiser le pool
+      // (première génération de références après un redémarrage, sous concurrence).
+      // Une collision n'annule que le point de sauvegarde.
+      await sequelize.transaction({ transaction }, (sp) =>
+        sequelize.query(sql, { transaction: sp })
+      );
+      // La séquence n'existe pour de bon qu'une fois la transaction validée
+      apresCommit(transaction, () => sequencesConnues.add(nom));
+      return;
+    }
+    await sequelize.query(sql);
   } catch (err) {
     // 23505 / 42P07 : créée au même instant par une autre connexion
     if (!['23505', '42P07'].includes(err.parent?.code)) throw err;
@@ -34,7 +46,7 @@ const creerSequence = async (nom) => {
 };
 
 const prochaineValeur = async (nom, transaction = null) => {
-  await creerSequence(nom);
+  await creerSequence(nom, transaction);
   const options = transaction ? { transaction } : {};
   const [[{ nextval }]] = await sequelize.query(`SELECT nextval('"${nom}"') AS nextval`, options);
   return Number(nextval);

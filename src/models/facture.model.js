@@ -1,4 +1,4 @@
-const { DataTypes, Model } = require('sequelize');
+const { DataTypes, Model, Op } = require('sequelize');
 const sequelize = require('../config/db');
 const { DEVISES, STATUTS_FACTURE } = require('../config/facturation');
 const { PAYEURS } = require('../config/colis');
@@ -66,6 +66,8 @@ Facture.init(
     /** Mentions légales et coordonnées bancaires figées à l'émission. */
     mentions: { type: DataTypes.STRING(1000), allowNull: true },
     emisePar: { type: DataTypes.UUID, allowNull: true },
+    /** Avoir : facture qu'il compense (le cumul des avoirs ne peut dépasser son total). */
+    factureOrigineId: { type: DataTypes.UUID, allowNull: true },
   },
   {
     sequelize,
@@ -78,6 +80,13 @@ Facture.init(
       { fields: ['statut'] },
       { fields: ['userId', 'statut'] },
       { fields: ['dateLimitePaiement'] },
+      // Liste et export du back-office, du plus récent au plus ancien
+      { name: 'factures_created_at', fields: ['createdAt'] },
+      {
+        name: 'factures_facture_origine_id',
+        fields: ['factureOrigineId'],
+        where: { factureOrigineId: { [Op.ne]: null } },
+      },
     ],
   }
 );

@@ -1,7 +1,10 @@
 const router = require('express').Router();
 const ctrl = require('../controller/public.controller');
 const validate = require('../../../middlewares/validate.middleware');
-const { authRateLimit, mesureRateLimit } = require('../../../middlewares/rateLimit.middleware');
+const {
+  suiviPublicRateLimit,
+  mesureRateLimit,
+} = require('../../../middlewares/rateLimit.middleware');
 const authOptionnelle = require('../../../middlewares/authOptionnelle.middleware');
 const avisCtrl = require('../../avis/controller/avis.controller');
 const faqCtrl = require('../../faq/controller/faq.controller');
@@ -24,7 +27,12 @@ const {
  */
 
 // Le numéro de suivi suffit à consulter l'avancement : débit limité contre l'énumération
-router.get('/suivi/:reference', authRateLimit, validate(referenceParam, 'params'), ctrl.suivi);
+router.get(
+  '/suivi/:reference',
+  suiviPublicRateLimit,
+  validate(referenceParam, 'params'),
+  ctrl.suivi
+);
 router.get('/points-collecte', validate(rechercheGeoSchema, 'query'), ctrl.points);
 router.get('/services', ctrl.services);
 router.get('/villes', ctrl.villes);

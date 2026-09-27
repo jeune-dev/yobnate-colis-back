@@ -1,5 +1,73 @@
 const multer = require('multer');
 const { uploadConfig } = require('../config/security');
+const { ServiceUnavailableError } = require('../errors/AppError');
+
+/**
+ * Réceptions de fichiers simultanées, par processus.
+ *
+ * multer garde chaque fichier en mémoire jusqu'à la fin de la requête (le fichier
+ * est ensuite contrôlé puis envoyé à Cloudinary). Sans plafond, la mémoire croissait
+ * avec le nombre d'envois en cours : 30 déclarations simultanées de 20 Mo portaient
+ * le processus à 568 Mo, au-delà de la limite de 512 Mo du conteneur de production
+ * (arrêt brutal par le noyau, toutes les requêtes en cours perdues).
+ *
+ * Au-delà de UPLOAD_CONCURRENCE réceptions (4 par défaut, soit ~100 Mo au pire derrière
+ * Nginx qui plafonne un corps à 25 Mo), les suivantes attendent leur tour, au plus
+ * UPLOAD_ATTENTE_MS (30 s), puis reçoivent un 503 que l'application peut réessayer.
+ */
+const MAX_RECEPTIONS = Number(process.env.UPLOAD_CONCURRENCE) || 4;
+const ATTENTE_MAX_MS = Number(process.env.UPLOAD_ATTENTE_MS) || 30000;
+let receptionsEnCours = 0;
+const enAttente = [];
+
+const libererPlace = () => {
+  receptionsEnCours -= 1;
+  const suivant = enAttente.shift();
+  if (suivant) suivant();
+};
+
+const limiterReceptions = (req, res, next) => {
+  const demarrer = () => {
+    receptionsEnCours += 1;
+    let libere = false;
+    const liberer = () => {
+      if (libere) return;
+      libere = true;
+      libererPlace();
+    };
+    res.once('finish', liberer);
+    res.once('close', liberer);
+    next();
+  };
+  if (receptionsEnCours < MAX_RECEPTIONS) return demarrer();
+
+  const tour = () => {
+    clearTimeout(minuteur);
+    req.off('close', abandon);
+    demarrer();
+  };
+  const retirer = () => {
+    const position = enAttente.indexOf(tour);
+    if (position >= 0) enAttente.splice(position, 1);
+  };
+  // Client parti pendant l'attente : sa place dans la file est rendue
+  const abandon = () => {
+    clearTimeout(minuteur);
+    retirer();
+  };
+  const minuteur = setTimeout(() => {
+    retirer();
+    req.off('close', abandon);
+    next(
+      new ServiceUnavailableError('Trop d’envois de fichiers en cours, réessayez dans un instant')
+    );
+  }, ATTENTE_MAX_MS);
+  req.once('close', abandon);
+  enAttente.push(tour);
+};
+
+/** Un middleware multer précédé du plafond de réceptions simultanées. */
+const avecPlafond = (middleware) => [limiterReceptions, middleware];
 
 // Signatures binaires (magic bytes) pour valider le vrai type de fichier,
 // indépendamment de l'extension ou du mimetype déclaré par le client.
@@ -36,11 +104,16 @@ const fileFilter = (req, file, cb) => {
   cb(null, true);
 };
 
-const upload = multer({
+const multerStandard = multer({
   storage,
   limits: { fileSize: uploadConfig.maxFileSize },
   fileFilter,
 });
+const upload = {
+  single: (...args) => avecPlafond(multerStandard.single(...args)),
+  array: (...args) => avecPlafond(multerStandard.array(...args)),
+  fields: (...args) => avecPlafond(multerStandard.fields(...args)),
+};
 
 /**
  * Formulaire d'expédition : photos du colis et, en option, un message vocal
@@ -62,22 +135,30 @@ const TYPES_AUDIO = [
   'video/mp4', // certains enregistreurs Android étiquettent ainsi un m4a
 ];
 
-const uploadColis = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024, files: 11 },
-  fileFilter: (req, file, cb) => {
-    const autorises =
-      file.fieldname === 'vocal'
-        ? TYPES_AUDIO
-        : uploadConfig.allowedMimeTypes.filter((t) => t.startsWith('image/'));
-    if (!autorises.includes(file.mimetype)) {
-      return cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
-    }
-    cb(null, true);
-  },
-}).fields([
-  { name: 'photos', maxCount: 10 },
-  { name: 'vocal', maxCount: 1 },
-]);
+const uploadColis = avecPlafond(
+  multer({
+    storage,
+    limits: { fileSize: 10 * 1024 * 1024, files: 11 },
+    fileFilter: (req, file, cb) => {
+      const autorises =
+        file.fieldname === 'vocal'
+          ? TYPES_AUDIO
+          : uploadConfig.allowedMimeTypes.filter((t) => t.startsWith('image/'));
+      if (!autorises.includes(file.mimetype)) {
+        return cb(new multer.MulterError('LIMIT_UNEXPECTED_FILE', file.fieldname));
+      }
+      cb(null, true);
+    },
+  }).fields([
+    { name: 'photos', maxCount: 10 },
+    { name: 'vocal', maxCount: 1 },
+  ])
+);
 
-module.exports = { upload, uploadColis, isAllowedFile, isAllowedAudio };
+module.exports = {
+  upload,
+  uploadColis,
+  isAllowedFile,
+  isAllowedAudio,
+  etatReceptions: () => ({ enCours: receptionsEnCours, enAttente: enAttente.length }),
+};

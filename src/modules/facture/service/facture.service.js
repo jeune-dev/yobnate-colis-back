@@ -1,7 +1,7 @@
 const { Op } = require('sequelize');
 const { sequelize, Facture, Colis, User, Paiement, Ville } = require('../../../models');
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
-const { paginate, paginateResult } = require('../../../utils/paginate');
+const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -91,13 +91,14 @@ class FactureService {
 
   static getAllFactures = async (filters = {}, pagination = {}) => {
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Facture.findAndCountAll({
+    // Comptage sans jointure puis identifiants de la page (voir utils/paginate) :
+    // COUNT(DISTINCT) joignait colis, villes, comptes et paiements sur toute la table.
+    const { rows, count } = await listerPagine(Facture, {
       where: FactureService.construireFiltres(filters),
       include: FactureService.INCLUDE_DETAIL,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -229,12 +230,28 @@ class FactureService {
     }
 
     const avoir = await sequelize.transaction(async (t) => {
+      // Facture d'origine verrouillée : deux avoirs émis en même temps sont sérialisés,
+      // et le cumul des avoirs déjà émis est relu avant d'en accepter un nouveau.
+      await Facture.findByPk(id, { attributes: ['id'], lock: t.LOCK.UPDATE, transaction: t });
+      const dejaAccorde = Number(
+        (await Facture.sum('montantTotal', {
+          where: { factureOrigineId: id, type: 'avoir' },
+          transaction: t,
+        })) || 0
+      );
+      const reste = arrondir(Number(facture.montantTotal) - dejaAccorde, facture.devise);
+      if (montantAvoir > reste) {
+        throw new BadRequestError(
+          `L'avoir dépasse le montant encore compensable de la facture (${reste} ${facture.devise}, ${dejaAccorde} déjà accordés)`
+        );
+      }
       const reference = await genererRefFacture(t);
       return Facture.create(
         {
           reference: reference.replace('FAC-', 'AVO-'),
           userId: facture.userId,
           colisId: null,
+          factureOrigineId: id,
           type: 'avoir',
           devise: facture.devise,
           montantHt: montantAvoir,
@@ -346,6 +363,8 @@ class FactureService {
     };
   };
 
+  static LIMITE_EXPORT = 10000;
+
   static COLONNES_EXPORT = [
     { cle: 'reference', libelle: 'Référence' },
     { cle: 'dateEmission', libelle: "Date d'émission" },
@@ -363,18 +382,28 @@ class FactureService {
   ];
 
   static exporterCsv = async (filters = {}) => {
+    // Seules les colonnes exportées sont lues, en lignes brutes : l'export chargeait
+    // les factures complètes (lignes JSONB) avec leurs paiements, colis et villes,
+    // puis construisait 10 000 instances Sequelize : 1,3 s de CPU pendant lesquelles
+    // le processus ne répondait à aucune autre requête.
     const factures = await Facture.findAll({
       where: FactureService.construireFiltres(filters),
-      include: FactureService.INCLUDE_DETAIL,
-      order: [['createdAt', 'DESC']],
-      limit: 10000,
+      attributes: FactureService.COLONNES_EXPORT.map((c) => c.cle).filter((c) => !c.includes('.')),
+      include: [
+        { model: Colis, as: 'colis', attributes: ['reference'] },
+        { model: User, attributes: ['email'] },
+      ],
+      order: [
+        ['createdAt', 'DESC'],
+        ['id', 'DESC'],
+      ],
+      limit: FactureService.LIMITE_EXPORT,
+      raw: true,
+      nest: true,
     });
 
     return {
-      contenu: versCsv(
-        factures.map((f) => f.toJSON()),
-        FactureService.COLONNES_EXPORT
-      ),
+      contenu: versCsv(factures, FactureService.COLONNES_EXPORT),
       nomFichier: `factures-${new Date().toISOString().slice(0, 10)}.csv`,
       total: factures.length,
     };

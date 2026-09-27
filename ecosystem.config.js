@@ -2,9 +2,12 @@
  * PM2 — déploiement hors Docker (bash deploy/deploy.sh pm2).
  *
  * - Les variables sont lues dans .env.prod (-r dotenv/config + DOTENV_CONFIG_PATH).
- * - Mode cluster : les tâches planifiées ne tournent que sur l'instance 0
- *   (src/jobs/index.js) ; renseigner REDIS_URL pour que les limiteurs de débit
- *   soient partagés entre les workers.
+ * - Mode cluster : chaque tâche planifiée n'est exécutée que par un seul worker à
+ *   chaque créneau (réservation atomique en base, src/jobs/taches.js) ; renseigner
+ *   REDIS_URL pour que les limiteurs de débit soient partagés entre les workers.
+ * - PM2_INSTANCES : « max » ouvre un worker par cœur, soit jusqu'à cœurs × DB_POOL_MAX
+ *   connexions PostgreSQL (16 cœurs × 10 = 160 > 100, max_connections par défaut :
+ *   « too many clients »). Fixer PM2_INSTANCES explicitement en production.
  */
 module.exports = {
   apps: [

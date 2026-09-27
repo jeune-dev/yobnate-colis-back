@@ -223,6 +223,11 @@ Facture.belongsTo(Colis, { foreignKey: 'colisId', as: 'colis' });
 User.hasMany(Facture, { foreignKey: 'userId' });
 Facture.belongsTo(User, { foreignKey: 'userId' });
 Facture.belongsTo(User, { foreignKey: 'emisePar', as: 'emetteur' });
+Facture.belongsTo(Facture, {
+  foreignKey: 'factureOrigineId',
+  as: 'factureOrigine',
+  onDelete: 'SET NULL',
+});
 
 // Une facture peut recevoir plusieurs règlements (acompte puis solde)
 Facture.hasMany(Paiement, { foreignKey: 'factureId', as: 'paiements', onDelete: 'CASCADE' });

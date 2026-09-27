@@ -1,9 +1,9 @@
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
+const motDePasse = require('../../../utils/motDePasse');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
 const { User, UserOtp, RefreshToken, TokenBlacklist } = require('../../../models');
-const { jwtConfig, bcryptConfig } = require('../../../config/security');
+const { jwtConfig } = require('../../../config/security');
 const {
   BadRequestError,
   UnauthorizedError,
@@ -35,8 +35,7 @@ class AuthService {
   /** Empreinte bcrypt sans mot de passe connu, au même coût que les vraies (calculée une fois). */
   static empreinteFactice = () => {
     AuthService.promesseEmpreinte =
-      AuthService.promesseEmpreinte ||
-      bcrypt.hash(crypto.randomBytes(16).toString('hex'), bcryptConfig.saltRounds);
+      AuthService.promesseEmpreinte || motDePasse.hacher(crypto.randomBytes(16).toString('hex'));
     return AuthService.promesseEmpreinte;
   };
 
@@ -188,7 +187,7 @@ class AuthService {
       parrainId = parrain.id;
     }
 
-    const password = await bcrypt.hash(data.password, bcryptConfig.saltRounds);
+    const password = await motDePasse.hacher(data.password);
     let user;
     for (let tentative = 0; !user; tentative += 1) {
       try {
@@ -229,7 +228,7 @@ class AuthService {
     // bcrypt est exécuté même sans compte : le temps de réponse ne révèle pas
     // si l'identifiant existe (énumération des comptes).
     const empreinte = user?.password || (await AuthService.empreinteFactice());
-    const valide = await bcrypt.compare(String(password), empreinte);
+    const valide = await motDePasse.comparer(String(password), empreinte);
     if (!user || !valide) {
       throw new UnauthorizedError('Identifiant ou mot de passe incorrect');
     }
@@ -345,7 +344,7 @@ class AuthService {
     );
     if (!consommes) throw invalide;
 
-    const password = await bcrypt.hash(newPassword, bcryptConfig.saltRounds);
+    const password = await motDePasse.hacher(newPassword);
     await user.update({ password });
     await AuthService.revoquerSessions(user);
     return { message: 'Mot de passe réinitialisé avec succès.' };
@@ -353,10 +352,10 @@ class AuthService {
 
   static changePassword = async (userId, oldPassword, newPassword) => {
     const user = await User.findByPk(userId);
-    if (!(await bcrypt.compare(oldPassword, user.password))) {
+    if (!(await motDePasse.comparer(oldPassword, user.password))) {
       throw new BadRequestError('Ancien mot de passe incorrect');
     }
-    const password = await bcrypt.hash(newPassword, bcryptConfig.saltRounds);
+    const password = await motDePasse.hacher(newPassword);
     await user.update({ password });
     await AuthService.revoquerSessions(user);
     return { message: 'Mot de passe modifié avec succès.' };

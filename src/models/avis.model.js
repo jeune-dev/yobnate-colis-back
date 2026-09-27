@@ -40,6 +40,14 @@ Avis.init(
       // Affichage public : avis publiés, du plus récent au plus ancien
       { name: 'avis_statut_created_at', fields: ['statut', { name: 'createdAt', order: 'DESC' }] },
       { name: 'avis_user_id', fields: ['userId'] },
+      // File de modération sans filtre de statut
+      {
+        name: 'avis_created_at_id',
+        fields: [
+          { name: 'createdAt', order: 'DESC' },
+          { name: 'id', order: 'DESC' },
+        ],
+      },
       // Un seul avis par expédition
       {
         name: 'avis_colis_id_unique',

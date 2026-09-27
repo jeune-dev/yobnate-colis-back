@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const bcrypt = require('bcrypt');
+const motDePasse = require('../../../utils/motDePasse');
 const { Op } = require('sequelize');
 const {
   sequelize,
@@ -14,7 +14,6 @@ const {
   UserOtp,
   DemandeSuppression,
 } = require('../../../models');
-const { bcryptConfig } = require('../../../config/security');
 const { STATUTS_TERMINAUX } = require('../../../config/colis');
 const { BadRequestError, ConflictError, NotFoundError } = require('../../../errors/AppError');
 const JWTUtils = require('../../../utils/jwtUtils');
@@ -92,6 +91,9 @@ class CompteService {
    * client perdrait le suivi d'un colis encore dans le réseau.
    */
   static pseudonymiser = async (userId, { auteurId = userId, motif = null } = {}) => {
+    // Empreinte inutilisable calculée AVANT la transaction : bcrypt (~250 ms de CPU,
+    // à concurrence bornée) ne retient ni la connexion ni le verrou du compte.
+    const empreinteNeutre = await motDePasse.hacher(crypto.randomBytes(32).toString('hex'));
     const avatar = await sequelize.transaction(async (t) => {
       const user = await User.findByPk(userId, { transaction: t, lock: t.LOCK.UPDATE });
       if (!user || user.supprimeLe) throw new NotFoundError('Compte introuvable');
@@ -118,10 +120,7 @@ class CompteService {
           email: `supprime-${neutre}@yobante.invalid`,
           telephone: `X${neutre.slice(0, 19)}`,
           telephoneSecondaire: null,
-          password: await bcrypt.hash(
-            crypto.randomBytes(32).toString('hex'),
-            bcryptConfig.saltRounds
-          ),
+          password: empreinteNeutre,
           adresse: null,
           codePostal: null,
           raisonSociale: null,
@@ -175,7 +174,7 @@ class CompteService {
   static supprimerMonCompte = async (userId, { password, motif }) => {
     const user = await User.findByPk(userId, { attributes: ['id', 'password'] });
     if (!user) throw new NotFoundError('Compte introuvable');
-    if (!(await bcrypt.compare(String(password || ''), user.password))) {
+    if (!(await motDePasse.comparer(String(password || ''), user.password))) {
       throw new BadRequestError('Mot de passe incorrect');
     }
     return CompteService.pseudonymiser(userId, { motif });

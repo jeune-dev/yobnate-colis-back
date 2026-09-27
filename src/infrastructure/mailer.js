@@ -73,21 +73,33 @@ const smtpConfigure = () => {
  * Envoi d'un courriel, confié à la file d'arrière-plan : l'appelant (et donc la
  * requête HTTP) n'attend plus le serveur SMTP. Les échecs restent journalisés.
  */
+const CODES_RESEAU_TRANSITOIRES = ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNRESET'];
+/** Panne passagère (réseau, SMTP 4xx « réessayez plus tard ») : l'envoi est retenté. */
+const erreurSmtpTransitoire = (err) =>
+  CODES_RESEAU_TRANSITOIRES.includes(err.code) ||
+  (Number(err.responseCode) >= 400 && Number(err.responseCode) < 500);
+
 const sendMail = ({ to, subject, html, texte = null }) => {
   if (!to) return Promise.resolve();
-  arrierePlan.lancer('email', async () => {
-    try {
-      await transporter.sendMail({
+  arrierePlan.lancer(
+    'email',
+    () =>
+      transporter.sendMail({
         from: process.env.MAIL_FROM,
         to,
         subject,
         html,
         text: texte || undefined,
-      });
-    } catch (err) {
-      logger.error(`Échec envoi email à ${to}`, { message: err.message, subject });
+      }),
+    {
+      // 3 tentatives (maintenant, +2 s, +8 s) sur une panne passagère ; une adresse
+      // refusée (5xx) n'est pas retentée
+      tentatives: Number(process.env.SMTP_TENTATIVES) || 3,
+      estTransitoire: erreurSmtpTransitoire,
+      surEchec: (err) =>
+        logger.error(`Échec envoi email à ${to}`, { message: err.message, subject }),
     }
-  });
+  );
   return Promise.resolve();
 };
 
