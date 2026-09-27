@@ -10,10 +10,27 @@ const _skipEnDev = () => process.env.NODE_ENV !== 'production';
  * configuré, mémoire sinon. `passOnStoreError` laisse passer les requêtes si
  * Redis tombe : une panne du cache ne doit pas rendre l'API indisponible.
  */
-const store = (prefixe) =>
-  redis
-    ? new RedisStore({ sendCommand: (...args) => redis.call(...args), prefix: `rl:${prefixe}:` })
-    : undefined;
+const store = (prefixe) => {
+  if (!redis) return undefined;
+
+  const magasin = new RedisStore({
+    sendCommand: (...args) => redis.call(...args),
+    prefix: `rl:${prefixe}:`,
+  });
+
+  // rate-limit-redis lance le chargement de ses scripts Lua DANS son
+  // constructeur et se contente de stocker les promesses ; personne ne les
+  // consomme avant la premiere requete. Si Redis est indisponible, Node voit
+  // donc un rejet sans gestionnaire et arrete le processus. On y attache un
+  // gestionnaire vide : la promesse reste rejetee, `passOnStoreError` laisse
+  // alors passer les requetes, et une panne de Redis degrade la limitation de
+  // debit au lieu de faire tomber l'API.
+  const ignorer = () => {};
+  magasin.incrementScriptSha?.catch?.(ignorer);
+  magasin.getScriptSha?.catch?.(ignorer);
+
+  return magasin;
+};
 
 const limiteur = (prefixe, options) =>
   rateLimit({ passOnStoreError: true, store: store(prefixe), ...options });
