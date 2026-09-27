@@ -441,6 +441,17 @@ class ReclamationService {
 
     let avoir = null;
     await sequelize.transaction(async (t) => {
+      // Statut relu sous verrou : deux résolutions simultanées (double envoi, deux
+      // agents) passaient toutes deux le contrôle ci-dessus et émettaient chacune un
+      // avoir d'indemnisation. La seconde constate désormais l'état laissé par la première.
+      const verrouillee = await Reclamation.findByPk(id, {
+        attributes: ['id', 'statut'],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+      if (!ReclamationService.TRANSITIONS[verrouillee.statut]?.includes(statut)) {
+        throw new BadRequestError(`Transition invalide : ${verrouillee.statut} vers ${statut}`);
+      }
       await reclamation.update(
         {
           statut,

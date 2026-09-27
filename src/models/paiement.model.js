@@ -52,6 +52,8 @@ Paiement.init(
       { fields: ['methode'] },
       { fields: ['referenceTransaction'] },
       { fields: ['payeAt'] },
+      // Liste et export du back-office, du plus récent au plus ancien
+      { name: 'paiements_created_at', fields: ['createdAt'] },
     ],
   }
 );

@@ -20,6 +20,8 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
 // échec déjà absorbé par infrastructure/mailer.js.
 process.env.SMTP_HOST = '127.0.0.1';
 process.env.SMTP_PORT = '9';
+// Pas de réessai différé d'un envoi voué à l'échec (port fermé) après la fin d'un test
+process.env.SMTP_TENTATIVES = '1';
 process.env.APP_PUBLIC_URL = '';
 process.env.API_PUBLIC_URL = '';
 

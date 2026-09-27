@@ -1,8 +1,7 @@
 const { Op } = require('sequelize');
-const bcrypt = require('bcrypt');
+const motDePasse = require('../../../utils/motDePasse');
 const { User } = require('../../../models');
 const JWTUtils = require('../../../utils/jwtUtils');
-const { bcryptConfig } = require('../../../config/security');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
@@ -52,7 +51,7 @@ class AdminService {
     if (existing)
       throw new ConflictError('Un compte existe déjà avec cet email ou ce numéro de téléphone');
 
-    const password = await bcrypt.hash(data.password, bcryptConfig.saltRounds);
+    const password = await motDePasse.hacher(data.password);
     const admin = await User.create({ ...data, password, isActive: true });
 
     await logActivity({

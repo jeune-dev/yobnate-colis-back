@@ -525,4 +525,132 @@ decrire('Parcours complets (base réelle)', () => {
       1
     );
   });
+  test('concurrence : plus d’annulations simultanées que de connexions au pool, sans blocage', async () => {
+    // Chaque annulation tient une connexion (transaction + verrou du colis) ; ses
+    // notifications en réclamaient une seconde avant le COMMIT. Au-delà de la taille
+    // du pool (10), toutes attendaient : 30 s de blocage puis des 503.
+    const ids = [];
+    for (let i = 0; i < 14; i += 1) {
+      const r = await declarer(
+        donnees.parrain,
+        { ...base(), categorie: 'documents', typeDocument: 'Acte', modeDepot: 'envoi_postal' },
+        1
+      );
+      expect(r.status).toBe(201);
+      ids.push(r.body.data.colis.id);
+    }
+    const debut = Date.now();
+    const reponses = await Promise.all(
+      ids.map((id) =>
+        request(app).patch(`/client/colis/${id}/annuler`).set(auth(donnees.parrain)).send({})
+      )
+    );
+    expect(reponses.map((r) => r.status)).toEqual(ids.map(() => 200));
+    expect(Date.now() - debut).toBeLessThan(10000);
+    // Les notifications partent bien, après validation
+    const notifiees = await m.Notification.count({ where: { entiteId: ids } });
+    expect(notifiees).toBeGreaterThanOrEqual(ids.length);
+  });
+
+  test('une transaction annulée n’annonce rien au client (notification après validation)', async () => {
+    const suivi = require('../../src/modules/colis/service/suivi.service');
+    const id = donnees.colisConcurrence;
+    const compter = () =>
+      m.Notification.count({
+        where: { entiteId: id, titre: { [require('sequelize').Op.like]: '%Information%' } },
+      });
+    const avant = await compter();
+    await expect(
+      m.sequelize.transaction(async (t) => {
+        const colis = await m.Colis.findByPk(id, { transaction: t });
+        await suivi.enregistrerEvenement(
+          colis,
+          { codeEvenement: 'INFO', commentaire: 'x' },
+          { transaction: t }
+        );
+        throw new Error('annulée');
+      })
+    ).rejects.toThrow('annulée');
+    expect(await compter()).toBe(avant);
+
+    await m.sequelize.transaction(async (t) => {
+      const colis = await m.Colis.findByPk(id, { transaction: t });
+      await suivi.enregistrerEvenement(
+        colis,
+        { codeEvenement: 'INFO', commentaire: 'x' },
+        { transaction: t }
+      );
+    });
+    expect(await compter()).toBe(avant + 1);
+  });
+  test('concurrence : une réclamation résolue deux fois en même temps n’indemnise qu’une fois', async () => {
+    const ouverte = await request(app)
+      .post('/client/reclamations')
+      .set(auth(donnees.parrain))
+      .send({ type: 'retard', objet: 'Colis en retard', description: 'Mon colis a du retard.' });
+    expect(ouverte.status).toBe(201);
+    const { id, reference } = ouverte.body.data.reclamation;
+    await request(app)
+      .patch(`/admin/reclamations/${id}/resoudre`)
+      .set(auth(donnees.admin))
+      .send({ statut: 'en_cours' })
+      .expect(200);
+
+    const resolutions = await Promise.all(
+      [1, 2].map(() =>
+        request(app)
+          .patch(`/admin/reclamations/${id}/resoudre`)
+          .set(auth(donnees.admin))
+          .send({ statut: 'resolue', resolution: 'Geste commercial', montantAccorde: 30 })
+      )
+    );
+    expect(resolutions.map((r) => r.status).sort()).toEqual([200, 400]);
+    const avoirs = await m.Facture.count({
+      where: { type: 'avoir', mentions: `Avoir émis au titre de la réclamation ${reference}` },
+    });
+    expect(avoirs).toBe(1);
+  });
+  test('avoirs : le cumul ne dépasse jamais le total de la facture, même en parallèle', async () => {
+    const r = await declarer(
+      donnees.parrain,
+      { ...base(), categorie: 'documents', typeDocument: 'Acte', modeDepot: 'envoi_postal' },
+      1
+    );
+    const facture = await m.Facture.findOne({ where: { colisId: r.body.data.colis.id } });
+    const total = Number(facture.montantTotal);
+    const moitie = Math.floor((total * 60) / 100);
+    // Deux avoirs de 60 % demandés en même temps : un seul peut passer
+    const simultanes = await Promise.all(
+      [1, 2].map(() =>
+        request(app)
+          .post(`/admin/factures/${facture.id}/avoir`)
+          .set(auth(donnees.admin))
+          .send({ montant: moitie, motif: 'Geste commercial' })
+      )
+    );
+    expect(simultanes.map((x) => x.status).sort()).toEqual([200, 400]);
+    const somme = await m.Facture.sum('montantTotal', {
+      where: { factureOrigineId: facture.id, type: 'avoir' },
+    });
+    expect(Number(somme)).toBeLessThanOrEqual(total);
+  });
+  test('concurrence : un conteneur passé deux fois « en transit » en même temps ne propage qu’une fois', async () => {
+    const { rotationId } = await m.Colis.findByPk(donnees.colisConcurrence);
+    const statut = (valeur) =>
+      request(app)
+        .patch(`/admin/conteneurs/${rotationId}/statut`)
+        .set(auth(donnees.admin))
+        .send({ statut: valeur });
+    expect((await statut('cloturee')).status).toBe(200);
+    const departs = await Promise.all([statut('en_transit'), statut('en_transit')]);
+    // Un seul passage accepté ; l'autre est refusé, en conflit (409) s'il a lu l'ancien
+    // statut, ou comme transition invalide (400) s'il est arrivé après le premier
+    const statuts = departs.map((r) => r.status);
+    expect(statuts.filter((code) => code === 200)).toHaveLength(1);
+    expect([400, 409]).toContain(statuts.find((code) => code !== 200));
+    const evenements = await m.SuiviColis.count({
+      where: { colisId: donnees.colisConcurrence, codeEvenement: 'DEPART_HUB' },
+    });
+    expect(evenements).toBe(1);
+  });
 });

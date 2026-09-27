@@ -1,6 +1,6 @@
 const { Op } = require('sequelize');
 const { sequelize, Rotation, Colis, PointCollecte, User, Ville } = require('../../../models');
-const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
+const { BadRequestError, ConflictError, NotFoundError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const suiviService = require('../../colis/service/suivi.service');
@@ -465,7 +465,14 @@ class RotationService {
     if (nouveauStatut === 'arrivee') maj.dateArriveeEffective = new Date();
     if (commentaire) maj.commentaire = commentaire;
 
-    await rotation.update(maj);
+    // Mise à jour conditionnée au statut lu : deux changements simultanés passaient
+    // tous deux le contrôle ci-dessus et propageaient chacun l'événement à tous les
+    // colis embarqués (doublons dans le suivi et notifications en double aux clients).
+    const [modifiees] = await Rotation.update(maj, { where: { id, statut: rotation.statut } });
+    if (!modifiees) {
+      throw new ConflictError('La rotation vient d’être modifiée par ailleurs : rechargez-la');
+    }
+    rotation.set(maj);
 
     // Événement propagé aux colis embarqués
     const EVENEMENT_PAR_STATUT = {

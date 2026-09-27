@@ -141,6 +141,8 @@ User.init(
       { fields: ['typeCompte'] },
       { fields: ['parrainId'] },
       { fields: ['codePostal'] },
+      // Connexion, inscription, codes : recherche de l'email sans tenir compte de la casse
+      { name: 'users_lower_email', fields: [sequelize.fn('lower', sequelize.col('email'))] },
     ],
   }
 );

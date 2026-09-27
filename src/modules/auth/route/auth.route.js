@@ -5,6 +5,7 @@ const validate = require('../../../middlewares/validate.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const {
   authRateLimit,
+  connexionRateLimit,
   otpEmailRateLimit,
   mutationRateLimit,
 } = require('../../../middlewares/rateLimit.middleware');
@@ -96,7 +97,7 @@ router.post('/register', authRateLimit, validate(registerSchema), authController
  *       403: { description: Compte désactivé, ou email non confirmé (si exigé) }
  *       429: { description: Trop de tentatives }
  */
-router.post('/login', authRateLimit, validate(loginSchema), authController.login);
+router.post('/login', ...connexionRateLimit, validate(loginSchema), authController.login);
 
 /**
  * @swagger

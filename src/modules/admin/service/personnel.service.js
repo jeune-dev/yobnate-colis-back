@@ -1,7 +1,6 @@
 const { Op } = require('sequelize');
-const bcrypt = require('bcrypt');
+const motDePasse = require('../../../utils/motDePasse');
 const { User, PointCollecte, Colis, DemandeEnlevement } = require('../../../models');
-const { bcryptConfig } = require('../../../config/security');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
@@ -108,7 +107,7 @@ class PersonnelService {
 
     await PersonnelService.validerAffectation(data.role, data.pays, data.pointCollecteId);
 
-    const password = await bcrypt.hash(data.password, bcryptConfig.saltRounds);
+    const password = await motDePasse.hacher(data.password);
     const personne = await User.create({ ...data, password, isActive: true });
 
     if (data.role === 'agent_point' && data.pointCollecteId) {

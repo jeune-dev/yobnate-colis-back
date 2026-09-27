@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { sequelize, Paiement, Facture, User, PointCollecte, Colis } = require('../../../models');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../../../errors/AppError');
 const perimetre = require('../../../utils/perimetre');
-const { paginate, paginateResult } = require('../../../utils/paginate');
+const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
 const { sendPaiementConfirmeEmail } = require('../../../infrastructure/mailer');
@@ -54,13 +54,14 @@ class PaiementService {
 
   static getAllPaiements = async (filters = {}, pagination = {}, restriction = null) => {
     const { limit, offset } = paginate(pagination);
-    const { rows, count } = await Paiement.findAndCountAll({
+    // Comptage sans jointure puis identifiants de la page (voir utils/paginate) :
+    // COUNT(DISTINCT) joignait factures, colis, comptes et points sur toute la table.
+    const { rows, count } = await listerPagine(Paiement, {
       where: perimetre.combiner(PaiementService.construireFiltres(filters), restriction),
       include: PaiementService.INCLUDE_DETAIL,
       order: [['createdAt', 'DESC']],
       limit,
       offset,
-      distinct: true,
     });
 
     return {
@@ -433,18 +434,32 @@ class PaiementService {
   ];
 
   static exporterCsv = async (filters = {}) => {
+    // Colonnes exportées seulement, en lignes brutes (voir l'export des factures) :
+    // la facture complète de chaque paiement n'est plus lue ni instanciée.
     const paiements = await Paiement.findAll({
       where: PaiementService.construireFiltres(filters),
-      include: PaiementService.INCLUDE_DETAIL,
-      order: [['createdAt', 'DESC']],
+      attributes: PaiementService.COLONNES_EXPORT.map((c) => c.cle).filter((c) => !c.includes('.')),
+      include: [
+        {
+          model: Facture,
+          as: 'facture',
+          attributes: ['reference'],
+          include: [{ model: Colis, as: 'colis', attributes: ['reference'] }],
+        },
+        { model: User, attributes: ['email'] },
+        { model: PointCollecte, as: 'pointEncaissement', attributes: ['nom'] },
+      ],
+      order: [
+        ['createdAt', 'DESC'],
+        ['id', 'DESC'],
+      ],
       limit: 10000,
+      raw: true,
+      nest: true,
     });
 
     return {
-      contenu: versCsv(
-        paiements.map((p) => p.toJSON()),
-        PaiementService.COLONNES_EXPORT
-      ),
+      contenu: versCsv(paiements, PaiementService.COLONNES_EXPORT),
       nomFichier: `paiements-${new Date().toISOString().slice(0, 10)}.csv`,
       total: paiements.length,
     };

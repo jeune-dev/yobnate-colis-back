@@ -100,6 +100,10 @@ services:
       # Tas V8 borné sous la limite mémoire du conteneur (512 Mo) : le GC se déclenche
       # avant que le noyau ne tue le processus (OOM)
       NODE_OPTIONS: --max-old-space-size=384
+      # 1 vCPU : un seul hachage bcrypt à la fois laisse du CPU aux autres requêtes
+      BCRYPT_CONCURRENCE: 1
+      # Fichiers gardés en mémoire pendant la réception : 4 × 25 Mo (plafond Nginx) au pire
+      UPLOAD_CONCURRENCE: 4
     # Durcissement : système de fichiers en lecture seule (logs sur la sortie standard)
     read_only: true
     tmpfs:

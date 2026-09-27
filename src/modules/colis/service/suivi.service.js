@@ -17,6 +17,7 @@ const {
 } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
 const { ajouterJoursCalendaires } = require('../../../utils/delais');
+const { apresCommit } = require('../../../utils/transactions');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -225,6 +226,27 @@ class SuiviService {
       ? await executer(options.transaction)
       : await sequelize.transaction(executer);
 
+    // Dans une transaction englobante, facturation, journal et notifications attendent
+    // son COMMIT : ils ne tiennent pas une seconde connexion pendant que la transaction
+    // garde la sienne et ses verrous, et rien n'est annoncé si elle est annulée.
+    const effets = () =>
+      SuiviService.effetsEvenement(colis, evenement, point, nouveauStatut, {
+        ...options,
+        codeEvenement,
+        visiblePublic,
+      });
+    if (options.transaction) {
+      await apresCommit(options.transaction, effets, { colisId: colis.id, codeEvenement });
+    } else {
+      await effets();
+    }
+
+    return { message: `Suivi mis à jour : ${evenement.libelle}.`, evenement, colis };
+  };
+
+  /** Facturation à la réception, journal et notifications d'un événement enregistré. */
+  static effetsEvenement = async (colis, evenement, point, nouveauStatut, options) => {
+    const { codeEvenement, visiblePublic } = options;
     await SuiviService.notifierSansBloquer(
       SuiviService.facturerALaReception(colis, codeEvenement, options.auteurId || null),
       { colisId: colis.id, etape: 'facturation' }
@@ -282,8 +304,6 @@ class SuiviService {
         { colisId: colis.id, canal: 'whatsapp' }
       );
     }
-
-    return { message: `Suivi mis à jour : ${evenement.libelle}.`, evenement, colis };
   };
 
   /**

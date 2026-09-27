@@ -1,4 +1,5 @@
 require('dotenv').config();
+const crypto = require('crypto');
 
 // C-03 : bloquer le démarrage si JWT_SECRET manquant ou trop court
 const _jwtSecret = process.env.JWT_SECRET;
@@ -32,9 +33,13 @@ if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGIN) {
 const jwtConfig = {
   // Algorithme imposé à la vérification : un jeton signé autrement est refusé
   algorithm: 'HS256',
-  secret: _jwtSecret,
+  // Clés préparées une fois : passé en chaîne, le secret était reconverti à chaque
+  // signature ou vérification (jsonwebtoken tente d'abord d'y lire une clé publique,
+  // échoue, puis crée la clé secrète) : 32 µs par vérification au lieu de 8, sur
+  // chaque requête authentifiée.
+  secret: crypto.createSecretKey(Buffer.from(_jwtSecret)),
   expiresIn: process.env.JWT_EXPIRES_IN || '1h',
-  refreshSecret: _jwtRefreshSecret,
+  refreshSecret: crypto.createSecretKey(Buffer.from(_jwtRefreshSecret)),
   refreshExpiresIn: '7d',
 };
 
