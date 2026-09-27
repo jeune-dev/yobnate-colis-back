@@ -19,13 +19,17 @@ if [[ ! -f .env.prod ]]; then
   exit 1
 fi
 
+# Port de l'API sur l'hôte (API_PORT_HOTE dans .env.prod, 3000 par défaut)
+PORT_HOTE="$(grep -E '^API_PORT_HOTE=' .env.prod | cut -d= -f2 | tr -d '[:space:]')"
+PORT_HOTE="${PORT_HOTE:-3000}"
+
 echo "▶ Mise à jour du code…"
 git pull --rebase origin main
 
 attendre_sante() {
   echo "▶ Attente de la disponibilité (migrations incluses)…"
   for _ in $(seq 1 40); do
-    if curl -fsS http://127.0.0.1:3000/ready >/dev/null 2>&1; then
+    if curl -fsS "http://127.0.0.1:${PORT_HOTE}/ready" >/dev/null 2>&1; then
       echo "✔ API opérationnelle"
       return 0
     fi

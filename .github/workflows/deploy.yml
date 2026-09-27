@@ -58,6 +58,7 @@ jobs:
               exit 1
             fi
 
-            curl -fsS http://127.0.0.1:3000/ready
+            PORT_HOTE="$(grep -E '^API_PORT_HOTE=' .env.prod | cut -d= -f2 | tr -d '[:space:]')"
+            curl -fsS "http://127.0.0.1:${PORT_HOTE:-3000}/ready"
             docker image prune -f
             echo "✔ Déploiement terminé — backend healthy"
