@@ -1,11 +1,15 @@
 name: Deploy Yobante Colis API
 
-# Déploiement uniquement après une CI réussie sur main (lint, migrations, tests, image)
+# Déploiement uniquement après une CI réussie sur main (lint, migrations, tests, image).
+# `workflow_dispatch` ouvre en plus un bouton « Run workflow » : sans lui, relancer
+# un déploiement qui a échoué pour une cause externe (VPS injoignable, secret
+# corrigé après coup) obligeait à pousser un commit vide.
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
 
 # Jamais deux déploiements en parallèle sur le même serveur
 concurrency:
@@ -15,7 +19,10 @@ concurrency:
 jobs:
   deploy:
     name: Déploiement sur le VPS
-    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
