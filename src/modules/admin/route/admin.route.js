@@ -6,6 +6,8 @@ const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware
 const validate = require('../../../middlewares/validate.middleware');
 const { createAdminSchema, updateAdminSchema } = require('../validation/user.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { User } = require('../../../models');
 
 /**
  * @swagger
@@ -104,6 +106,7 @@ router.put(
   '/:id',
   superAdmin,
   validate(uuidParam, 'params'),
+  verrou(User),
   validate(updateAdminSchema),
   adminController.update
 );

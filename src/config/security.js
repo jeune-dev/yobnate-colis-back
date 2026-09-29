@@ -87,7 +87,7 @@ const corsConfig = {
     .filter(Boolean) || ['http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   // X-Visiteur-Id : identifiant anonyme du visiteur (mesure d'audience et de conversion)
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Visiteur-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Visiteur-Id', 'X-Version'],
   credentials: true,
 };
 

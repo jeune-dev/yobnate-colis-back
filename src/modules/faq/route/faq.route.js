@@ -10,13 +10,21 @@ const {
   listeFaqQuery,
 } = require('../validation/faq.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { Faq } = require('../../../models');
 
 /** Rédaction de la FAQ du site vitrine et de l'application. */
 router.use(auth, checkActiveUser, admin);
 
 router.get('/', validate(listeFaqQuery, 'query'), ctrl.lister);
 router.post('/', validate(creerFaqSchema), ctrl.creer);
-router.put('/:id', validate(uuidParam, 'params'), validate(modifierFaqSchema), ctrl.modifier);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(Faq),
+  validate(modifierFaqSchema),
+  ctrl.modifier
+);
 router.delete('/:id', validate(uuidParam, 'params'), ctrl.supprimer);
 
 module.exports = router;

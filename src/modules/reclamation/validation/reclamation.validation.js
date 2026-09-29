@@ -27,7 +27,8 @@ const noterSchema = Joi.object({
 });
 
 const assignerSchema = Joi.object({
-  agentId: Joi.string().uuid().required(),
+  // null : retire l'assignation (la réclamation retourne dans la file commune)
+  agentId: Joi.string().uuid().allow(null).required(),
 });
 
 const resoudreSchema = Joi.object({

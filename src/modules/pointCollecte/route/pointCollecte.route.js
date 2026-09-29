@@ -13,6 +13,8 @@ const {
   transfertStockSchema,
 } = require('../validation/pointCollecte.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { PointCollecte } = require('../../../models');
 
 /**
  * Réseau des points de collecte (agences, points relais, casiers, hubs).
@@ -29,7 +31,14 @@ router.get('/:id/stock', validate(uuidParam, 'params'), ctrl.stock);
 router.get('/:id/statistiques', validate(uuidParam, 'params'), ctrl.statistiques);
 
 router.post('/', admin, validate(createPointSchema), ctrl.create);
-router.put('/:id', admin, validate(uuidParam, 'params'), validate(updatePointSchema), ctrl.update);
+router.put(
+  '/:id',
+  admin,
+  validate(uuidParam, 'params'),
+  verrou(PointCollecte),
+  validate(updatePointSchema),
+  ctrl.update
+);
 router.patch(
   '/:id/statut',
   admin,

@@ -13,6 +13,8 @@ const {
   ajouterDocumentSchema,
 } = require('../validation/douane.validation');
 const { uuidParam, colisIdParam, articleParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { DeclarationDouane } = require('../../../models');
 
 /** Formalités douanières du corridor France - Sénégal. */
 router.use(auth, checkActiveUser, admin);
@@ -23,7 +25,13 @@ router.get('/colis/:colisId', validate(colisIdParam, 'params'), ctrl.getParColis
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/facture-commerciale', validate(uuidParam, 'params'), ctrl.factureCommerciale);
 
-router.put('/:id', validate(uuidParam, 'params'), validate(updateDeclarationSchema), ctrl.update);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(DeclarationDouane),
+  validate(updateDeclarationSchema),
+  ctrl.update
+);
 router.put(
   '/:id/articles',
   validate(uuidParam, 'params'),

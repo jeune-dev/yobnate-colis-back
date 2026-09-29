@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const ctrl = require('../controller/zone.controller');
 const auth = require('../../../middlewares/auth.middleware');
-const { admin } = require('../../../middlewares/requireRole.middleware');
+const { admin, personnel } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
 const {
@@ -10,14 +10,25 @@ const {
   affecterVillesSchema,
 } = require('../validation/zone.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { Zone } = require('../../../models');
 
 /** Zones tarifaires, regroupant des villes d'un même pays. */
 router.use(auth, checkActiveUser);
 
-router.get('/', ctrl.getAll);
-router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
+// Lecture réservée au personnel (admin, coursier, agent) : les clients passent par les
+// variantes publiques (/public/…, /publiques, /publics), qui n'exposent que l'actif.
+router.get('/', personnel, ctrl.getAll);
+router.get('/:id', personnel, validate(uuidParam, 'params'), ctrl.getOne);
 router.post('/', admin, validate(createZoneSchema), ctrl.create);
-router.put('/:id', admin, validate(uuidParam, 'params'), validate(updateZoneSchema), ctrl.update);
+router.put(
+  '/:id',
+  admin,
+  validate(uuidParam, 'params'),
+  verrou(Zone),
+  validate(updateZoneSchema),
+  ctrl.update
+);
 router.post(
   '/:id/villes',
   admin,

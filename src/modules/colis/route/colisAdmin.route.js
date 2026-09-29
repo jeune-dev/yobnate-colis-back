@@ -22,6 +22,7 @@ const { uuidParam } = require('../../../validations/common');
 const { Colis } = require('../../../models');
 const perimetre = require('../../../utils/perimetre');
 const { siUuid } = require('../../../middlewares/perimetre.middleware');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
 
 /** Back-office des expéditions : acheminement, pesée, incidents, documents. */
 router.use(auth, checkActiveUser, personnel);
@@ -104,7 +105,14 @@ router.post(
 );
 router.post('/:id/code-retrait', admin, validate(uuidParam, 'params'), ctrl.regenererCodeRetrait);
 
-router.put('/:id', admin, validate(uuidParam, 'params'), validate(updateColisSchema), ctrl.update);
+router.put(
+  '/:id',
+  admin,
+  validate(uuidParam, 'params'),
+  verrou(Colis),
+  validate(updateColisSchema),
+  ctrl.update
+);
 router.patch(
   '/:id/point-retrait',
   admin,

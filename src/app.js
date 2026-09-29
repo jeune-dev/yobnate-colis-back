@@ -24,7 +24,10 @@ const SONDES = new Set(
   ['/health', '/health/live', '/ready', '/health/ready'].flatMap((c) => [c, `${PREFIXE_API}${c}`])
 );
 
-app.set('trust proxy', 1);
+// Nombre de relais de confiance devant l'API (répartiteur de l'hébergeur = 1). À
+// augmenter seulement si un relais supplémentaire maîtrisé transmet X-Forwarded-For
+// (sinon un client pourrait falsifier son IP et contourner les limites de débit).
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS) || 1);
 app.disable('x-powered-by');
 
 app.use(requestId);

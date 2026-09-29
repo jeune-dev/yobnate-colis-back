@@ -53,13 +53,18 @@ const PUBLIQUES = new Map([
   ['POST /suppression-compte', 'exigence Google Play : joignable sans connexion ni application'],
 ]);
 
-/** Lectures du back-office ouvertes à tout compte connecté, par décision. */
+/**
+ * Lectures du back-office ouvertes à tout compte connecté, par décision : seules les
+ * variantes « publiques » (éléments actifs) des référentiels. Les listes complètes
+ * (/, /:id, inactifs compris) sont réservées au personnel.
+ */
 const LECTURES_OUVERTES = new Map([
-  ['/admin/services', 'catalogue des services, déjà public via /public/services'],
-  ['/admin/tarifs', 'grille tarifaire, déjà publique via /public/tarifs (audit réservé admin)'],
-  ['/admin/villes', 'référentiel des villes (dont /publiques) lu par les formulaires'],
-  ['/admin/zones', 'zones tarifaires, référentiel non nominatif'],
+  ['GET /admin/villes/publiques', 'villes actives lues par les formulaires des applications'],
+  ['GET /admin/services/publics', 'services actifs, déjà publics via /public/services'],
 ]);
+
+/** Référentiels dont l'écriture est réservée aux administrateurs. */
+const REFERENTIELS = ['/admin/services', '/admin/tarifs', '/admin/villes', '/admin/zones'];
 
 describe('Inventaire des routes', () => {
   test('l’inventaire couvre toutes les routes montées', () => {
@@ -93,10 +98,7 @@ describe('Back-office — garde de rôle sur chaque route', () => {
   test.each(routes.filter((r) => r.espace === 'admin').map((r) => [cle(r), r]))(
     '%s',
     (_nom, route) => {
-      const ouverte =
-        route.methode === 'get' &&
-        [...LECTURES_OUVERTES.keys()].some((prefixe) => route.chemin.startsWith(prefixe));
-      if (ouverte) return;
+      if (LECTURES_OUVERTES.has(cle(route))) return;
       expect(route.roles).not.toBeNull();
       expect(route.roles).not.toContain('client');
     }
@@ -104,11 +106,25 @@ describe('Back-office — garde de rôle sur chaque route', () => {
 
   test('les écritures du référentiel restent réservées aux administrateurs', () => {
     const ecritures = routes.filter(
-      (r) =>
-        r.methode !== 'get' &&
-        [...LECTURES_OUVERTES.keys()].some((prefixe) => r.chemin.startsWith(prefixe))
+      (r) => r.methode !== 'get' && REFERENTIELS.some((prefixe) => r.chemin.startsWith(prefixe))
     );
     expect(ecritures.length).toBeGreaterThan(0);
     for (const r of ecritures) expect(r.roles).toEqual(['admin', 'super_admin']);
+  });
+
+  test('les listes complètes des référentiels sont fermées aux clients', () => {
+    const lectures = routes.filter(
+      (r) =>
+        r.methode === 'get' &&
+        REFERENTIELS.some((prefixe) => r.chemin.startsWith(prefixe)) &&
+        !LECTURES_OUVERTES.has(cle(r))
+    );
+    expect(lectures.length).toBeGreaterThanOrEqual(8);
+    for (const r of lectures) expect(r.roles).not.toContain('client');
+  });
+
+  test('chaque lecture ouverte déclarée existe encore', () => {
+    const cles = new Set(routes.map(cle));
+    expect([...LECTURES_OUVERTES.keys()].filter((c) => !cles.has(c))).toEqual([]);
   });
 });

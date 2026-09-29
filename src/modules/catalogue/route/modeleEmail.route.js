@@ -4,6 +4,8 @@ const auth = require('../../../middlewares/auth.middleware');
 const { admin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { ModeleEmail } = require('../../../models');
 const {
   modeleEmailSchema,
   codeModeleParam,
@@ -17,6 +19,7 @@ router.get('/', ctrl.getAll);
 router.put(
   '/:code',
   validate(codeModeleParam, 'params'),
+  verrou(ModeleEmail, { param: 'code', cle: 'code' }),
   validate(modeleEmailSchema),
   ctrl.enregistrer
 );

@@ -322,6 +322,19 @@ class ReclamationService {
     const reclamation = await Reclamation.findByPk(id);
     if (!reclamation) throw new NotFoundError('Réclamation introuvable');
 
+    if (agentId === null) {
+      const ancien = reclamation.assigneA;
+      await reclamation.update({ assigneA: null });
+      await logActivity({
+        userId: adminId,
+        action: 'admin.reclamation.desassigner',
+        entite: 'Reclamation',
+        entiteId: id,
+        details: { ancienAgentId: ancien },
+      });
+      return { message: 'Assignation retirée.', reclamation };
+    }
+
     const agent = await User.findByPk(agentId);
     if (!agent || !['admin', 'super_admin', 'agent_point'].includes(agent.role)) {
       throw new BadRequestError("L'agent désigné ne peut pas traiter de réclamations");
@@ -554,12 +567,14 @@ class ReclamationService {
         group: ['type'],
         raw: true,
       }),
-      Reclamation.findOne({
+      Reclamation.findAll({
         where: { montantAccorde: { [Op.gt]: 0 } },
         attributes: [
+          'devise',
           [sequelize.fn('COUNT', sequelize.col('id')), 'nombre'],
           [sequelize.fn('SUM', sequelize.col('montantAccorde')), 'total'],
         ],
+        group: ['devise'],
         raw: true,
       }),
       Reclamation.findOne({
@@ -575,8 +590,14 @@ class ReclamationService {
         parStatut: parStatut.map((r) => ({ statut: r.statut, total: Number(r.total) })),
         parType: parType.map((r) => ({ type: r.type, total: Number(r.total) })),
         indemnisations: {
-          nombre: Number(indemnisations?.nombre || 0),
-          montantTotal: Number(indemnisations?.total || 0),
+          nombre: indemnisations.reduce((n, r) => n + Number(r.nombre), 0),
+          // Déprécié : somme toutes devises ; utiliser `parDevise`
+          montantTotal: indemnisations.reduce((n, r) => n + Number(r.total || 0), 0),
+          parDevise: indemnisations.map((r) => ({
+            devise: r.devise,
+            nombre: Number(r.nombre),
+            montantTotal: Number(r.total || 0),
+          })),
         },
         satisfactionMoyenne: satisfaction?.moyenne
           ? Number(Number(satisfaction.moyenne).toFixed(2))

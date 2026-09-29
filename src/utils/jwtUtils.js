@@ -12,9 +12,32 @@ const jwt = require('jsonwebtoken');
 const { jwtConfig } = require('../config/security');
 const { UnauthorizedError, ForbiddenError } = require('../errors/AppError');
 const cache = require('./cache');
+const redis = require('../config/redis');
+const logger = require('./logger');
 const { User, TokenBlacklist } = require('../models');
 
 const CACHE_TTL_MS = 30 * 1000;
+
+/**
+ * Invalidation diffusée à tous les processus : le cache d'authentification est
+ * propre à chaque worker PM2. Avec Redis (REDIS_URL), une désactivation ou un
+ * changement de rôle est publié sur ce canal et chaque worker oublie aussitôt
+ * l'utilisateur, au lieu d'attendre l'expiration du cache (30 s).
+ */
+const CANAL_INVALIDATION = 'yobante:auth:invalider';
+let abonne = null;
+if (redis && typeof redis.duplicate === 'function') {
+  abonne = redis.duplicate();
+  abonne.on('error', (err) =>
+    logger.warn('Redis (invalidation) indisponible', { message: err.message })
+  );
+  abonne
+    .subscribe(CANAL_INVALIDATION)
+    .catch((err) => logger.warn('Abonnement invalidation impossible', { message: err.message }));
+  abonne.on('message', (canal, userId) => {
+    if (canal === CANAL_INVALIDATION) cache.del(`auth:${userId}`);
+  });
+}
 
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex');
 
@@ -91,11 +114,21 @@ class JWTUtils {
   /**
    * Oublie l'utilisateur mis en cache : à appeler après toute modification qui
    * doit prendre effet immédiatement (désactivation, rôle, mot de passe).
-   * Le cache étant propre à chaque processus, un autre worker PM2 peut conserver
-   * l'ancienne version jusqu'à CACHE_TTL_MS.
+   * Sans Redis, un autre worker PM2 peut conserver l'ancienne version jusqu'à
+   * CACHE_TTL_MS ; avec Redis, l'invalidation est diffusée à tous les workers.
    */
   static invaliderCache(userId) {
     cache.del(`auth:${userId}`);
+    if (redis) {
+      redis
+        .publish(CANAL_INVALIDATION, String(userId))
+        .catch((err) => logger.warn('Diffusion invalidation impossible', { message: err.message }));
+    }
+  }
+
+  /** Ferme la connexion d'abonnement (arrêt propre du serveur). */
+  static async fermer() {
+    if (abonne) await abonne.quit().catch(() => {});
   }
 
   /**

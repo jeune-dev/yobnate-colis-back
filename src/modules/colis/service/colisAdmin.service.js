@@ -749,9 +749,11 @@ class ColisService {
         'serviceId',
         'paysDepart',
         'paysArrivee',
+        'devise',
         [sequelize.literal('GROUPING("Colis"."statut")'), 'gStatut'],
         [sequelize.literal('GROUPING("Colis"."serviceId")'), 'gService'],
         [sequelize.literal('GROUPING("Colis"."paysDepart", "Colis"."paysArrivee")'), 'gCorridor'],
+        [sequelize.literal('GROUPING("Colis"."devise")'), 'gDevise'],
         [sequelize.fn('COUNT', col('id')), 'total'],
         [sequelize.fn('SUM', col('montantTotal')), 'chiffreAffaires'],
         [sequelize.fn('SUM', col('poidsFactureKg')), 'poids'],
@@ -760,7 +762,7 @@ class ColisService {
       group: [
         sequelize.literal(
           'GROUPING SETS (("Colis"."statut"), ("Colis"."serviceId"), ' +
-            '("Colis"."paysDepart", "Colis"."paysArrivee"), ())'
+            '("Colis"."paysDepart", "Colis"."paysArrivee"), ("Colis"."devise"), ())'
         ),
       ],
       raw: true,
@@ -770,9 +772,12 @@ class ColisService {
     const parStatut = lignes.filter((l) => Number(l.gStatut) === 0);
     const parCorridor = lignes.filter((l) => Number(l.gCorridor) === 0);
     const lignesService = lignes.filter((l) => Number(l.gService) === 0);
+    const lignesDevise = lignes.filter((l) => Number(l.gDevise) === 0);
     // Ligne du total général : agrégée par aucun regroupement (GROUPING ≠ 0 partout)
     const totaux =
-      lignes.find((l) => [l.gStatut, l.gService, l.gCorridor].every((g) => Number(g) !== 0)) || {};
+      lignes.find((l) =>
+        [l.gStatut, l.gService, l.gCorridor, l.gDevise].every((g) => Number(g) !== 0)
+      ) || {};
     const services = await ServiceExpedition.findAll({
       where: { id: lignesService.map((l) => l.serviceId) },
       attributes: ['id', 'nom'],
@@ -785,9 +790,17 @@ class ColisService {
       message: 'Statistiques des expéditions',
       statistiques: {
         total: Number(totaux?.total || 0),
+        // Déprécié : somme brute toutes devises confondues (EUR + XOF), conservée pour
+        // la compatibilité. Les montants exploitables sont dans `parDevise`.
         chiffreAffaires: Number(totaux?.chiffreAffaires || 0),
         poidsTotalKg: Number(totaux?.poids || 0),
         panierMoyen: Number(Number(totaux?.panierMoyen || 0).toFixed(2)),
+        parDevise: lignesDevise.map((r) => ({
+          devise: r.devise,
+          total: Number(r.total),
+          chiffreAffaires: Number(r.chiffreAffaires || 0),
+          panierMoyen: Number(Number(r.panierMoyen || 0).toFixed(2)),
+        })),
         parStatut: STATUTS_COLIS.map((statut) => ({ statut, total: comptes[statut] || 0 })),
         parService: lignesService.map((r) => ({
           service: nomService[r.serviceId] || 'Inconnu',

@@ -232,7 +232,7 @@ class AuthService {
     if (!user || !valide) {
       throw new UnauthorizedError('Identifiant ou mot de passe incorrect');
     }
-    if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé');
+    if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé', 'COMPTE_DESACTIVE');
     if (user.role === 'client' && !user.emailVerifie) {
       const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
       // Sans SMTP configuré, le lien ne peut pas être reçu : la vérification ne bloque pas

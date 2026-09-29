@@ -11,13 +11,21 @@ const {
   retirerPhotoSchema,
 } = require('../validation/catalogue.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { Emballage } = require('../../../models');
 
 /** Emballages : barigots et cartons à la vente, prestation d'emballage sur site. */
 router.use(auth, checkActiveUser, admin);
 
 router.get('/', ctrl.getAll);
 router.post('/', validate(createEmballageSchema), ctrl.create);
-router.put('/:id', validate(uuidParam, 'params'), validate(updateEmballageSchema), ctrl.update);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(Emballage),
+  validate(updateEmballageSchema),
+  ctrl.update
+);
 router.delete('/:id', validate(uuidParam, 'params'), ctrl.remove);
 router.post(
   '/:id/photos',

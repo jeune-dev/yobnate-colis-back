@@ -3,6 +3,7 @@ require('dotenv').config();
 const app = require('./app');
 const sequelize = require('./config/db');
 const redis = require('./config/redis');
+const JWTUtils = require('./utils/jwtUtils');
 const logger = require('./utils/logger');
 const etatApplication = require('./utils/etatApplication');
 const arrierePlan = require('./utils/arrierePlan');
@@ -83,6 +84,7 @@ const attendreRequetes = async (delaiMs) => {
           await attendreRequetes(5000);
           await arrierePlan.vider(4000);
           await sequelize.close();
+          await JWTUtils.fermer();
           if (redis) await redis.quit();
           logger.info('Connexions fermées proprement');
         } catch (_err) {

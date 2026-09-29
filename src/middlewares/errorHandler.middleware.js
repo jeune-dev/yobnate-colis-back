@@ -52,6 +52,7 @@ const ERREURS_CONNEXION_BASE = [
 const traduire = (err) => {
   if (err instanceof AppError && err.isOperational) {
     const corps = { message: err.message };
+    if (typeof err.code === 'string') corps.code = err.code;
     if (err.details && err.details.length) corps.details = err.details;
     return [err.statusCode, corps];
   }

@@ -12,6 +12,8 @@ const {
   changerStatutSchema,
 } = require('../validation/rotation.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { Rotation } = require('../../../models');
 
 /** Rotations : départs groupés (aériens ou maritimes) reliant les deux pays. */
 router.use(auth, checkActiveUser, admin);
@@ -21,7 +23,13 @@ router.get('/embarquables', ctrl.embarquables);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/manifeste', validate(uuidParam, 'params'), ctrl.manifeste);
 router.post('/', validate(createRotationSchema), ctrl.create);
-router.put('/:id', validate(uuidParam, 'params'), validate(updateRotationSchema), ctrl.update);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(Rotation),
+  validate(updateRotationSchema),
+  ctrl.update
+);
 // Coût du conteneur réparti sur les colis au prorata du poids (marge moyenne)
 router.post(
   '/:id/cout',

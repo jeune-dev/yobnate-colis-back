@@ -1,8 +1,13 @@
 'use strict';
 
 class AppError extends Error {
-  constructor(message, statusCode = 500, isOperational = true) {
+  /**
+   * @param {string} [code] identifiant stable renvoyé au client (ex. COMPTE_DESACTIVE) pour
+   *   distinguer des cas qu'un même statut HTTP ne suffit pas à séparer
+   */
+  constructor(message, statusCode = 500, isOperational = true, code = undefined) {
     super(message);
+    if (code) this.code = code;
     this.name = this.constructor.name;
     this.statusCode = statusCode;
     this.isOperational = isOperational;
@@ -22,8 +27,8 @@ class UnauthorizedError extends AppError {
   }
 }
 class ForbiddenError extends AppError {
-  constructor(message = 'Accès refusé') {
-    super(message, 403);
+  constructor(message = 'Accès refusé', code = undefined) {
+    super(message, 403, true, code);
   }
 }
 class NotFoundError extends AppError {

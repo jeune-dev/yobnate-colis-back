@@ -10,6 +10,8 @@ const {
   coursiersDisponiblesQuery,
 } = require('../validation/user.validation');
 const { uuidParam, statutActifSchema } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { User } = require('../../../models');
 
 /** Coursiers et agents de point de collecte. */
 router.use(auth, checkActiveUser, admin);
@@ -22,7 +24,13 @@ router.get(
 );
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.post('/', validate(createPersonnelSchema), ctrl.create);
-router.put('/:id', validate(uuidParam, 'params'), validate(updatePersonnelSchema), ctrl.update);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(User),
+  validate(updatePersonnelSchema),
+  ctrl.update
+);
 router.patch(
   '/:id/statut',
   validate(uuidParam, 'params'),

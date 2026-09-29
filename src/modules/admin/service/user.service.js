@@ -1,5 +1,5 @@
 const { Op } = require('sequelize');
-const { User, Colis, Facture, Ville } = require('../../../models');
+const { User, Colis, Facture, Ville, sequelize } = require('../../../models');
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
@@ -56,11 +56,24 @@ class UserService {
     });
     if (!user) throw new NotFoundError('Client introuvable');
 
-    const [nbColisEnvoyes, nbColisLivres, encours] = await Promise.all([
+    const facturesOuvertes = {
+      userId: id,
+      statut: { [Op.in]: ['en_attente', 'partiellement_payee'] },
+    };
+    const [nbColisEnvoyes, nbColisLivres, encours, soldes] = await Promise.all([
       Colis.count({ where: { userId: id } }),
       Colis.count({ where: { userId: id, statut: 'livre' } }),
-      Facture.sum('montantTotal', {
-        where: { userId: id, statut: { [Op.in]: ['en_attente', 'partiellement_payee'] } },
+      Facture.sum('montantTotal', { where: facturesOuvertes }),
+      // Reste réellement dû (total - déjà payé), séparé par devise : additionner des
+      // euros et des francs CFA n'a pas de sens
+      Facture.findAll({
+        where: facturesOuvertes,
+        attributes: [
+          'devise',
+          [sequelize.fn('SUM', sequelize.literal('"montantTotal" - "montantPaye"')), 'solde'],
+        ],
+        group: ['devise'],
+        raw: true,
       }),
     ]);
 
@@ -68,7 +81,13 @@ class UserService {
       message: 'Détail du client',
       utilisateur: {
         ...user.toJSON(),
-        stats: { nbColisEnvoyes, nbColisLivres, encours: Number(encours || 0) },
+        stats: {
+          nbColisEnvoyes,
+          nbColisLivres,
+          // Déprécié : total facturé brut toutes devises ; utiliser `encoursParDevise`
+          encours: Number(encours || 0),
+          encoursParDevise: soldes.map((r) => ({ devise: r.devise, solde: Number(r.solde || 0) })),
+        },
       },
     };
   };

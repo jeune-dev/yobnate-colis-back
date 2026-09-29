@@ -10,13 +10,21 @@ const {
   updateArticleTarifSchema,
 } = require('../validation/catalogue.validation');
 const { uuidParam } = require('../../../validations/common');
+const verrou = require('../../../middlewares/verrouOptimiste.middleware');
+const { ArticleTarif } = require('../../../models');
 
 /** Grille forfaitaire : prix par article, colonnes Dakar et autres régions. */
 router.use(auth, checkActiveUser, admin);
 
 router.get('/', ctrl.getAll);
 router.post('/', validate(createArticleTarifSchema), ctrl.create);
-router.put('/:id', validate(uuidParam, 'params'), validate(updateArticleTarifSchema), ctrl.update);
+router.put(
+  '/:id',
+  validate(uuidParam, 'params'),
+  verrou(ArticleTarif),
+  validate(updateArticleTarifSchema),
+  ctrl.update
+);
 router.delete('/:id', validate(uuidParam, 'params'), ctrl.remove);
 router.post('/:id/photo', validate(uuidParam, 'params'), upload.single('photo'), ctrl.photo);
 
