@@ -20,7 +20,7 @@ const {
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
 const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
-const { uploadToCloudinary } = require('../../../infrastructure/uploadService');
+const { uploadFile } = require('../../../infrastructure/r2.service');
 const suiviService = require('./suivi.service');
 const tarificationService = require('../../tarification/service/tarification.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -686,7 +686,7 @@ class ColisService {
     if (!colis) throw new NotFoundError('Expédition introuvable');
 
     const televerses = await Promise.all(
-      files.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-express/colis' }))
+      files.map((f) => uploadFile(f.buffer, { folder: 'yobnate-express/colis' }))
     );
     await colis.update({ photos: [...colis.photos, ...televerses] });
     await logActivity({

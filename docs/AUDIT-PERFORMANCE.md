@@ -134,7 +134,7 @@ transactions sont gérées par callback (commit ou rollback automatique).
 
 ## 6. Transactions
 
-- Aucun appel externe dans une transaction : les téléversements Cloudinary sont faits avant
+- Aucun appel externe dans une transaction : les téléversements R2 sont faits avant
   la transaction de déclaration, et les notifications après le commit. C'était déjà le cas.
 - Réessai de référence (`creerAvecReference`, émission de facture) :
   - Défaut : après une violation d'unicité, PostgreSQL annule toute la transaction, donc le

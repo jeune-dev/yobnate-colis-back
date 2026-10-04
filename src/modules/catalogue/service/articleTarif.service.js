@@ -1,9 +1,6 @@
 const { ArticleTarif } = require('../../../models');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 
 /**
@@ -93,7 +90,7 @@ class ArticleTarifService {
    */
   static remove = async (id, adminId) => {
     const article = await ArticleTarifService.charger(id);
-    if (article.photoPublicId) await deleteFromCloudinary(article.photoPublicId).catch(() => {});
+    if (article.photoPublicId) await deleteFile(article.photoPublicId);
     await article.destroy();
     await logActivity({
       userId: adminId,
@@ -107,10 +104,10 @@ class ArticleTarifService {
   static definirPhoto = async (id, fichier, adminId) => {
     if (!fichier) throw new BadRequestError('Aucune photo fournie');
     const article = await ArticleTarifService.charger(id);
-    const photo = await uploadToCloudinary(fichier.buffer, { folder: 'yobnate-express/grille' });
+    const photo = await uploadFile(fichier.buffer, { folder: 'yobnate-express/grille' });
     const ancienne = article.photoPublicId;
     await article.update({ photoUrl: photo.url, photoPublicId: photo.publicId });
-    if (ancienne) await deleteFromCloudinary(ancienne).catch(() => {});
+    if (ancienne) await deleteFile(ancienne);
     await logActivity({
       userId: adminId,
       action: 'admin.article_tarif.photo',

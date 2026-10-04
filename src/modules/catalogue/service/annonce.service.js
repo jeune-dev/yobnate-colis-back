@@ -1,10 +1,7 @@
 const { Op } = require('sequelize');
 const { Annonce } = require('../../../models');
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 
 /**
@@ -105,7 +102,7 @@ class AnnonceService {
 
   static remove = async (id, adminId) => {
     const annonce = await AnnonceService.charger(id);
-    if (annonce.imagePublicId) await deleteFromCloudinary(annonce.imagePublicId).catch(() => {});
+    if (annonce.imagePublicId) await deleteFile(annonce.imagePublicId);
     await annonce.destroy();
     await logActivity({
       userId: adminId,
@@ -119,10 +116,10 @@ class AnnonceService {
   static definirImage = async (id, fichier, adminId) => {
     if (!fichier) throw new BadRequestError('Aucune image fournie');
     const annonce = await AnnonceService.charger(id);
-    const image = await uploadToCloudinary(fichier.buffer, { folder: 'yobnate-express/annonces' });
+    const image = await uploadFile(fichier.buffer, { folder: 'yobnate-express/annonces' });
     const ancienne = annonce.imagePublicId;
     await annonce.update({ imageUrl: image.url, imagePublicId: image.publicId });
-    if (ancienne) await deleteFromCloudinary(ancienne).catch(() => {});
+    if (ancienne) await deleteFile(ancienne);
     await logActivity({
       userId: adminId,
       action: 'admin.annonce.image',

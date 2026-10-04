@@ -23,11 +23,12 @@ const mockEmails = [];
 jest.mock('nodemailer', () => ({
   createTransport: () => ({ sendMail: async (m) => mockEmails.push(m) }),
 }));
-jest.mock('../../src/infrastructure/uploadService', () => {
+jest.mock('../../src/infrastructure/r2.service', () => {
   let n = 0;
   return {
-    uploadToCloudinary: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `f${n}` }),
-    deleteFromCloudinary: async () => {},
+    uploadFile: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `r2:f${n}` }),
+    deleteFile: async () => {},
+    PUBLIC_URL: 'https://test',
   };
 });
 

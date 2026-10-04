@@ -10,10 +10,7 @@ const {
 const whatsapp = require('../../../infrastructure/whatsapp');
 const AuthService = require('../../auth/service/auth.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 
 /** Espace personnel du client : profil, préférences et compte professionnel. */
 
@@ -126,8 +123,8 @@ class ProfilService {
     const user = await User.findByPk(userId);
     if (!user) throw new NotFoundError('Utilisateur introuvable');
 
-    const uploaded = await uploadToCloudinary(file.buffer, { folder: 'yobnate-express/avatars' });
-    if (user.avatarPublicId) await deleteFromCloudinary(user.avatarPublicId);
+    const uploaded = await uploadFile(file.buffer, { folder: 'yobnate-express/avatars' });
+    if (user.avatarPublicId) await deleteFile(user.avatarPublicId);
 
     await user.update({ avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId });
     return { message: 'Photo de profil mise à jour.', utilisateur: user.toSafeJSON() };
@@ -160,14 +157,11 @@ class ProfilService {
     if (!user.numeroIdentificationFiscale) {
       throw new BadRequestError("Renseignez d'abord votre numéro NINEA ou SIRET dans votre profil");
     }
-
-    const resourceType = file.mimetype === 'application/pdf' ? 'raw' : 'image';
-    const fichier = await uploadToCloudinary(file.buffer, {
+    const fichier = await uploadFile(file.buffer, {
       folder: 'yobnate-express/justificatifs',
-      resourceType,
     });
     if (user.justificatifProPublicId) {
-      await deleteFromCloudinary(user.justificatifProPublicId).catch(() => {});
+      await deleteFile(user.justificatifProPublicId);
     }
     await user.update({
       justificatifProUrl: fichier.url,
