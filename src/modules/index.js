@@ -20,6 +20,12 @@ const ROUTES = [
     routeur: r('appVersion', 'appVersion'),
   },
   {
+    chemin: '/public/demandes-contact',
+    espace: 'public',
+    tag: 'Contact des sites vitrines',
+    routeur: r('demandeContact', 'demandeContactPublic'),
+  },
+  {
     chemin: '/suppression-compte',
     espace: 'public',
     tag: 'Suppression de compte',
@@ -250,6 +256,12 @@ const ROUTES = [
     espace: 'admin',
     tag: 'Admin — Version application',
     routeur: r('appVersion', 'appVersionAdmin'),
+  },
+  {
+    chemin: '/admin/demandes-contact',
+    espace: 'admin',
+    tag: 'Admin — Demandes de contact',
+    routeur: r('demandeContact', 'demandeContactAdmin'),
   },
   {
     chemin: '/admin/suppressions-compte',

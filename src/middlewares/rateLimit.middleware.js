@@ -162,6 +162,17 @@ const demandePubliqueRateLimit = limiteur('demande', {
   message: { success: false, message: 'Trop de demandes. Réessayez dans une heure.' },
 });
 
+// Formulaire de contact des sites vitrines : ouvert à Internet, déclenche une
+// notification aux administrateurs. 10 envois / heure par IP.
+const contactPubliqueRateLimit = limiteur('contact', {
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: _skipEnDev,
+  message: { success: false, message: 'Trop de messages envoyés. Réessayez dans une heure.' },
+});
+
 module.exports = {
   globalRateLimit,
   authRateLimit,
@@ -172,4 +183,5 @@ module.exports = {
   mesureRateLimit,
   envoiCodeRateLimit,
   demandePubliqueRateLimit,
+  contactPubliqueRateLimit,
 };

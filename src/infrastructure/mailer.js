@@ -247,6 +247,25 @@ const sendReclamationEmail = (user, reclamation, titre, corpsTexte) =>
     }),
   });
 
+/**
+ * Réponse de l'administrateur à une demande de contact d'un site vitrine.
+ * L'objet est celui saisi par l'administrateur ; la demande d'origine est rappelée
+ * sous la réponse. Le texte est échappé, les retours à la ligne sont conservés.
+ */
+const sendReponseDemandeContactEmail = (demande, { objet, reponse }) =>
+  sendMail({
+    to: demande.email,
+    subject: objet,
+    html: gabarit({
+      titre: objet,
+      corps: `<p>Bonjour ${echapper(demande.prenom)},</p>
+        <p style="white-space:pre-line;">${echapper(reponse)}</p>
+        <p style="margin:20px 0 6px;color:#6b7280;font-size:13px;">Votre message :</p>
+        <p style="margin:0;padding:12px;background:#f0f7f4;border-left:4px solid #0b3d2c;font-size:14px;white-space:pre-line;">${echapper(demande.message)}</p>`,
+    }),
+    texte: `Bonjour ${demande.prenom},\n\n${reponse}\n\n---\nVotre message :\n${demande.message}`,
+  });
+
 /* ── Modèles personnalisables par l'administrateur ──────────────────────── */
 
 /**
@@ -407,4 +426,5 @@ module.exports = {
   sendPaiementConfirmeEmail,
   sendEnlevementPlanifieEmail,
   sendReclamationEmail,
+  sendReponseDemandeContactEmail,
 };

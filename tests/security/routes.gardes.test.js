@@ -50,6 +50,10 @@ const PUBLIQUES = new Map([
     'mesure d’audience anonyme (UUID aléatoires, ni IP ni agent), débit limité',
   ],
   ['GET /app-version', 'lu par l’application mobile avant toute connexion'],
+  [
+    'POST /public/demandes-contact',
+    'formulaire de contact des sites vitrines, débit limité par IP',
+  ],
   ['POST /suppression-compte', 'exigence Google Play : joignable sans connexion ni application'],
 ]);
 
