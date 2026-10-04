@@ -1,6 +1,6 @@
 /**
  * Référentiel des pays desservis.
- * Le service Yobnate Express couvre exclusivement le corridor France ⇄ Sénégal.
+ * Le service Yobante Colis couvre exclusivement le corridor France ⇄ Sénégal.
  */
 const PAYS = {
   FR: {

@@ -87,7 +87,7 @@ const genererEtiquette = (colis, { piece = null, point = null } = {}) => {
   const contenu = `
   <div class="cadre" style="width:105mm;">
     <div style="display:flex;justify-content:space-between;align-items:center;background:#0b3d2c;color:#fff;padding:8px 10px;">
-      <strong style="font-size:15px;letter-spacing:1px;">YOBNATE EXPRESS</strong>
+      <strong style="font-size:15px;letter-spacing:1px;">YOBANTE COLIS</strong>
       <span style="font-size:11px;">${echapper(colis.service?.nom || '')}</span>
     </div>
 
@@ -278,7 +278,7 @@ const genererFactureCommerciale = (colis, declaration, articles = [], entreprise
     </div>
 
     <div style="margin-top:16px;border-top:1px solid #ccc;padding-top:6px;" class="muted">
-      ${echapper(entreprise.entreprise_nom || 'Yobnate Express')}
+      ${echapper(entreprise.entreprise_nom || 'Yobante Colis')}
       ${entreprise.entreprise_adresse ? ` — ${echapper(entreprise.entreprise_adresse)}` : ''}
       ${entreprise.entreprise_email ? ` — ${echapper(entreprise.entreprise_email)}` : ''}
     </div>`;
@@ -305,7 +305,7 @@ const genererFactureTransport = (facture, colis, entreprise = {}) => {
   const contenu = `
     <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
       <div>
-        <h1 style="color:#0b3d2c;">${echapper(entreprise.entreprise_nom || 'Yobnate Express')}</h1>
+        <h1 style="color:#0b3d2c;">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</h1>
         <div class="muted">${echapper(entreprise.entreprise_adresse || '')}</div>
         <div class="muted">${echapper(entreprise.entreprise_email || '')} ${echapper(entreprise.entreprise_telephone || '')}</div>
       </div>
@@ -395,7 +395,7 @@ const genererManifeste = (rotation, colisList = [], entreprise = {}) => {
     <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
       <div>
         <h1 style="color:#0b3d2c;">MANIFESTE DE CHARGEMENT</h1>
-        <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobnate Express')}</div>
+        <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</div>
       </div>
       <div class="droite">
         <div><strong>${echapper(rotation.numeroManifeste || rotation.reference)}</strong></div>
@@ -450,7 +450,7 @@ const genererBordereauDepot = (colis, point, entreprise = {}) => {
   const contenu = `
     <div class="cadre" style="width:105mm;padding:10px;">
       <div style="text-align:center;border-bottom:1px solid #111;padding-bottom:6px;margin-bottom:8px;">
-        <strong style="font-size:14px;">${echapper(entreprise.entreprise_nom || 'YOBNATE EXPRESS')}</strong><br>
+        <strong style="font-size:14px;">${echapper(entreprise.entreprise_nom || 'YOBANTE COLIS')}</strong><br>
         <span class="muted">Récépissé de dépôt</span>
       </div>
       <div class="centre">${barcode.versSvg(colis.reference, { moduleWidth: 1.6, hauteur: 48 })}</div>
@@ -509,7 +509,7 @@ const genererInventaire = (inventaire, entreprise = {}) => {
     <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
       <div>
         <h1 style="color:#0b3d2c;">INVENTAIRE DES PRODUITS CHARGÉS</h1>
-        <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobnate Express')}</div>
+        <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</div>
       </div>
       <div class="droite">
         <div><strong>${echapper(inventaire.titre)}</strong></div>

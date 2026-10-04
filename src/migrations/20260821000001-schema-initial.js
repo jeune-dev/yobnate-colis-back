@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Migration initiale du schéma Yobnate Express.
+ * Migration initiale du schéma Yobante Colis.
  *
  * Plutôt que de dupliquer à la main la définition de 28 tables — au risque
  * d'une dérive silencieuse entre le schéma de développement et celui de

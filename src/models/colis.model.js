@@ -18,7 +18,7 @@ const {
 } = require('../config/colis');
 
 /**
- * Expédition — la lettre de transport (LTA) du réseau Yobnate Express.
+ * Expédition — la lettre de transport (LTA) du réseau Yobante Colis.
  *
  * Une expédition regroupe une à plusieurs pièces physiques (cf. ColisPiece), suit
  * un corridor France ⇄ Sénégal, entre dans le réseau par un dépôt en point de

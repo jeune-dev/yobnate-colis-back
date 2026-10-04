@@ -895,7 +895,7 @@ class TarificationService {
       detailDouane: {
         ...douane,
         commentaire: douane.applicable
-          ? 'Droits et taxes avancés par Yobnate Express et refacturés (DDP)'
+          ? 'Droits et taxes avancés par Yobante Colis et refacturés (DDP)'
           : international && contenu !== 'document'
             ? 'Droits et taxes estimés, à régler par le destinataire au dédouanement (DAP)'
             : 'Aucune formalité douanière',

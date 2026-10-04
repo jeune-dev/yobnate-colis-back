@@ -1,7 +1,7 @@
 {
   "name": "yobnate-colis-back",
   "version": "1.0.0",
-  "description": "API backend de gestion et suivi de colis - Yobnate Colis",
+  "description": "API backend de gestion et suivi de colis - Yobante Colis",
   "main": "src/server.js",
   "private": true,
   "scripts": {

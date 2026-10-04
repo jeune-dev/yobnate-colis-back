@@ -80,7 +80,7 @@ const seedSuperAdmin = async () => {
   const hashed = await bcrypt.hash(password, bcryptConfig.saltRounds);
   await User.create({
     nom: process.env.SUPER_ADMIN_NOM || 'Admin',
-    prenom: process.env.SUPER_ADMIN_PRENOM || 'Yobnate',
+    prenom: process.env.SUPER_ADMIN_PRENOM || 'Yobante',
     email,
     password: hashed,
     telephone: '+221770000001',
@@ -229,7 +229,7 @@ const seedPointsCollecte = async (villes) => {
   const points = [
     {
       code: 'SN-DKR-01',
-      nom: 'Agence Yobnate Dakar Plateau',
+      nom: 'Agence Yobante Colis Dakar Plateau',
       type: 'agence',
       pays: 'SN',
       villeCle: 'SN:Dakar',
@@ -239,7 +239,7 @@ const seedPointsCollecte = async (villes) => {
     },
     {
       code: 'FR-PAR-01',
-      nom: 'Agence Yobnate Paris',
+      nom: 'Agence Yobante Colis Paris',
       type: 'agence',
       pays: 'FR',
       villeCle: 'FR:Paris',

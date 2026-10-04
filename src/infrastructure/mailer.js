@@ -43,7 +43,7 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
 <body style="margin:0;padding:24px;background:#f4f5f7;font-family:Helvetica,Arial,sans-serif;color:#1f2933;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;">
     <tr><td style="background:#0b3d2c;padding:20px 24px;">
-      <span style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:1px;">YOBNATE EXPRESS</span>
+      <span style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:1px;">YOBANTE COLIS</span>
       <span style="color:#9fd5bd;font-size:12px;display:block;margin-top:4px;">France &nbsp;&#8646;&nbsp; Sénégal</span>
     </td></tr>
     <tr><td style="padding:24px;">
@@ -121,7 +121,7 @@ const sendOtpEmail = (user, code) =>
 const sendBienvenueEmail = (user) =>
   sendMail({
     to: user.email,
-    subject: 'Bienvenue chez Yobnate Express',
+    subject: 'Bienvenue chez Yobante Colis',
     html: gabarit({
       titre: `Bienvenue ${echapper(user.prenom)}`,
       corps: `<p>Votre compte est créé. Vous pouvez dès à présent estimer un tarif, déclarer une

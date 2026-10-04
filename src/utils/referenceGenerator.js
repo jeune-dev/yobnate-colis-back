@@ -90,7 +90,7 @@ const initialesClient = (nomComplet) => {
 };
 
 /**
- * Numéro de suivi au format Yobnate, par exemple PNCO0126032026MDT03 :
+ * Numéro de suivi au format Yobante Colis, par exemple PNCO0126032026MDT03 :
  *
  *   PN        préfixe de l'entreprise (paramétrable)
  *   CO01      conteneur n° 01

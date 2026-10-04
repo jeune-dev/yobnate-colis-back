@@ -88,7 +88,7 @@ class NotificationService {
         envoyerWhatsapp({
           telephone: colis.expediteurTelephone || client.telephone,
           message:
-            `Yobnate — Colis ${colis.reference} : ${evenement.libelle}` +
+            `Yobante Colis — Colis ${colis.reference} : ${evenement.libelle}` +
             `${evenement.lieu ? ` (${evenement.lieu})` : ''}.${lien}`,
         })
       );
@@ -187,7 +187,7 @@ class NotificationService {
             arrierePlan.lancer('whatsapp', () =>
               envoyerWhatsapp({
                 telephone: abonnement.destination,
-                message: `Yobnate — Colis ${colis.reference} : ${evenement.libelle}.`,
+                message: `Yobante Colis — Colis ${colis.reference} : ${evenement.libelle}.`,
               })
             );
           }

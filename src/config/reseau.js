@@ -6,7 +6,7 @@
 const TYPES_POINT = ['agence', 'point_relais', 'casier', 'hub', 'entrepot'];
 
 const LIBELLES_TYPES_POINT = {
-  agence: 'Agence Yobnate',
+  agence: 'Agence Yobante Colis',
   point_relais: 'Point relais partenaire',
   casier: 'Consigne automatique',
   hub: 'Hub de tri',
