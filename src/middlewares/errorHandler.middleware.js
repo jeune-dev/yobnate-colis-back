@@ -99,7 +99,11 @@ const traduire = (err) => {
       422,
       {
         message: 'Données invalides',
-        ...(enProd() ? {} : { details: err.errors?.map((e) => e.message) }),
+        // En production, seul le nom du champ refusé est exposé (contrat de l'API,
+        // comme pour Joi) : le client sait quoi corriger au lieu d'un message muet
+        details: enProd()
+          ? [...new Set((err.errors || []).map((e) => `Champ « ${e.path} » refusé`))]
+          : err.errors?.map((e) => e.message),
       },
     ];
   }

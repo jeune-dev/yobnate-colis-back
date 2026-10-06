@@ -650,11 +650,16 @@ class TarificationService {
       zoneDakar,
     });
 
-    // 2. Poids facturé — à défaut de colis détaillés, une pièce par article choisi
-    const piecesRetenues =
-      !pieces.length && !poidsReelKg && lignesForfait
-        ? TarificationService.piecesDepuisForfait(lignesForfait, categorie)
-        : pieces;
+    // 2. Poids facturé — à défaut de colis détaillés, une pièce par article choisi.
+    // Des documents sans forfait sur le trajet sont tarifés au poids : une
+    // enveloppe standard, faute de quoi le colis partirait à 0 kg (refusé en base).
+    const sansPoids = !pieces.length && !poidsReelKg;
+    let piecesRetenues = pieces;
+    if (sansPoids && lignesForfait) {
+      piecesRetenues = TarificationService.piecesDepuisForfait(lignesForfait, categorie);
+    } else if (sansPoids && categorie === 'documents') {
+      piecesRetenues = [{ designation: 'Enveloppe', typeEmballage: 'enveloppe', poidsKg: 0.5 }];
+    }
     const coefficient = Number(
       service.coefficientVolumetrique || params.coefficient_volumetrique_defaut
     );
