@@ -1,8 +1,11 @@
 const Joi = require('joi');
 const { articleDouaneSchema } = require('../../colis/validation/colis.validation');
+const { TYPES_CONTENU, INCOTERMS } = require('../../../config/colis');
+const { CODES_PAYS } = require('../../../config/pays');
+const { listeQuery, filtres } = require('../../../validations/common');
 
 const updateDeclarationSchema = Joi.object({
-  motifExport: Joi.string(),
+  motifExport: Joi.string().valid(...TYPES_CONTENU),
   incoterm: Joi.string().valid('DAP', 'DDP'),
   numeroEori: Joi.string().max(20).allow('', null),
   numeroNinea: Joi.string().max(20).allow('', null),
@@ -38,7 +41,17 @@ const ajouterDocumentSchema = Joi.object({
   libelle: Joi.string().max(150).allow('', null),
 });
 
+const listeDeclarationsQuery = listeQuery({
+  statut: filtres.valeurs(['brouillon', 'soumise', 'en_cours', 'bloquee', 'dedouanee', 'refusee']),
+  paysImport: filtres.valeurs(CODES_PAYS),
+  motifExport: filtres.valeurs(TYPES_CONTENU),
+  incoterm: filtres.valeurs(INCOTERMS),
+  numeroDeclaration: filtres.recherche,
+  aTraiter: filtres.booleen,
+});
+
 module.exports = {
+  listeDeclarationsQuery,
   updateDeclarationSchema,
   definirArticlesSchema,
   ajouterArticleSchema,

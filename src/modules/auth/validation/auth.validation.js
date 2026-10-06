@@ -29,7 +29,7 @@ const loginSchema = Joi.object({
   identifiant: Joi.string().trim().max(150),
   email: Joi.string().trim().lowercase().email(),
   telephone: Joi.string().trim().max(20),
-  password: Joi.string().required(),
+  password: Joi.string().max(128).required(),
 })
   .or('identifiant', 'email', 'telephone')
   .messages({ 'object.missing': 'Indiquez votre email ou votre numéro de téléphone' });
@@ -43,7 +43,7 @@ const renvoyerVerificationSchema = Joi.object({
 });
 
 const refreshTokenSchema = Joi.object({
-  refreshToken: Joi.string(),
+  refreshToken: Joi.string().max(512),
 });
 
 const forgotPasswordSchema = Joi.object({
@@ -57,7 +57,7 @@ const resetPasswordSchema = Joi.object({
 });
 
 const changePasswordSchema = Joi.object({
-  oldPassword: Joi.string().required(),
+  oldPassword: Joi.string().max(128).required(),
   newPassword: password.required(),
 });
 

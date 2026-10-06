@@ -4,7 +4,11 @@ const auth = require('../../../middlewares/auth.middleware');
 const { admin, superAdmin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
-const { createAdminSchema, updateAdminSchema } = require('../validation/user.validation');
+const {
+  createAdminSchema,
+  updateAdminSchema,
+  listeAdminsQuery,
+} = require('../validation/user.validation');
 const { uuidParam } = require('../../../validations/common');
 
 /**
@@ -32,7 +36,7 @@ router.use(auth, checkActiveUser, admin);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/', adminController.getAll);
+router.get('/', validate(listeAdminsQuery, 'query'), adminController.getAll);
 
 /**
  * @swagger

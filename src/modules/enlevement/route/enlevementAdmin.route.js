@@ -8,6 +8,7 @@ const {
   planifierSchema,
   cloturerSchema,
   annulerEnlevementSchema,
+  listeEnlevementsAdminQuery,
 } = require('../validation/enlevement.validation');
 const { uuidParam } = require('../../../validations/common');
 const { DemandeEnlevement } = require('../../../models');
@@ -29,7 +30,7 @@ router.param(
   )
 );
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeEnlevementsAdminQuery, 'query'), ctrl.getAll);
 router.get('/tournee/aujourdhui', ctrl.tournee);
 router.get('/tournee/:coursierId', ctrl.tournee);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);

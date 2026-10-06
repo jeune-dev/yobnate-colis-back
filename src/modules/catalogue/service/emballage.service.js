@@ -108,7 +108,7 @@ class EmballageService {
       );
     }
     const photos = await Promise.all(
-      fichiers.map((f) => uploadFile(f.buffer, { folder: 'yobnate-express/emballages' }))
+      fichiers.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/emballages' }))
     );
     await emballage.update({ photos: [...(emballage.photos || []), ...photos] });
     await logActivity({

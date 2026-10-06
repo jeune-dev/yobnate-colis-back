@@ -16,7 +16,7 @@ const {
 } = require('../../../models');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
 const {
-  genererNumeroSuiviYobnate,
+  genererNumeroSuiviYobante,
   genererNumeroPiece,
   genererNumeroFactureCommerciale,
   genererCodeRetrait,
@@ -515,11 +515,11 @@ class ColisDeclarationService {
     const televerser = (buffer, options) =>
       Promise.resolve().then(() => uploadFile(buffer, options));
     const envois = await Promise.allSettled([
-      ...fichiersPhotos.map((f) => televerser(f.buffer, { folder: 'yobnate-express/colis' })),
+      ...fichiersPhotos.map((f) => televerser(f.buffer, { folder: 'yobante-colis/colis' })),
       ...(fichierVocal
         ? [
             televerser(fichierVocal.buffer, {
-              folder: 'yobnate-express/vocaux',
+              folder: 'yobante-colis/vocaux',
             }),
           ]
         : []),
@@ -651,7 +651,7 @@ class ColisDeclarationService {
             creePar: contexte.auteurId || userId,
           }),
           () =>
-            genererNumeroSuiviYobnate({
+            genererNumeroSuiviYobante({
               prefixe: parametres.prefixe_numero_suivi || 'PN',
               codeConteneur: parametres.code_conteneur_numero_suivi || 'CO',
               numeroConteneur,

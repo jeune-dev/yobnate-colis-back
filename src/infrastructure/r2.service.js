@@ -77,10 +77,10 @@ const echecTeleversement = (err, folder) => {
  *
  * @param {Buffer} buffer      — contenu du fichier
  * @param {object} [options]
- * @param {string} [options.folder] — dossier dans le bucket (ex. 'yobnate-express/avatars')
+ * @param {string} [options.folder] — dossier dans le bucket (ex. 'yobante-colis/avatars')
  * @returns {Promise<{ url: string, publicId: string }>} URL publique et identifiant à conserver
  */
-const uploadFile = async (buffer, { folder = 'yobnate-express' } = {}) => {
+const uploadFile = async (buffer, { folder = 'yobante-colis' } = {}) => {
   const format = typeFichier(buffer);
   if (!format) throw new BadRequestError('Fichier invalide ou corrompu');
   if (!r2Client) {

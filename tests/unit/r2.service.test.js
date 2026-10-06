@@ -105,23 +105,23 @@ describe('Vérification du contenu des fichiers (magic bytes)', () => {
 describe('Stockage Cloudflare R2', () => {
   test('envoi : clé aléatoire dans le dossier, type réel, URL publique', async () => {
     const { service, envois } = chargerR2();
-    const fichier = await service.uploadFile(PDF, { folder: 'yobnate-express/justificatifs' });
+    const fichier = await service.uploadFile(PDF, { folder: 'yobante-colis/justificatifs' });
 
     const { Bucket, Key, ContentType } = envois[0].entree;
     expect(Bucket).toBe('yobante-colis');
-    expect(Key).toMatch(/^yobnate-express\/justificatifs\/[0-9a-f-]{36}\.pdf$/);
+    expect(Key).toMatch(/^yobante-colis\/justificatifs\/[0-9a-f-]{36}\.pdf$/);
     expect(ContentType).toBe('application/pdf');
     expect(fichier).toEqual({ url: `https://fichiers.exemple.com/${Key}`, publicId: `r2:${Key}` });
   });
 
   test('suppression : fichier R2 supprimé, identifiant antérieur à R2 ignoré', async () => {
     const { service, envois } = chargerR2();
-    await service.deleteFile('r2:yobnate-express/avatars/a.png');
-    await service.deleteFile('yobnate-express/avatars/ancien-fichier');
+    await service.deleteFile('r2:yobante-colis/avatars/a.png');
+    await service.deleteFile('yobante-colis/avatars/ancien-fichier');
     expect(envois).toHaveLength(1);
     expect(envois[0]).toMatchObject({
       type: 'delete',
-      entree: { Key: 'yobnate-express/avatars/a.png' },
+      entree: { Key: 'yobante-colis/avatars/a.png' },
     });
   });
 

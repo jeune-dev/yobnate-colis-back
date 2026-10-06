@@ -77,6 +77,25 @@ describe('Gestionnaire d’erreurs', () => {
     expect(executer(err).statut).toBe(statut);
   });
 
+  test.each(['22P02', '22001', '22003', '22007', '22008'])(
+    'valeur refusée par PostgreSQL (%s) → 400, pas 500',
+    (code) => {
+      const err = new Error('invalid input value for enum enum_colis_statut: "xyz"');
+      err.name = 'SequelizeDatabaseError';
+      err.parent = { code };
+      const { statut, corps } = executer(err, 'production');
+      expect(statut).toBe(400);
+      expect(corps.message).toBe('Paramètre invalide');
+    }
+  );
+
+  test('autre erreur PostgreSQL : reste une 500 masquée', () => {
+    const err = new Error('relation "x" does not exist');
+    err.name = 'SequelizeDatabaseError';
+    err.parent = { code: '42P01' };
+    expect(executer(err, 'production').statut).toBe(500);
+  });
+
   test('erreur inattendue en production : message interne masqué', () => {
     const { statut, corps } = executer(
       new Error('SELECT * FROM users — mot de passe DB'),

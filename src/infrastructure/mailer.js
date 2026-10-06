@@ -36,20 +36,32 @@ const echapper = (valeur) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+/**
+ * Couleurs du pictogramme Yobante Colis (mêmes valeurs que l'application mobile et
+ * les documents imprimables) : bleu marine pour l'en-tête, les titres et les boutons,
+ * jaune pour les accents.
+ */
+const COULEURS = {
+  primaire: '#053D8F',
+  secondaire: '#F6C537',
+  primaireClair: '#E7EDF6',
+  fond: '#F5F7FB',
+};
+
 /** Gabarit commun : en-tête, corps et pied de page. */
 const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><title>${echapper(titre)}</title></head>
-<body style="margin:0;padding:24px;background:#f4f5f7;font-family:Helvetica,Arial,sans-serif;color:#1f2933;">
+<body style="margin:0;padding:24px;background:${COULEURS.fond};font-family:Helvetica,Arial,sans-serif;color:#1f2933;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;">
-    <tr><td style="background:#0b3d2c;padding:20px 24px;">
+    <tr><td style="background:${COULEURS.primaire};padding:20px 24px;border-bottom:4px solid ${COULEURS.secondaire};">
       <span style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:1px;">YOBANTE COLIS</span>
-      <span style="color:#9fd5bd;font-size:12px;display:block;margin-top:4px;">France &nbsp;&#8646;&nbsp; Sénégal</span>
+      <span style="color:${COULEURS.secondaire};font-size:12px;display:block;margin-top:4px;">France &nbsp;&#8646;&nbsp; Sénégal</span>
     </td></tr>
     <tr><td style="padding:24px;">
-      <h1 style="margin:0 0 16px;font-size:20px;color:#0b3d2c;">${echapper(titre)}</h1>
+      <h1 style="margin:0 0 16px;font-size:20px;color:${COULEURS.primaire};">${echapper(titre)}</h1>
       ${corps}
-      ${bouton ? `<p style="margin:24px 0 0;"><a href="${echapper(bouton.url)}" style="display:inline-block;background:#0b3d2c;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:bold;">${echapper(bouton.libelle)}</a></p>` : ''}
+      ${bouton ? `<p style="margin:24px 0 0;"><a href="${echapper(bouton.url)}" style="display:inline-block;background:${COULEURS.primaire};color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;font-weight:bold;">${echapper(bouton.libelle)}</a></p>` : ''}
     </td></tr>
     <tr><td style="padding:16px 24px;background:#f0f2f5;font-size:12px;color:#6b7280;">
       ${piedDePage || 'Ce message vous est adressé automatiquement, merci de ne pas y répondre.'}
@@ -113,7 +125,7 @@ const sendOtpEmail = (user, code) =>
       titre: 'Réinitialisation de mot de passe',
       corps: `<p>Bonjour ${echapper(user.prenom)},</p>
         <p>Voici le code à saisir pour définir un nouveau mot de passe :</p>
-        <p style="font-size:32px;font-weight:bold;letter-spacing:6px;color:#0b3d2c;margin:16px 0;">${echapper(code)}</p>
+        <p style="font-size:32px;font-weight:bold;letter-spacing:6px;color:${COULEURS.primaire};margin:16px 0;">${echapper(code)}</p>
         <p>Ce code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.</p>`,
     }),
   });
@@ -140,7 +152,7 @@ const sendColisCreeEmail = (destinataireEmail, colis, prenom = '') =>
       titre: 'Votre expédition est enregistrée',
       corps: `<p>Bonjour ${echapper(prenom)},</p>
         <p>Votre expédition a bien été enregistrée sous le numéro de suivi :</p>
-        <p style="font-size:22px;font-weight:bold;letter-spacing:2px;color:#0b3d2c;">${echapper(colis.reference)}</p>
+        <p style="font-size:22px;font-weight:bold;letter-spacing:2px;color:${COULEURS.primaire};">${echapper(colis.reference)}</p>
         <p>Conservez ce numéro : il permet de suivre l'acheminement à tout moment.</p>`,
       bouton: URL_PUBLIQUE
         ? { url: `${URL_PUBLIQUE}/suivi/${colis.reference}`, libelle: 'Suivre mon colis' }
@@ -179,7 +191,7 @@ const sendColisDisponibleEmail = (email, colis, point, prenom = '') =>
       titre: 'Votre colis vous attend',
       corps: `<p>Bonjour ${echapper(prenom)},</p>
         <p>Le colis <strong>${echapper(colis.reference)}</strong> est disponible au point de retrait suivant :</p>
-        <p style="margin:12px 0;padding:12px;background:#f0f7f4;border-left:4px solid #0b3d2c;">
+        <p style="margin:12px 0;padding:12px;background:${COULEURS.primaireClair};border-left:4px solid ${COULEURS.secondaire};">
           <strong>${echapper(point?.nom)}</strong><br>${echapper(point?.adresse)}<br>
           ${point?.telephone ? `Tél. ${echapper(point.telephone)}` : ''}
         </p>
@@ -261,7 +273,7 @@ const sendReponseDemandeContactEmail = (demande, { objet, reponse }) =>
       corps: `<p>Bonjour ${echapper(demande.prenom)},</p>
         <p style="white-space:pre-line;">${echapper(reponse)}</p>
         <p style="margin:20px 0 6px;color:#6b7280;font-size:13px;">Votre message :</p>
-        <p style="margin:0;padding:12px;background:#f0f7f4;border-left:4px solid #0b3d2c;font-size:14px;white-space:pre-line;">${echapper(demande.message)}</p>`,
+        <p style="margin:0;padding:12px;background:${COULEURS.primaireClair};border-left:4px solid ${COULEURS.secondaire};font-size:14px;white-space:pre-line;">${echapper(demande.message)}</p>`,
     }),
     texte: `Bonjour ${demande.prenom},\n\n${reponse}\n\n---\nVotre message :\n${demande.message}`,
   });
@@ -326,7 +338,7 @@ const MODELES_PAR_DEFAUT = {
     corps: `<p>Bonjour {{prenom}},</p>
       <p>Après étude de votre demande <strong>{{reference}}</strong>, nous vous proposons le tarif
       suivant :</p>
-      <p style="font-size:24px;font-weight:bold;color:#0b3d2c;">{{montant}}</p>
+      <p style="font-size:24px;font-weight:bold;color:${COULEURS.primaire};">{{montant}}</p>
       <p>{{commentaire}}</p>
       <p>Conditions : {{conditions}}</p>
       <p>Cette proposition est valable jusqu'au <strong>{{dateExpiration}}</strong>. Acceptez-la

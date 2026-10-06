@@ -1,5 +1,6 @@
 const Joi = require('joi');
 const { pays, devise, dateISO } = require('../../../validations/common');
+const { TYPES_CONTENU } = require('../../../config/colis');
 
 const trancheSchema = Joi.object({
   poidsMinKg: Joi.number().min(0).required(),
@@ -56,10 +57,12 @@ const calculerPrixSchema = Joi.object({
   villeDepartId: Joi.string().uuid().required(),
   villeArriveeId: Joi.string().uuid().required(),
   poidsKg: Joi.number().positive().max(1000).required(),
-  longueurCm: Joi.number().positive().allow(null),
-  largeurCm: Joi.number().positive().allow(null),
-  hauteurCm: Joi.number().positive().allow(null),
-  typeContenu: Joi.string().default('marchandise'),
+  longueurCm: Joi.number().positive().max(500).allow(null),
+  largeurCm: Joi.number().positive().max(500).allow(null),
+  hauteurCm: Joi.number().positive().max(500).allow(null),
+  typeContenu: Joi.string()
+    .valid(...TYPES_CONTENU)
+    .default('marchandise'),
   valeurDeclaree: Joi.number().min(0).default(0),
   assuranceSouscrite: Joi.boolean().default(false),
   modeDepot: Joi.string().valid('point_collecte', 'enlevement_domicile').default('point_collecte'),

@@ -1,4 +1,4 @@
-# Audit critique du backend — Yobnate Colis
+# Audit critique du backend — Yobante Colis
 
 Audit du 27/09/2026, sur `main` au commit `a693962`. Les corrections sont sur la branche
 `claude/amazing-carson-4ya8x3` (commit `f0c67f7`).

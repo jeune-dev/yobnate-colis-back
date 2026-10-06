@@ -104,7 +104,7 @@ class ArticleTarifService {
   static definirPhoto = async (id, fichier, adminId) => {
     if (!fichier) throw new BadRequestError('Aucune photo fournie');
     const article = await ArticleTarifService.charger(id);
-    const photo = await uploadFile(fichier.buffer, { folder: 'yobnate-express/grille' });
+    const photo = await uploadFile(fichier.buffer, { folder: 'yobante-colis/grille' });
     const ancienne = article.photoPublicId;
     await article.update({ photoUrl: photo.url, photoPublicId: photo.publicId });
     if (ancienne) await deleteFile(ancienne);

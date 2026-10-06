@@ -11,6 +11,7 @@ const {
   ajouterArticleSchema,
   changerStatutSchema,
   ajouterDocumentSchema,
+  listeDeclarationsQuery,
 } = require('../validation/douane.validation');
 const { uuidParam, colisIdParam, articleParam } = require('../../../validations/common');
 
@@ -18,7 +19,7 @@ const { uuidParam, colisIdParam, articleParam } = require('../../../validations/
 router.use(auth, checkActiveUser, admin);
 
 router.get('/tableau-de-bord', ctrl.tableauDeBord);
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeDeclarationsQuery, 'query'), ctrl.getAll);
 router.get('/colis/:colisId', validate(colisIdParam, 'params'), ctrl.getParColis);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/facture-commerciale', validate(uuidParam, 'params'), ctrl.factureCommerciale);

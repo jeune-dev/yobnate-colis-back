@@ -4,7 +4,7 @@
  *
  * La base indiquée est ENTIÈREMENT VIDÉE puis reconstruite : n'utiliser qu'une base
  * dédiée aux tests. Exécution :
- *   E2E_DATABASE_URL=postgres://user:mdp@localhost:5432/yobnate_e2e npx jest tests/e2e
+ *   E2E_DATABASE_URL=postgres://user:mdp@localhost:5432/yobante_e2e npx jest tests/e2e
  * Sans E2E_DATABASE_URL, la suite est ignorée.
  */
 const URL_BASE = process.env.E2E_DATABASE_URL;

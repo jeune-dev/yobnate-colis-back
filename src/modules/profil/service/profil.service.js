@@ -26,7 +26,10 @@ class ProfilService {
       attributes: ['id', 'telephone', 'telephoneVerifie'],
     });
     if (!user) throw new NotFoundError('Utilisateur introuvable');
-    if (user.telephoneVerifie) return { message: 'Votre numéro est déjà vérifié.' };
+    // Drapeau lu par l'application : aucun code n'est envoyé, l'écran de saisie est inutile
+    if (user.telephoneVerifie) {
+      return { message: 'Votre numéro est déjà vérifié.', dejaVerifie: true };
+    }
     if (!whatsapp.estConfigure()) {
       throw new ServiceUnavailableError(
         'La vérification du numéro est momentanément indisponible. Réessayez plus tard.'
@@ -50,7 +53,10 @@ class ProfilService {
     });
     if (!envoye)
       throw new ServiceUnavailableError("Le code n'a pas pu être envoyé. Réessayez plus tard.");
-    return { message: 'Un code de vérification vous a été envoyé par WhatsApp.' };
+    return {
+      message: 'Un code de vérification vous a été envoyé par WhatsApp.',
+      dejaVerifie: false,
+    };
   };
 
   /** Vérifie le code ; au-delà de 5 essais erronés, un nouveau code doit être demandé. */
@@ -123,7 +129,7 @@ class ProfilService {
     const user = await User.findByPk(userId);
     if (!user) throw new NotFoundError('Utilisateur introuvable');
 
-    const uploaded = await uploadFile(file.buffer, { folder: 'yobnate-express/avatars' });
+    const uploaded = await uploadFile(file.buffer, { folder: 'yobante-colis/avatars' });
     if (user.avatarPublicId) await deleteFile(user.avatarPublicId);
 
     await user.update({ avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId });
@@ -158,7 +164,7 @@ class ProfilService {
       throw new BadRequestError("Renseignez d'abord votre numéro NINEA ou SIRET dans votre profil");
     }
     const fichier = await uploadFile(file.buffer, {
-      folder: 'yobnate-express/justificatifs',
+      folder: 'yobante-colis/justificatifs',
     });
     if (user.justificatifProPublicId) {
       await deleteFile(user.justificatifProPublicId);

@@ -12,6 +12,8 @@ const {
   abonnerSuiviSchema,
   modifierColisClientSchema,
   repondrePropositionSchema,
+  listeColisClientQuery,
+  listeColisRecusQuery,
 } = require('../validation/colis.validation');
 const { uuidParam } = require('../../../validations/common');
 
@@ -19,8 +21,8 @@ const { uuidParam } = require('../../../validations/common');
 router.use(auth, checkActiveUser);
 
 router.post('/devis', validate(devisSchema), ctrl.devis);
-router.get('/', ctrl.getMes);
-router.get('/recus', ctrl.getRecus);
+router.get('/', validate(listeColisClientQuery, 'query'), ctrl.getMes);
+router.get('/recus', validate(listeColisRecusQuery, 'query'), ctrl.getRecus);
 // Formulaire multipart : photos (champ « photos ») et message vocal facultatif (champ « vocal »)
 router.post(
   '/',

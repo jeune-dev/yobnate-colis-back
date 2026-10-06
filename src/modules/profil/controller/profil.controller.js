@@ -39,7 +39,7 @@ exports.updateDeviceToken = asyncHandler(async (req, res) => {
 
 exports.demanderCodeTelephone = asyncHandler(async (req, res) => {
   const result = await profilService.demanderCodeTelephone(req.user.id);
-  return ok(res, null, result.message);
+  return ok(res, { dejaVerifie: result.dejaVerifie }, result.message);
 });
 
 exports.verifierTelephone = asyncHandler(async (req, res) => {

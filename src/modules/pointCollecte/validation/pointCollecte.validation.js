@@ -1,5 +1,6 @@
 const Joi = require('joi');
-const { pays, heureHHMM } = require('../../../validations/common');
+const { pays, heureHHMM, listeQuery, filtres } = require('../../../validations/common');
+const { CODES_PAYS } = require('../../../config/pays');
 const { TYPES_POINT, SERVICES_POINT, JOURS_SEMAINE } = require('../../../config/reseau');
 
 const creneauSchema = Joi.object({
@@ -92,7 +93,20 @@ const rechercheGeoSchema = Joi.object({
   rayonKm: Joi.number().positive().max(500),
 }).unknown(true);
 
+const listePointsQuery = listeQuery({
+  search: filtres.recherche,
+  pays: filtres.valeurs(CODES_PAYS),
+  type: filtres.valeurs(TYPES_POINT),
+  service: filtres.valeurs(SERVICES_POINT),
+  villeId: filtres.id,
+  isActive: filtres.booleen,
+  visiblePublic: filtres.booleen,
+  enMaintenance: filtres.booleen,
+  enSouffrance: filtres.booleen,
+});
+
 module.exports = {
+  listePointsQuery,
   createPointSchema,
   updatePointSchema,
   toggleSchema,

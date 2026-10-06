@@ -1,5 +1,7 @@
 const Joi = require('joi');
-const { phone, password, pays } = require('../../../validations/common');
+const { phone, password, pays, listeQuery, filtres } = require('../../../validations/common');
+const { CODES_PAYS } = require('../../../config/pays');
+const { ROLES } = require('../../../config/roles');
 
 const createAdminSchema = Joi.object({
   nom: Joi.string().min(2).max(50).required(),
@@ -49,7 +51,33 @@ const updatePersonnelSchema = Joi.object({
 /** Le pays est indispensable : sans lui la requête SQL échouait (500 au lieu de 400). */
 const coursiersDisponiblesQuery = Joi.object({ pays: pays.required() });
 
+/* ── Filtres des listes ─────────────────────────────────────────────────── */
+
+const listeClientsQuery = listeQuery({
+  search: filtres.recherche,
+  pays: filtres.valeurs(CODES_PAYS),
+  typeCompte: filtres.valeurs(['particulier', 'entreprise']),
+  isActive: filtres.booleen,
+  sortOrder: filtres.sortOrder,
+});
+
+const listeAdminsQuery = listeQuery({
+  search: filtres.recherche,
+  role: filtres.valeurs(ROLES),
+});
+
+const listePersonnelQuery = listeQuery({
+  search: filtres.recherche,
+  role: filtres.valeurs(ROLES),
+  pays: filtres.valeurs(CODES_PAYS),
+  pointCollecteId: filtres.id,
+  isActive: filtres.booleen,
+});
+
 module.exports = {
+  listeAdminsQuery,
+  listeClientsQuery,
+  listePersonnelQuery,
   coursiersDisponiblesQuery,
   createAdminSchema,
   updateAdminSchema,

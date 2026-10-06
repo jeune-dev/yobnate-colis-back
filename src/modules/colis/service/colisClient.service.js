@@ -531,7 +531,7 @@ class ColisService {
     }
 
     const televerses = await Promise.all(
-      files.map((f) => uploadFile(f.buffer, { folder: 'yobnate-express/colis' }))
+      files.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/colis' }))
     );
     await colis.update({ photos: [...colis.photos, ...televerses] });
     return { message: `${televerses.length} photo(s) ajoutée(s).`, colis };
@@ -545,7 +545,7 @@ class ColisService {
     if (colis.estTermine) throw new BadRequestError('Cette expédition est clôturée');
 
     const vocal = await uploadFile(fichier.buffer, {
-      folder: 'yobnate-express/vocaux',
+      folder: 'yobante-colis/vocaux',
     });
     const ancien = colis.vocalPublicId;
     await colis.update({ vocalUrl: vocal.url, vocalPublicId: vocal.publicId });

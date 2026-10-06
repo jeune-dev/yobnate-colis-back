@@ -127,7 +127,7 @@ class ReclamationService {
       ? await Promise.all(
           files.map(async (f) => {
             const televerse = await uploadFile(f.buffer, {
-              folder: 'yobnate-express/reclamations',
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })
@@ -223,7 +223,7 @@ class ReclamationService {
       ? await Promise.all(
           files.map(async (f) => {
             const televerse = await uploadFile(f.buffer, {
-              folder: 'yobnate-express/reclamations',
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })
@@ -359,7 +359,7 @@ class ReclamationService {
       ? await Promise.all(
           files.map(async (f) => {
             const televerse = await uploadFile(f.buffer, {
-              folder: 'yobnate-express/reclamations',
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })

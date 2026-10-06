@@ -84,6 +84,32 @@ const paginationQuery = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
 }).unknown(true);
 
+/**
+ * Filtres d'une liste (paramètres d'URL) : seuls les champs déclarés sont contrôlés,
+ * les autres (tri, options propres à un écran) passent tels quels. Une valeur vide
+ * (`?statut=`) reste acceptée : le service l'ignore, comme avant. `limit` n'a pas de
+ * plafond ici : utils/paginate le ramène à 100, sans refuser la requête.
+ */
+const listeQuery = (champs) =>
+  Joi.object({
+    page: Joi.number().integer().min(1),
+    limit: Joi.number().integer().min(1),
+    ...champs,
+  })
+    .fork([...Object.keys(champs), 'page', 'limit'], (schema) => schema.allow(''))
+    .unknown(true);
+
+/** Briques des filtres : identifiant, booléen « true/false », recherche, période, tri. */
+const filtres = {
+  id: Joi.string().uuid().messages({ 'string.guid': 'Identifiant invalide' }),
+  booleen: Joi.boolean(),
+  recherche: Joi.string().trim().max(100),
+  valeurs: (liste) => Joi.string().valid(...liste),
+  // Horodatage (createdAt) : date seule ou date-heure ISO 8601
+  date: Joi.string().isoDate().messages({ 'string.isoDate': 'Date invalide (format ISO 8601)' }),
+  sortOrder: Joi.string().lowercase().valid('asc', 'desc'),
+};
+
 module.exports = {
   phone,
   password,
@@ -100,4 +126,6 @@ module.exports = {
   articleParam,
   statutActifSchema,
   paginationQuery,
+  listeQuery,
+  filtres,
 };

@@ -47,6 +47,11 @@ const ERREURS_CONNEXION_BASE = [
   'SequelizeTimeoutError',
   'SequelizeConnectionAcquireTimeoutError',
 ];
+/**
+ * Codes SQLSTATE d'une valeur mal formée : 22P02 (ENUM, UUID, entier), 22001 (texte
+ * trop long), 22003 (nombre hors limites), 22007 / 22008 (date invalide).
+ */
+const CODES_SAISIE_INVALIDE = new Set(['22P02', '22001', '22003', '22007', '22008']);
 
 /** Traduit une erreur en statut HTTP et corps de réponse. */
 const traduire = (err) => {
@@ -103,6 +108,11 @@ const traduire = (err) => {
   }
   if (err.name === 'SequelizeForeignKeyConstraintError') {
     return [400, { message: 'Référence invalide vers une ressource liée' }];
+  }
+  // Valeur refusée par PostgreSQL (filtre hors liste, identifiant mal formé, date ou
+  // nombre invalide, texte trop long) : erreur de saisie, pas une panne du serveur
+  if (err.name === 'SequelizeDatabaseError' && CODES_SAISIE_INVALIDE.has(err.parent?.code)) {
+    return [400, { message: 'Paramètre invalide' }];
   }
   // Base injoignable, pool saturé, ou requête annulée par statement_timeout (57014)
   if (ERREURS_CONNEXION_BASE.includes(err.name) || err.parent?.code === '57014') {

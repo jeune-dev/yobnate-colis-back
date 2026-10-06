@@ -11,6 +11,7 @@ const {
   toggleSchema,
   maintenanceSchema,
   transfertStockSchema,
+  listePointsQuery,
 } = require('../validation/pointCollecte.validation');
 const { uuidParam } = require('../../../validations/common');
 
@@ -22,7 +23,7 @@ const { uuidParam } = require('../../../validations/common');
 // responsables : réservé au personnel. Le public dispose de /public/points-collecte.
 router.use(auth, checkActiveUser, personnel);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listePointsQuery, 'query'), ctrl.getAll);
 router.get('/reseau', ctrl.getReseau);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/stock', validate(uuidParam, 'params'), ctrl.stock);

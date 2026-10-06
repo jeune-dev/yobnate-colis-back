@@ -116,7 +116,7 @@ class AnnonceService {
   static definirImage = async (id, fichier, adminId) => {
     if (!fichier) throw new BadRequestError('Aucune image fournie');
     const annonce = await AnnonceService.charger(id);
-    const image = await uploadFile(fichier.buffer, { folder: 'yobnate-express/annonces' });
+    const image = await uploadFile(fichier.buffer, { folder: 'yobante-colis/annonces' });
     const ancienne = annonce.imagePublicId;
     await annonce.update({ imageUrl: image.url, imagePublicId: image.publicId });
     if (ancienne) await deleteFile(ancienne);

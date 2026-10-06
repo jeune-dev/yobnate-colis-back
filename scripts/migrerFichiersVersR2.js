@@ -30,37 +30,42 @@ const { sequelize } = models;
 const PREFIXE_R2 = 'r2:';
 const PREFIXE_LOCAL = 'local:';
 const DOSSIER_LOCAL = path.resolve(__dirname, '../uploads');
-const DOSSIER_PAR_DEFAUT = 'yobnate-express/migration';
+const DOSSIER_PAR_DEFAUT = 'yobante-colis/migration';
 const DELAI_TELECHARGEMENT_MS = 30000;
 
 /** Colonnes simples : une URL et son identifiant sur la même ligne. */
 const CHAMPS = [
-  ['User', 'avatarUrl', 'avatarPublicId', 'yobnate-express/avatars'],
-  ['User', 'justificatifProUrl', 'justificatifProPublicId', 'yobnate-express/justificatifs'],
-  ['PointCollecte', 'photoUrl', 'photoPublicId', 'yobnate-express/points'],
-  ['ArticleTarif', 'photoUrl', 'photoPublicId', 'yobnate-express/grille'],
-  ['Annonce', 'imageUrl', 'imagePublicId', 'yobnate-express/annonces'],
-  ['Colis', 'vocalUrl', 'vocalPublicId', 'yobnate-express/vocaux'],
-  ['ColisPiece', 'photoUrl', 'photoPublicId', 'yobnate-express/colis'],
-  ['PreuveLivraison', 'signatureUrl', 'signaturePublicId', 'yobnate-express/livraisons'],
-  ['PreuveLivraison', 'photoUrl', 'photoPublicId', 'yobnate-express/livraisons'],
+  ['User', 'avatarUrl', 'avatarPublicId', 'yobante-colis/avatars'],
+  ['User', 'justificatifProUrl', 'justificatifProPublicId', 'yobante-colis/justificatifs'],
+  ['PointCollecte', 'photoUrl', 'photoPublicId', 'yobante-colis/points'],
+  ['ArticleTarif', 'photoUrl', 'photoPublicId', 'yobante-colis/grille'],
+  ['Annonce', 'imageUrl', 'imagePublicId', 'yobante-colis/annonces'],
+  ['Colis', 'vocalUrl', 'vocalPublicId', 'yobante-colis/vocaux'],
+  ['ColisPiece', 'photoUrl', 'photoPublicId', 'yobante-colis/colis'],
+  ['PreuveLivraison', 'signatureUrl', 'signaturePublicId', 'yobante-colis/livraisons'],
+  ['PreuveLivraison', 'photoUrl', 'photoPublicId', 'yobante-colis/livraisons'],
 ];
 
 /** Colonnes JSON : liste d'objets { url, publicId, … }. */
 const LISTES = [
-  ['Colis', 'photos', 'yobnate-express/colis'],
-  ['Emballage', 'photos', 'yobnate-express/emballages'],
-  ['DeclarationDouane', 'documents', 'yobnate-express/douane'],
-  ['Reclamation', 'piecesJointes', 'yobnate-express/reclamations'],
-  ['MessageReclamation', 'piecesJointes', 'yobnate-express/reclamations'],
+  ['Colis', 'photos', 'yobante-colis/colis'],
+  ['Emballage', 'photos', 'yobante-colis/emballages'],
+  ['DeclarationDouane', 'documents', 'yobante-colis/douane'],
+  ['Reclamation', 'piecesJointes', 'yobante-colis/reclamations'],
+  ['MessageReclamation', 'piecesJointes', 'yobante-colis/reclamations'],
 ];
 
 const aTransferer = (url, publicId) =>
   Boolean(url) && !String(publicId || '').startsWith(PREFIXE_R2);
 
-/** Dossier d'origine (« yobnate-express/avatars/abc » → « yobnate-express/avatars »). */
+/** Anciennes racines (avant le nom Yobante Colis), rangées sous la racine actuelle. */
+const ANCIENNES_RACINES = /^(yobnate-express|yobnate-colis)(\/|$)/;
+
+/** Dossier d'origine (« yobnate-express/avatars/abc » → « yobante-colis/avatars »). */
 const dossierDe = (publicId, dossierParDefaut) => {
-  const chemin = String(publicId || '').replace(PREFIXE_LOCAL, '');
+  const chemin = String(publicId || '')
+    .replace(PREFIXE_LOCAL, '')
+    .replace(ANCIENNES_RACINES, 'yobante-colis$2');
   const dossier = path.posix.dirname(chemin);
   return dossier && dossier !== '.' ? dossier : dossierParDefaut || DOSSIER_PAR_DEFAUT;
 };

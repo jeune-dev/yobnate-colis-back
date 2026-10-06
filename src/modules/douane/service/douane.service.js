@@ -261,7 +261,7 @@ class DouaneService {
     const declaration = await DouaneService.chargerDeclaration(id);
 
     const televerse = await uploadFile(file.buffer, {
-      folder: 'yobnate-express/douane',
+      folder: 'yobante-colis/douane',
     });
 
     const document = {

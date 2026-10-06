@@ -686,7 +686,7 @@ class ColisService {
     if (!colis) throw new NotFoundError('Expédition introuvable');
 
     const televerses = await Promise.all(
-      files.map((f) => uploadFile(f.buffer, { folder: 'yobnate-express/colis' }))
+      files.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/colis' }))
     );
     await colis.update({ photos: [...colis.photos, ...televerses] });
     await logActivity({

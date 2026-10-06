@@ -102,7 +102,7 @@ const initialesClient = (nomComplet) => {
  * conteneur) reçoivent un suffixe alphabétique (…MDT03B, …MDT03C) afin que le
  * numéro reste unique et non réattribuable.
  */
-const genererNumeroSuiviYobnate = async ({
+const genererNumeroSuiviYobante = async ({
   prefixe = 'PN',
   codeConteneur = 'CO',
   numeroConteneur = 0,
@@ -161,7 +161,7 @@ const genererCodeRetrait = () => String(require('crypto').randomInt(1000, 10000)
 module.exports = {
   referenceAnnuelle,
   genererNumeroSuivi,
-  genererNumeroSuiviYobnate,
+  genererNumeroSuiviYobante,
   initialesClient,
   genererNumeroPiece,
   genererRefColis,

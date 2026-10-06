@@ -9,6 +9,7 @@ const {
   annulerFactureSchema,
   prolongerEcheanceSchema,
   emettreAvoirSchema,
+  listeFacturesQuery,
 } = require('../validation/facture.validation');
 const { uuidParam } = require('../../../validations/common');
 
@@ -16,8 +17,8 @@ const { uuidParam } = require('../../../validations/common');
 router.use(auth, checkActiveUser, admin);
 
 router.get('/statistiques', ctrl.statistiques);
-router.get('/export', ctrl.exporter);
-router.get('/', ctrl.getAll);
+router.get('/export', validate(listeFacturesQuery, 'query'), ctrl.exporter);
+router.get('/', validate(listeFacturesQuery, 'query'), ctrl.getAll);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/document', validate(uuidParam, 'params'), ctrl.document);
 

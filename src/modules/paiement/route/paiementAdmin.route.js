@@ -8,6 +8,7 @@ const {
   recordPaiementSchema,
   rembourserSchema,
   marquerEchoueSchema,
+  listePaiementsQuery,
 } = require('../validation/paiement.validation');
 const { uuidParam, factureIdParam } = require('../../../validations/common');
 const { Paiement } = require('../../../models');
@@ -24,9 +25,9 @@ router.param(
 );
 
 router.get('/statistiques', admin, ctrl.statistiques);
-router.get('/export', admin, ctrl.exporter);
+router.get('/export', admin, validate(listePaiementsQuery, 'query'), ctrl.exporter);
 router.get('/caisse/:pointId', ctrl.caisse);
-router.get('/', ctrl.getAll);
+router.get('/', validate(listePaiementsQuery, 'query'), ctrl.getAll);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 
 router.post(

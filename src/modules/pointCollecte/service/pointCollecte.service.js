@@ -466,7 +466,7 @@ class PointCollecteService {
     const point = await PointCollecte.findByPk(id);
     if (!point) throw new NotFoundError('Point de collecte introuvable');
 
-    const televerse = await uploadFile(file.buffer, { folder: 'yobnate-express/points' });
+    const televerse = await uploadFile(file.buffer, { folder: 'yobante-colis/points' });
     if (point.photoPublicId) await deleteFile(point.photoPublicId);
 
     await point.update({ photoUrl: televerse.url, photoPublicId: televerse.publicId });

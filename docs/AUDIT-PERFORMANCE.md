@@ -1,4 +1,4 @@
-# AUDIT PERFORMANCE BACKEND — Yobnate Colis
+# AUDIT PERFORMANCE BACKEND — Yobante Colis
 
 Audit réalisé le 26/09/2026 sur la branche `claude/amazing-carson-4ya8x3`, à partir du commit
 `ce71138`. Chaque correction a été mesurée avant/après, vérifiée à comportement identique

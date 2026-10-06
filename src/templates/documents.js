@@ -39,14 +39,26 @@ const dateHeureFr = (valeur) => {
   });
 };
 
+/**
+ * Couleurs du pictogramme Yobante Colis (mêmes valeurs que l'application mobile,
+ * lib/core/theme/app_color.dart) : bleu marine pour les bandeaux et les titres,
+ * jaune pour les accents.
+ */
+const COULEURS = {
+  primaire: '#053D8F',
+  secondaire: '#F6C537',
+  fondClair: '#F5F7FB',
+};
+
 const STYLE_COMMUN = `
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 12mm; font-family: Helvetica, Arial, sans-serif; color: #111; font-size: 12px; }
+  body { margin: 0; padding: 12mm; font-family: Helvetica, Arial, sans-serif; color: #111; font-size: 12px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   h1, h2, h3 { margin: 0 0 6px; }
   table { width: 100%; border-collapse: collapse; }
   th, td { padding: 6px 8px; text-align: left; vertical-align: top; }
-  thead th { background: #0b3d2c; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-  tbody tr:nth-child(even) { background: #f6f7f8; }
+  thead th { background: ${COULEURS.primaire}; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  tbody tr:nth-child(even) { background: ${COULEURS.fondClair}; }
   .cadre { border: 1px solid #111; }
   .muted { color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
   .total { font-size: 16px; font-weight: bold; }
@@ -86,7 +98,7 @@ const genererEtiquette = (colis, { piece = null, point = null } = {}) => {
 
   const contenu = `
   <div class="cadre" style="width:105mm;">
-    <div style="display:flex;justify-content:space-between;align-items:center;background:#0b3d2c;color:#fff;padding:8px 10px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;background:${COULEURS.primaire};color:#fff;padding:8px 10px;border-bottom:3px solid ${COULEURS.secondaire};">
       <strong style="font-size:15px;letter-spacing:1px;">YOBANTE COLIS</strong>
       <span style="font-size:11px;">${echapper(colis.service?.nom || '')}</span>
     </div>
@@ -101,7 +113,7 @@ const genererEtiquette = (colis, { piece = null, point = null } = {}) => {
       ])}
     </div>
 
-    <div style="display:flex;border-bottom:1px solid #111;background:#f6f7f8;">
+    <div style="display:flex;border-bottom:1px solid #111;background:${COULEURS.fondClair};">
       ${bloc('Destinataire', [
         `<strong style="font-size:15px;">${echapper(colis.destinataireNom)}</strong>`,
         colis.destinataireEntreprise ? echapper(colis.destinataireEntreprise) : null,
@@ -197,9 +209,9 @@ const genererFactureCommerciale = (colis, declaration, articles = [], entreprise
     .join('');
 
   const contenu = `
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;border-bottom:3px solid ${COULEURS.secondaire};padding-bottom:8px;">
       <div>
-        <h1 style="color:#0b3d2c;">FACTURE COMMERCIALE</h1>
+        <h1 style="color:${COULEURS.primaire};">FACTURE COMMERCIALE</h1>
         <div class="muted">Commercial invoice — pour usage douanier</div>
       </div>
       <div class="droite">
@@ -303,9 +315,9 @@ const genererFactureTransport = (facture, colis, entreprise = {}) => {
     .join('');
 
   const contenu = `
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;border-bottom:3px solid ${COULEURS.secondaire};padding-bottom:8px;">
       <div>
-        <h1 style="color:#0b3d2c;">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</h1>
+        <h1 style="color:${COULEURS.primaire};">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</h1>
         <div class="muted">${echapper(entreprise.entreprise_adresse || '')}</div>
         <div class="muted">${echapper(entreprise.entreprise_email || '')} ${echapper(entreprise.entreprise_telephone || '')}</div>
       </div>
@@ -392,9 +404,9 @@ const genererManifeste = (rotation, colisList = [], entreprise = {}) => {
     .join('');
 
   const contenu = `
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;border-bottom:3px solid ${COULEURS.secondaire};padding-bottom:8px;">
       <div>
-        <h1 style="color:#0b3d2c;">MANIFESTE DE CHARGEMENT</h1>
+        <h1 style="color:${COULEURS.primaire};">MANIFESTE DE CHARGEMENT</h1>
         <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</div>
       </div>
       <div class="droite">
@@ -449,8 +461,8 @@ const genererManifeste = (rotation, colisList = [], entreprise = {}) => {
 const genererBordereauDepot = (colis, point, entreprise = {}) => {
   const contenu = `
     <div class="cadre" style="width:105mm;padding:10px;">
-      <div style="text-align:center;border-bottom:1px solid #111;padding-bottom:6px;margin-bottom:8px;">
-        <strong style="font-size:14px;">${echapper(entreprise.entreprise_nom || 'YOBANTE COLIS')}</strong><br>
+      <div style="text-align:center;border-bottom:3px solid ${COULEURS.secondaire};padding-bottom:6px;margin-bottom:8px;">
+        <strong style="font-size:14px;color:${COULEURS.primaire};">${echapper(entreprise.entreprise_nom || 'YOBANTE COLIS')}</strong><br>
         <span class="muted">Récépissé de dépôt</span>
       </div>
       <div class="centre">${barcode.versSvg(colis.reference, { moduleWidth: 1.6, hauteur: 48 })}</div>
@@ -506,9 +518,9 @@ const genererInventaire = (inventaire, entreprise = {}) => {
     .join('');
 
   const contenu = `
-    <div style="display:flex;justify-content:space-between;border-bottom:2px solid #0b3d2c;padding-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;border-bottom:3px solid ${COULEURS.secondaire};padding-bottom:8px;">
       <div>
-        <h1 style="color:#0b3d2c;">INVENTAIRE DES PRODUITS CHARGÉS</h1>
+        <h1 style="color:${COULEURS.primaire};">INVENTAIRE DES PRODUITS CHARGÉS</h1>
         <div class="muted">${echapper(entreprise.entreprise_nom || 'Yobante Colis')}</div>
       </div>
       <div class="droite">

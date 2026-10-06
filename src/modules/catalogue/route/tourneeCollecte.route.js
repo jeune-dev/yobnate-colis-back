@@ -8,13 +8,14 @@ const {
   createTourneeSchema,
   updateTourneeSchema,
   changerStatutTourneeSchema,
+  listeTourneesQuery,
 } = require('../validation/catalogue.validation');
 const { uuidParam } = require('../../../validations/common');
 
 /** Tournées de collecte à domicile : date, zone (villes, codes postaux), bannière. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeTourneesQuery, 'query'), ctrl.getAll);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.post('/', validate(createTourneeSchema), ctrl.create);
 router.put('/:id', validate(uuidParam, 'params'), validate(updateTourneeSchema), ctrl.update);

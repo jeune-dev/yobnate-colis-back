@@ -8,13 +8,14 @@ const {
   createPersonnelSchema,
   updatePersonnelSchema,
   coursiersDisponiblesQuery,
+  listePersonnelQuery,
 } = require('../validation/user.validation');
 const { uuidParam, statutActifSchema } = require('../../../validations/common');
 
 /** Coursiers et agents de point de collecte. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listePersonnelQuery, 'query'), ctrl.getAll);
 router.get(
   '/coursiers-disponibles',
   validate(coursiersDisponiblesQuery, 'query'),
