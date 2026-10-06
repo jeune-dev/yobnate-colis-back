@@ -92,7 +92,7 @@ describeDb('Compte client — export et suppression (base réelle)', () => {
       expect(client.supprimeLe).not.toBeNull();
       expect(client.isActive).toBe(false);
       expect(client.email).not.toBe(emailOrigine);
-      expect(client.nom).toBe('Compte');
+      expect(client.nom).toBe('COMPTE');
       expect(await f.models.Adresse.count({ where: { userId: client.id } })).toBe(0);
       expect(await f.models.RefreshToken.count({ where: { userId: client.id } })).toBe(0);
       expect(await f.models.Colis.count({ where: { id: colis.id } })).toBe(1);

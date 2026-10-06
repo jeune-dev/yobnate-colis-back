@@ -61,6 +61,113 @@ describeDb('Authentification (base réelle)', () => {
     });
   });
 
+  describe('Confirmation de l’adresse par code', () => {
+    const inscrire = (champs = {}) =>
+      request(app)
+        .post('/auth/register')
+        .send({
+          nom: 'diop',
+          prenom: 'awa',
+          email: `code-${f.suffixe()}@exemple.com`,
+          telephone: f.telephoneUnique(),
+          password: 'Motdepasse1!',
+          ...champs,
+        });
+
+    const deposerCodeVerification = async (email, code) => {
+      const user = await f.models.User.findOne({ where: { email } });
+      await f.models.UserOtp.update(
+        { isUsed: true },
+        { where: { userId: user.id, type: 'verification_email' } }
+      );
+      await f.models.UserOtp.create({
+        userId: user.id,
+        codeHash: sha256(code),
+        type: 'verification_email',
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      });
+      return user;
+    };
+
+    test('inscription : aucun jeton, code exigé, noms mis en forme', async () => {
+      const res = await inscrire();
+      expect(res.status).toBe(201);
+      expect(res.body.data.verificationRequise).toBe(true);
+      expect(res.body.data.accessToken).toBeUndefined();
+      expect(res.body.data.utilisateur.nom).toBe('DIOP');
+      expect(res.body.data.utilisateur.prenom).toBe('Awa');
+    });
+
+    test('connexion avant confirmation → 403 EMAIL_NON_CONFIRME', async () => {
+      const { body } = await inscrire();
+      const res = await request(app)
+        .post('/auth/login')
+        .send({ identifiant: body.data.email, password: 'Motdepasse1!' });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('EMAIL_NON_CONFIRME');
+      expect(res.body.email).toBe(body.data.email);
+    });
+
+    test('code faux refusé ; bon code → session ouverte, puis connexion possible', async () => {
+      const { body } = await inscrire();
+      const email = body.data.email;
+      await deposerCodeVerification(email, '246810');
+
+      const faux = await request(app).post('/auth/verify-email').send({ email, code: '111111' });
+      expect(faux.status).toBe(400);
+
+      const bon = await request(app).post('/auth/verify-email').send({ email, code: '246810' });
+      expect(bon.status).toBe(200);
+      expect(bon.body.data.accessToken).toEqual(expect.any(String));
+
+      const connexion = await request(app)
+        .post('/auth/login')
+        .send({ identifiant: email, password: 'Motdepasse1!' });
+      expect(connexion.status).toBe(200);
+    });
+
+    test('adresse déjà confirmée : aucun jeton délivré sans mot de passe', async () => {
+      const user = await f.creerUtilisateur();
+      const res = await request(app)
+        .post('/auth/verify-email')
+        .send({ email: user.email, code: '000000' });
+      expect(res.status).toBe(400);
+      expect(res.body.data?.accessToken).toBeUndefined();
+    });
+
+    test('après 5 codes faux, le bon code est lui aussi refusé', async () => {
+      const { body } = await inscrire();
+      const email = body.data.email;
+      await deposerCodeVerification(email, '135790');
+      for (let i = 0; i < 5; i += 1) {
+        await request(app)
+          .post('/auth/verify-email')
+          .send({ email, code: String(200000 + i) })
+          .expect(400);
+      }
+      const res = await request(app).post('/auth/verify-email').send({ email, code: '135790' });
+      expect(res.status).toBe(400);
+    });
+
+    test('numéro déjà utilisé → 409 qui nomme le téléphone', async () => {
+      const user = await f.creerUtilisateur();
+      const res = await inscrire({ telephone: user.telephone });
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/numéro de téléphone/);
+    });
+
+    test('saisie invalide → message précis', async () => {
+      const res = await inscrire({ email: 'awa diop@exemple.com', telephone: '+2217712345' });
+      expect(res.status).toBe(400);
+      expect(res.body.details).toEqual(
+        expect.arrayContaining([
+          "L'adresse email ne doit pas contenir d'espace",
+          expect.stringMatching(/9 chiffres/),
+        ])
+      );
+    });
+  });
+
   describe('Adresse email insensible à la casse', () => {
     test('inscription avec la même adresse en majuscules → 409', async () => {
       const user = await f.creerUtilisateur();

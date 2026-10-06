@@ -10,7 +10,17 @@ const refreshCookieOptions = { ...cookieConfig, maxAge: 7 * 24 * 60 * 60 * 1000 
 
 exports.register = asyncHandler(async (req, res) => {
   const result = await authService.register(req.body, requestMeta(req));
-  return created(res, { utilisateur: result.utilisateur }, result.message);
+  // Pas de jeton : l'application enchaîne sur la saisie du code reçu par email
+  return created(
+    res,
+    {
+      verificationRequise: true,
+      codeEnvoye: result.codeEnvoye,
+      email: result.email,
+      utilisateur: result.utilisateur,
+    },
+    result.message
+  );
 });
 
 exports.login = asyncHandler(async (req, res) => {
@@ -60,24 +70,23 @@ exports.logout = asyncHandler(async (req, res) => {
   return ok(res, null, result.message);
 });
 
+/**
+ * Confirme l'adresse avec le code reçu et ouvre la session : c'est ici que les
+ * jetons sont émis pour la première fois, comme à la connexion.
+ */
 exports.verifierEmail = asyncHandler(async (req, res) => {
-  const result = await authService.verifierEmail(req.body.token);
-  return ok(res, null, result.message);
-});
-
-/** Lien cliqué directement depuis l'email : page de confirmation minimale. */
-exports.verifierEmailLien = asyncHandler(async (req, res) => {
-  let titre;
-  try {
-    titre = (await authService.verifierEmail(req.params.token)).message;
-  } catch (err) {
-    titre = err.message;
-  }
-  const { gabarit } = require('../../../infrastructure/mailer');
-  return res
-    .status(200)
-    .type('html')
-    .send(gabarit({ titre, corps: '' }));
+  const result = await authService.verifierEmail(req.body.email, req.body.code, requestMeta(req));
+  res.cookie(REFRESH_COOKIE, result.refreshToken, refreshCookieOptions);
+  return ok(
+    res,
+    {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresIn: EXPIRES_IN,
+      utilisateur: result.utilisateur,
+    },
+    result.message
+  );
 });
 
 exports.renvoyerVerification = asyncHandler(async (req, res) => {

@@ -21,11 +21,10 @@ const cle = (r) => `${r.methode.toUpperCase()} ${r.chemin}`;
 const PUBLIQUES = new Map([
   ['POST /auth/register', 'création de compte'],
   ['POST /auth/login', 'point d’entrée : aucun jeton à présenter encore'],
-  ['POST /auth/verify-email', 'confirmation d’email, portée par un jeton secret à usage unique'],
-  ['GET /auth/verify-email/:token', 'lien cliqué depuis l’email, même jeton'],
+  ['POST /auth/verify-email', 'confirmation d’email, portée par le code reçu (5 essais)'],
   [
     'POST /auth/resend-verification',
-    'renvoi du lien, réponse identique que le compte existe ou non',
+    'renvoi du code, réponse identique que le compte existe ou non',
   ],
   ['POST /auth/refresh-token', 'le jeton d’accès est justement expiré'],
   ['POST /auth/logout', 'doit aboutir même avec un jeton d’accès expiré'],

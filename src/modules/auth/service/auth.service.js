@@ -15,9 +15,8 @@ const {
   sendOtpEmail,
   sendBienvenueEmail,
   envoyerModele,
-  smtpConfigure,
-  URL_PUBLIQUE,
 } = require('../../../infrastructure/mailer');
+const logger = require('../../../utils/logger');
 const { genererCodeParrainage } = require('../../../utils/referenceGenerator');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -78,57 +77,121 @@ class AuthService {
     await sendOtpEmail(user, code);
   };
 
-  static VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
+  /** Validité du code de confirmation d'email (minutes). */
+  static VERIFICATION_DUREE_MINUTES =
+    Number.parseInt(process.env.VERIFICATION_EMAIL_DUREE_MINUTES, 10) || 60;
 
   /**
-   * Lien de confirmation de l'adresse email. Le jeton n'est stocké qu'haché ;
-   * le lien pointe vers l'API (API_PUBLIC_URL) ou, à défaut, vers l'application
-   * qui transmet le jeton à POST /auth/verify-email.
+   * Code de confirmation de l'adresse email, repris de SIGNS : 6 chiffres, haché
+   * en base, valable une heure, 5 essais. Tant qu'il n'est pas confirmé, le compte
+   * ne peut pas se connecter ; c'est la confirmation qui ouvre la première session.
+   *
+   * L'envoi est attendu (et non confié à la file) : l'application doit savoir si le
+   * code est vraiment parti, au lieu d'afficher « code envoyé » quand le SMTP n'est
+   * pas configuré.
+   *
+   * @returns {Promise<boolean>} true si l'email est parti.
    */
-  static envoyerLienVerification = async (user) => {
-    const token = crypto.randomBytes(32).toString('hex');
+  static envoyerCodeVerification = async (user) => {
+    const code = AuthService.generateOtpCode();
     await UserOtp.update(
       { isUsed: true },
       { where: { userId: user.id, type: 'verification_email', isUsed: false } }
     );
     await UserOtp.create({
       userId: user.id,
-      codeHash: AuthService.sha256(token),
+      codeHash: AuthService.sha256(code),
       type: 'verification_email',
-      expiresAt: new Date(Date.now() + AuthService.VERIFICATION_TTL_MS),
+      expiresAt: new Date(Date.now() + AuthService.VERIFICATION_DUREE_MINUTES * 60 * 1000),
     });
-    const baseApi = process.env.API_PUBLIC_URL;
-    const lien = baseApi
-      ? `${baseApi}/auth/verify-email/${token}`
-      : `${URL_PUBLIQUE}/verifier-email?token=${token}`;
-    await envoyerModele('verification_email', user.email, { prenom: user.prenom, lien });
+    try {
+      await envoyerModele(
+        'verification_email',
+        user.email,
+        { prenom: user.prenom, code, duree: AuthService.VERIFICATION_DUREE_MINUTES },
+        { immediat: true }
+      );
+      return true;
+    } catch (err) {
+      // Le compte et le code existent : l'utilisateur pourra en redemander un.
+      logger.error('Envoi du code de confirmation impossible', { message: err.message });
+      // En développement, sans SMTP, le code est journalisé pour pouvoir tester le parcours
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn(`[DEV] Code de confirmation de ${user.email} : ${code}`);
+      }
+      return false;
+    }
   };
 
-  static verifierEmail = async (token) => {
-    const otp = await UserOtp.findOne({
-      where: { codeHash: AuthService.sha256(String(token)), type: 'verification_email' },
-    });
-    if (!otp || otp.isUsed || otp.expiresAt < new Date()) {
-      throw new BadRequestError('Lien de confirmation invalide ou expiré');
+  /**
+   * Vérifie le code saisi, confirme l'adresse et OUVRE LA SESSION (jetons émis).
+   * Un code faux est compté ; au 5e, le code est invalidé et il faut en redemander un.
+   */
+  static verifierEmail = async (email, code, meta = {}) => {
+    const user = await AuthService.trouverParEmail(email);
+    if (!user) throw new BadRequestError('Code incorrect ou expiré.');
+    if (user.emailVerifie) {
+      // Pas de session ici : sans quoi l'adresse d'un compte confirmé suffirait à s'y connecter
+      throw new BadRequestError('Cette adresse est déjà confirmée. Connectez-vous.');
     }
-    const user = await User.findByPk(otp.userId);
-    if (!user) throw new BadRequestError('Lien de confirmation invalide ou expiré');
-    await otp.update({ isUsed: true });
-    await user.update({ emailVerifie: true });
+
+    const otp = await UserOtp.findOne({
+      where: { userId: user.id, type: 'verification_email', isUsed: false },
+      order: [['createdAt', 'DESC']],
+    });
+    if (!otp) {
+      throw new BadRequestError("Aucun code en attente. Demandez l'envoi d'un nouveau code.");
+    }
+    if (otp.expiresAt < new Date()) {
+      await otp.update({ isUsed: true });
+      throw new BadRequestError('Ce code a expiré. Demandez-en un nouveau.');
+    }
+
+    if (!AuthService.empreintesEgales(otp.codeHash, AuthService.sha256(String(code)))) {
+      await otp.increment('tentatives');
+      await otp.reload({ attributes: ['id', 'tentatives'] });
+      if (otp.tentatives >= AuthService.OTP_MAX_TENTATIVES) {
+        await otp.update({ isUsed: true });
+        throw new BadRequestError('Trop de codes erronés. Demandez un nouveau code.');
+      }
+      throw new BadRequestError('Code incorrect. Vérifiez les chiffres saisis.');
+    }
+
+    // Consommation conditionnelle : un même code ne sert qu'une fois, même en parallèle
+    const [consommes] = await UserOtp.update(
+      { isUsed: true },
+      { where: { id: otp.id, isUsed: false } }
+    );
+    if (!consommes) throw new BadRequestError('Code incorrect ou expiré.');
+
+    await user.update({ emailVerifie: true, lastLoginAt: new Date() });
     await logActivity({
       userId: user.id,
       action: 'auth.verify_email',
       entite: 'User',
       entiteId: user.id,
+      ...meta,
     });
     await sendBienvenueEmail(user).catch(() => {});
-    return { message: 'Adresse email confirmée. Vous pouvez vous connecter.' };
+
+    const tokens = await AuthService.issueTokens(user);
+    return {
+      message: 'Adresse confirmée. Bienvenue chez Yobante Colis !',
+      ...tokens,
+      utilisateur: user.toSafeJSON(),
+    };
   };
 
+  /** Réponse identique que le compte existe ou non (pas d'énumération des adresses). */
   static renvoyerVerification = async (email) => {
     const user = await AuthService.trouverParEmail(email);
-    if (user && !user.emailVerifie) await AuthService.envoyerLienVerification(user);
-    return { message: 'Si un compte non confirmé existe, un nouveau lien a été envoyé.' };
+    if (user && user.role === 'client' && !user.emailVerifie) {
+      await AuthService.envoyerCodeVerification(user);
+    }
+    return {
+      message:
+        "Si un compte est en attente de confirmation pour cette adresse, un code vient d'être envoyé.",
+    };
   };
 
   /** Recherche le compte par email ou par téléphone (normalisé au format international). */
@@ -170,11 +233,16 @@ class AuthService {
   };
 
   static register = async (data, meta = {}) => {
-    const existing =
-      (await AuthService.trouverParEmail(data.email)) ||
-      (await User.findOne({ where: { telephone: data.telephone } }));
-    if (existing) {
-      throw new ConflictError('Un compte existe déjà avec cet email ou ce numéro de téléphone');
+    // Messages distincts, comme dans SIGNS : l'utilisateur sait quel champ corriger
+    if (await AuthService.trouverParEmail(data.email)) {
+      throw new ConflictError(
+        'Cette adresse email est déjà utilisée. Connectez-vous ou utilisez « Mot de passe oublié ».'
+      );
+    }
+    if (await User.findOne({ where: { telephone: data.telephone } })) {
+      throw new ConflictError(
+        'Ce numéro de téléphone est déjà associé à un compte Yobante Colis. Connectez-vous avec ce numéro ou utilisez-en un autre.'
+      );
     }
 
     const { codeParrainage: codeParrain, ...donnees } = data;
@@ -212,11 +280,16 @@ class AuthService {
       entiteId: user.id,
       ...meta,
     });
-    await AuthService.envoyerLienVerification(user).catch(() => {});
+    // Aucun jeton ici : le compte reste fermé jusqu'à la saisie du code reçu par email
+    const codeEnvoye = await AuthService.envoyerCodeVerification(user);
 
     return {
-      message:
-        'Compte créé. Un lien de confirmation vous a été envoyé par email : cliquez dessus pour activer votre compte.',
+      message: codeEnvoye
+        ? `Compte créé. Un code de confirmation vient d'être envoyé à ${user.email}.`
+        : "Compte créé, mais l'envoi du code a échoué. Demandez-en un nouveau depuis l'écran de confirmation.",
+      verificationRequise: true,
+      codeEnvoye,
+      email: user.email,
       utilisateur: user.toSafeJSON(),
     };
   };
@@ -235,10 +308,14 @@ class AuthService {
     if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé');
     if (user.role === 'client' && !user.emailVerifie) {
       const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
-      // Sans SMTP configuré, le lien ne peut pas être reçu : la vérification ne bloque pas
-      if (obligatoire && smtpConfigure()) {
+      // Plus de dérogation « SMTP non configuré » : elle laissait entrer des comptes
+      // dont l'adresse n'avait jamais été prouvée. Le code d'erreur renvoie
+      // l'application vers l'écran de saisie du code.
+      if (obligatoire) {
         throw new ForbiddenError(
-          'Adresse email non confirmée : cliquez sur le lien reçu par email (ou demandez-en un nouveau).'
+          "Votre adresse email n'est pas encore confirmée. Saisissez le code reçu par email pour activer votre compte.",
+          'EMAIL_NON_CONFIRME',
+          { verificationRequise: true, email: user.email }
         );
       }
     }

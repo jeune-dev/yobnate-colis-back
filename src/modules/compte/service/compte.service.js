@@ -114,7 +114,7 @@ class CompteService {
       const ancienAvatar = user.avatarPublicId;
       await user.update(
         {
-          nom: 'Compte',
+          nom: 'COMPTE',
           prenom: 'Supprimé',
           email: `supprime-${neutre}@yobante.invalid`,
           telephone: `X${neutre.slice(0, 19)}`,

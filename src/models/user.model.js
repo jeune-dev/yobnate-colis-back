@@ -2,6 +2,7 @@ const { DataTypes, Model } = require('sequelize');
 const sequelize = require('../config/db');
 const { CODES_PAYS } = require('../config/pays');
 const { ROLES } = require('../config/roles');
+const { normaliserPrenom, normaliserNomFamille } = require('../utils/normaliserNom');
 
 /**
  * Compte utilisateur : client particulier ou professionnel, personnel opérationnel
@@ -133,6 +134,14 @@ User.init(
     sequelize,
     modelName: 'User',
     tableName: 'users',
+    hooks: {
+      // Forme unique, comme dans SIGNS : NOM en capitales, Prénom avec majuscule
+      // initiale (« diop » → « DIOP », « awa » → « Awa »), quel que soit le client.
+      beforeValidate(user) {
+        if (user.changed('prenom')) user.prenom = normaliserPrenom(user.prenom);
+        if (user.changed('nom')) user.nom = normaliserNomFamille(user.nom);
+      },
+    },
     indexes: [
       { fields: ['role'] },
       { fields: ['isActive'] },

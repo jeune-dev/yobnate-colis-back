@@ -115,6 +115,17 @@ const sendMail = ({ to, subject, html, texte = null }) => {
   return Promise.resolve();
 };
 
+/**
+ * Envoi IMMÉDIAT, attendu par l'appelant, sans passer par la file : réservé aux
+ * messages dont l'utilisateur a besoin pour continuer (code de confirmation). Lève
+ * une erreur si le SMTP n'est pas configuré ou refuse le message, pour que
+ * l'appelant puisse le dire au lieu de laisser attendre un code qui n'arrivera pas.
+ */
+const sendMailImmediat = async ({ to, subject, html }) => {
+  if (!smtpConfigure()) throw new Error('SMTP non configuré (SMTP_HOST / SMTP_USER)');
+  await transporter.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
+};
+
 /* ── Comptes ────────────────────────────────────────────────────────────── */
 
 const sendOtpEmail = (user, code) =>
@@ -287,13 +298,17 @@ const sendReponseDemandeContactEmail = (demande, { objet, reponse }) =>
  */
 const MODELES_PAR_DEFAUT = {
   verification_email: {
-    description: "Lien de confirmation de l'adresse email à l'inscription",
-    variables: ['prenom', 'lien'],
-    sujet: 'Confirmez votre adresse email',
+    description: "Code de confirmation de l'adresse email à l'inscription",
+    variables: ['prenom', 'code', 'duree'],
+    // Un corps personnalisé sans {{code}} (ancien modèle à lien) est ignoré
+    variablesObligatoires: ['code'],
+    sujet: 'Votre code de confirmation Yobante Colis',
     corps: `<p>Bonjour {{prenom}},</p>
-      <p>Merci pour votre inscription. Pour activer votre compte, confirmez votre adresse
-      email en cliquant sur le bouton ci-dessous. Ce lien est valable 24 heures.</p>`,
-    bouton: { libelle: 'Confirmer mon adresse email', variable: 'lien' },
+      <p>Merci pour votre inscription. Pour activer votre compte, saisissez ce code dans
+      l'application :</p>
+      <p style="font-size:32px;font-weight:bold;letter-spacing:6px;color:${COULEURS.primaire};margin:16px 0;">{{code}}</p>
+      <p>Ce code est valable {{duree}} minutes. Si vous n'êtes pas à l'origine de cette
+      inscription, ignorez ce message.</p>`,
   },
   accuse_reception_demande: {
     description: "Accusé de réception d'une demande d'expédition",
@@ -400,16 +415,25 @@ const chargerModelesPersonnalises = async () => {
  * Envoie un courriel à partir de son code de modèle : la version personnalisée
  * par l'administrateur si elle existe, le gabarit par défaut sinon.
  */
-const envoyerModele = async (code, to, variables = {}) => {
+const envoyerModele = async (code, to, variables = {}, { immediat = false } = {}) => {
   const defaut = MODELES_PAR_DEFAUT[code];
   if (!defaut) throw new Error(`Modèle d'email inconnu : ${code}`);
-  const personnalise = (await chargerModelesPersonnalises())[code];
+  let personnalise = (await chargerModelesPersonnalises())[code];
+  const incomplet =
+    personnalise?.corpsHtml &&
+    (defaut.variablesObligatoires || []).some(
+      (v) => !new RegExp(`\\{\\{\\s*${v}\\s*\\}\\}`).test(personnalise.corpsHtml)
+    );
+  if (incomplet) {
+    logger.warn(`Modèle d'email personnalisé « ${code} » ignoré : variable obligatoire absente`);
+    personnalise = null;
+  }
 
   const sujet = remplacerVariables(personnalise?.sujet || defaut.sujet, variables, false);
   const corps = remplacerVariables(personnalise?.corpsHtml || defaut.corps, variables);
   const urlBouton = defaut.bouton ? variables[defaut.bouton.variable] : null;
 
-  return sendMail({
+  return (immediat ? sendMailImmediat : sendMail)({
     to,
     subject: sujet,
     html: gabarit({
@@ -422,6 +446,7 @@ const envoyerModele = async (code, to, variables = {}) => {
 
 module.exports = {
   sendMail,
+  sendMailImmediat,
   smtpConfigure,
   gabarit,
   MODELES_PAR_DEFAUT,

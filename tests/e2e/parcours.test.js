@@ -63,11 +63,10 @@ decrire('Parcours complets (base réelle)', () => {
     const r = await request(app).post('/auth/register').send(champs);
     expect(r.status).toBe(201);
     await attendre(30);
-    const jeton = dernierEmail(champs.email, /Confirmez/)?.html.match(
-      /(?:token=|verify-email\/)([a-f0-9]{64})/
-    )?.[1];
-    expect(jeton).toBeDefined();
-    return jeton;
+    expect(r.body.data.verificationRequise).toBe(true);
+    const code = dernierEmail(champs.email, /code de confirmation/)?.html.match(/>(\d{6})</)?.[1];
+    expect(code).toBeDefined();
+    return code;
   };
 
   beforeAll(async () => {
@@ -177,7 +176,10 @@ decrire('Parcours complets (base réelle)', () => {
       .post('/auth/login')
       .send({ identifiant: 'parrain@test.fr', password: 'Motdepasse1!' });
     expect(r.status).toBe(403);
-    await request(app).post('/auth/verify-email').send({ token: jetonA }).expect(200);
+    await request(app)
+      .post('/auth/verify-email')
+      .send({ email: 'parrain@test.fr', code: jetonA })
+      .expect(200);
     r = await request(app)
       .post('/auth/login')
       .send({ identifiant: '+33612340001', password: 'Motdepasse1!' });
@@ -195,7 +197,10 @@ decrire('Parcours complets (base réelle)', () => {
       pays: 'FR',
       codeParrainage: code,
     });
-    await request(app).post('/auth/verify-email').send({ token: jetonB }).expect(200);
+    await request(app)
+      .post('/auth/verify-email')
+      .send({ email: 'filleul@test.fr', code: jetonB })
+      .expect(200);
     r = await request(app)
       .post('/auth/login')
       .send({ identifiant: 'filleul@test.fr', password: 'Motdepasse1!' });

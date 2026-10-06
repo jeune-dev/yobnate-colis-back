@@ -58,6 +58,9 @@ const traduire = (err) => {
   if (err instanceof AppError && err.isOperational) {
     const corps = { message: err.message };
     if (err.details && err.details.length) corps.details = err.details;
+    // Code métier lisible par l'application (ex : EMAIL_NON_CONFIRME) et ses données
+    if (err.codeMetier) corps.code = err.codeMetier;
+    if (err.donnees) Object.assign(corps, err.donnees);
     return [err.statusCode, corps];
   }
 

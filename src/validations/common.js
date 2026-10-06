@@ -1,22 +1,42 @@
 const Joi = require('joi');
-const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const { validerTelephone, validerEmail } = require('../utils/validationIdentifiants');
 
-// Seuls la France et le Sénégal sont couverts par le service pour le moment
-const PAYS_TELEPHONE_AUTORISES = ['FR', 'SN'];
-
+/**
+ * Téléphone France ou Sénégal, normalisé au format E.164 (ex : +221771234567).
+ * Sans indicatif, le numéro est rattaché au champ `pays` voisin (Sénégal à défaut).
+ * Le refus nomme le problème : indicatif, nombre de chiffres ou plage non attribuée.
+ */
 const phone = Joi.string()
   .trim()
   .custom((value, helpers) => {
-    const numero = parsePhoneNumberFromString(value);
-    if (!numero || !numero.isValid() || !PAYS_TELEPHONE_AUTORISES.includes(numero.country)) {
-      return helpers.error('any.invalid');
-    }
-    return numero.number; // normalisé au format E.164 (ex: +221771234567)
-  })
-  .messages({
-    'any.invalid':
-      'Numéro de téléphone invalide (format international, France ou Sénégal uniquement)',
+    const paysParDefaut = helpers.state.ancestors?.[0]?.pays;
+    const resultat = validerTelephone(value, { paysParDefaut });
+    return resultat.valide ? resultat.valeur : helpers.message(resultat.raison);
   });
+
+/** Adresse email, contrôlée règle par règle et enregistrée en minuscules. */
+const email = Joi.string()
+  .trim()
+  .custom((value, helpers) => {
+    const resultat = validerEmail(value);
+    return resultat.valide ? resultat.valeur : helpers.message(resultat.raison);
+  });
+
+/**
+ * Nom ou prénom d'une personne (la mise en forme — NOM en capitales, Prénom —
+ * est appliquée à l'enregistrement par le modèle User).
+ */
+const nomPersonne = (libelle) =>
+  Joi.string()
+    .trim()
+    .min(2)
+    .max(50)
+    .messages({
+      'string.empty': `Indiquez votre ${libelle}`,
+      'any.required': `Indiquez votre ${libelle}`,
+      'string.min': `Votre ${libelle} doit comporter au moins 2 caractères`,
+      'string.max': `Votre ${libelle} ne peut pas dépasser 50 caractères`,
+    });
 
 const password = Joi.string()
   .min(8)
@@ -112,6 +132,8 @@ const filtres = {
 
 module.exports = {
   phone,
+  email,
+  nomPersonne,
   password,
   pays,
   devise,
