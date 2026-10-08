@@ -6,6 +6,7 @@ const {
   heureHHMM,
   listeQuery,
   filtres,
+  largeurNeDepassePasLongueur,
 } = require('../../../validations/common');
 const { CODES_PAYS } = require('../../../config/pays');
 const { CATEGORIES_COLIS } = require('../../../config/colis');
@@ -60,8 +61,10 @@ const createArticleTarifSchema = Joi.object({
   modeTransport: champsArticle.modeTransport.default('maritime'),
   paysDepart: pays.default('FR'),
   paysArrivee: pays.default('SN'),
-});
-const updateArticleTarifSchema = Joi.object({ ...champsArticle, code }).min(1);
+}).custom(largeurNeDepassePasLongueur);
+const updateArticleTarifSchema = Joi.object({ ...champsArticle, code })
+  .min(1)
+  .custom(largeurNeDepassePasLongueur);
 
 /* ── Emballages ─────────────────────────────────────────────────────────── */
 
@@ -88,8 +91,10 @@ const createEmballageSchema = Joi.object({
   code: code.required(),
   libelle: champsEmballage.libelle.required(),
   prix: champsEmballage.prix.required(),
-});
-const updateEmballageSchema = Joi.object({ ...champsEmballage, code }).min(1);
+}).custom(largeurNeDepassePasLongueur);
+const updateEmballageSchema = Joi.object({ ...champsEmballage, code })
+  .min(1)
+  .custom(largeurNeDepassePasLongueur);
 
 /* ── Tournées de collecte ───────────────────────────────────────────────── */
 

@@ -130,4 +130,66 @@ describeDb('Périmètre du personnel (base réelle)', () => {
       expect(res.body.data.paiements.every((p) => p.recordedBy === coursier.id)).toBe(true);
     });
   });
+
+  describe('Missions du personnel', () => {
+    test('un agent ne peut pas enregistrer une étape hors de sa mission (douane) → 403', async () => {
+      const colis = await f.creerColis(client, { pointActuelId: pointA.id, statut: 'en_douane' });
+      const res = await request(app)
+        .post(`/admin/colis/${colis.id}/evenements`)
+        .set('Authorization', await f.jeton(agentA))
+        .send({ codeEvenement: 'DOUANE_OK' });
+      expect(res.status).toBe(403);
+      await colis.reload();
+      expect(colis.statut).toBe('en_douane');
+    });
+
+    test('le détail masque le code de retrait et propose les étapes de la mission', async () => {
+      const colis = await f.creerColis(client, {
+        pointRetraitId: pointA.id,
+        statut: 'arrive',
+        codeRetrait: '123456',
+      });
+      const res = await request(app)
+        .get(`/admin/colis/${colis.id}`)
+        .set('Authorization', await f.jeton(agentA));
+      expect(res.status).toBe(200);
+      expect(res.body.data.colis.codeRetrait).toBeUndefined();
+      expect(res.body.data.colis.aCodeRetrait).toBe(true);
+      const codes = res.body.data.colis.evenementsPossibles.map((e) => e.code);
+      expect(codes).toContain('DISPO');
+      expect(codes).not.toContain('DOUANE_OK');
+    });
+
+    test('la remise au destinataire exige le bon code de retrait', async () => {
+      const colis = await f.creerColis(client, {
+        pointRetraitId: pointA.id,
+        statut: 'disponible_retrait',
+        codeRetrait: '654321',
+      });
+      const entete = await f.jeton(agentA);
+      const retirer = (codeRetrait) =>
+        request(app)
+          .post(`/admin/colis/${colis.id}/evenements`)
+          .set('Authorization', entete)
+          .send({ codeEvenement: 'RETIRE', codeRetrait });
+
+      expect((await retirer('000000')).status).toBe(400);
+      expect((await retirer('654321')).status).toBe(200);
+      await colis.reload();
+      expect(colis.statut).toBe('recupere');
+    });
+
+    test('un coursier ne livre pas sans le code du destinataire quand il en a un', async () => {
+      const colis = await f.creerColis(client, {
+        coursierLivraisonId: coursier.id,
+        statut: 'en_livraison',
+        codeRetrait: '111222',
+      });
+      const res = await request(app)
+        .post(`/admin/colis/${colis.id}/evenements`)
+        .set('Authorization', await f.jeton(coursier))
+        .send({ codeEvenement: 'LIVRE' });
+      expect(res.status).toBe(400);
+    });
+  });
 });

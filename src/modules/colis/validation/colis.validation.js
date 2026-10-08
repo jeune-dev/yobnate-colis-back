@@ -6,6 +6,7 @@ const {
   dateISO,
   listeQuery,
   filtres,
+  largeurNeDepassePasLongueur,
 } = require('../../../validations/common');
 const { CODES_PAYS } = require('../../../config/pays');
 const {
@@ -33,7 +34,7 @@ const pieceSchema = Joi.object({
   longueurCm: Joi.number().positive().max(500).allow(null),
   largeurCm: Joi.number().positive().max(500).allow(null),
   hauteurCm: Joi.number().positive().max(500).allow(null),
-});
+}).custom(largeurNeDepassePasLongueur);
 
 const articleDouaneSchema = Joi.object({
   designation: Joi.string().min(2).max(255).required(),

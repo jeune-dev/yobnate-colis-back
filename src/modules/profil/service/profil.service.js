@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { User, Colis, UserOtp } = require('../../../models');
 const { genererCodeParrainage } = require('../../../utils/referenceGenerator');
 const notificationService = require('../../notification/service/notification.service');
@@ -237,6 +238,12 @@ class ProfilService {
     const user = await User.findByPk(userId);
     if (!user) throw new NotFoundError('Utilisateur introuvable');
 
+    // Un téléphone ne reçoit les push que du compte connecté : si un autre compte
+    // a gardé ce jeton (déconnexion qui n'a pas pu l'invalider), il le perd ici.
+    await User.update(
+      { deviceToken: null, devicePlatform: null },
+      { where: { deviceToken: token, id: { [Op.ne]: userId } } }
+    );
     await user.update({ deviceToken: token, devicePlatform: platform });
     return { message: 'Token de notification enregistré.' };
   };

@@ -1,5 +1,10 @@
 const Joi = require('joi');
-const { pays, devise, dateISO } = require('../../../validations/common');
+const {
+  pays,
+  devise,
+  dateISO,
+  largeurNeDepassePasLongueur,
+} = require('../../../validations/common');
 const { TYPES_CONTENU } = require('../../../config/colis');
 
 const trancheSchema = Joi.object({
@@ -69,7 +74,7 @@ const calculerPrixSchema = Joi.object({
   modeLivraison: Joi.string().valid('point_retrait', 'livraison_domicile').default('point_retrait'),
   incoterm: Joi.string().valid('DAP', 'DDP').default('DAP'),
   payeur: Joi.string().valid('expediteur', 'destinataire').default('expediteur'),
-});
+}).custom(largeurNeDepassePasLongueur);
 
 module.exports = {
   createTarifSchema,

@@ -95,6 +95,43 @@ const EVENEMENTS_SUIVI = {
 
 const CODES_EVENEMENTS = Object.keys(EVENEMENTS_SUIVI);
 
+/**
+ * Événements que le personnel de terrain peut enregistrer, selon sa mission :
+ * - coursier : ramassage chez l'expéditeur, dépôt au point, livraison à domicile ;
+ * - agent_point : réception au comptoir, mise à disposition, retrait par le destinataire.
+ * Les étapes de transit, de douane et d'étude restent réservées aux administrateurs.
+ */
+const EVENEMENTS_PAR_ROLE = {
+  coursier: [
+    'ENL_OK',
+    'ENL_ECHEC',
+    'DEPOT',
+    'EN_LIVRAISON',
+    'LIV_ECHEC',
+    'LIVRE',
+    'REFUSE',
+    'AVARIE',
+    'RETARD',
+    'INFO',
+  ],
+  agent_point: [
+    'DEPOT',
+    'RECEPTION',
+    'ARR_AGENCE',
+    'DISPO',
+    'EN_LIVRAISON',
+    'RETIRE',
+    'REFUSE',
+    'AVARIE',
+    'RETARD',
+    'INFO',
+  ],
+};
+
+/** Codes d'événements permis pour un rôle ; `null` = aucune restriction (administrateurs). */
+const evenementsAutorises = (role) =>
+  ['admin', 'super_admin'].includes(role) ? null : EVENEMENTS_PAR_ROLE[role] || [];
+
 /** Nature de la marchandise transportée — détermine les obligations douanières. */
 const TYPES_CONTENU = [
   'document',
@@ -215,6 +252,8 @@ module.exports = {
   TRANSITIONS_AUTORISEES,
   EVENEMENTS_SUIVI,
   CODES_EVENEMENTS,
+  EVENEMENTS_PAR_ROLE,
+  evenementsAutorises,
   TYPES_CONTENU,
   MODES_DEPOT,
   MODES_LIVRAISON,

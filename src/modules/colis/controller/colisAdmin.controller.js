@@ -10,7 +10,7 @@ exports.getAll = asyncHandler(async (req, res) => {
 });
 
 exports.getOne = asyncHandler(async (req, res) => {
-  const result = await service.getColisById(req.params.id);
+  const result = await service.getColisById(req.params.id, req.user);
   return ok(res, { colis: result.colis }, result.message);
 });
 
@@ -20,7 +20,7 @@ exports.rechercher = asyncHandler(async (req, res) => {
 });
 
 exports.enregistrerEvenement = asyncHandler(async (req, res) => {
-  const result = await service.enregistrerEvenement(req.params.id, req.body, req.user.id);
+  const result = await service.enregistrerEvenement(req.params.id, req.body, req.user.id, req.user);
   return ok(res, { colis: result.colis, evenement: result.evenement }, result.message);
 });
 
@@ -118,6 +118,6 @@ exports.exporter = asyncHandler(async (req, res) => {
 });
 
 exports.codesEvenements = asyncHandler((req, res) => {
-  const result = service.getCodesEvenements();
+  const result = service.getCodesEvenements(req.user);
   return ok(res, { evenements: result.evenements }, result.message);
 });

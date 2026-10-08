@@ -130,6 +130,19 @@ const filtres = {
   sortOrder: Joi.string().lowercase().valid('asc', 'desc'),
 };
 
+/**
+ * Contrôle d'un objet portant `longueurCm` / `largeurCm` : la longueur est le
+ * plus grand côté, la largeur ne peut donc pas la dépasser (égalité admise
+ * pour une base carrée). Ignoré si l'une des deux est absente.
+ */
+const largeurNeDepassePasLongueur = (value, helpers) => {
+  const absente = (v) => v === null || v === undefined;
+  if (absente(value?.longueurCm) || absente(value?.largeurCm)) return value;
+  return Number(value.largeurCm) > Number(value.longueurCm)
+    ? helpers.message('La largeur ne peut pas être supérieure à la longueur')
+    : value;
+};
+
 module.exports = {
   phone,
   email,
@@ -150,4 +163,5 @@ module.exports = {
   paginationQuery,
   listeQuery,
   filtres,
+  largeurNeDepassePasLongueur,
 };
