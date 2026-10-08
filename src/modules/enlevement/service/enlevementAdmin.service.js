@@ -145,8 +145,10 @@ class EnlevementService {
       creneau: creneau || demande.creneau,
     });
 
-    // Le colis rattaché passe en enlèvement programmé
+    // Le colis rattaché est confié au coursier (il le voit dans ses missions)
+    // et passe en enlèvement programmé
     if (demande.colis) {
+      await Colis.update({ coursierEnlevementId: coursierId }, { where: { id: demande.colis.id } });
       await suiviService
         .enregistrerEvenement(
           demande.colis,

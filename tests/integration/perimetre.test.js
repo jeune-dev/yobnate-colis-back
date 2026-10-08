@@ -191,5 +191,37 @@ describeDb('Périmètre du personnel (base réelle)', () => {
         .send({ codeEvenement: 'LIVRE' });
       expect(res.status).toBe(400);
     });
+
+    test('le coursier et l’agent du point de dépôt voient le colis d’un enlèvement', async () => {
+      const autreCoursier = await f.creerUtilisateur({ role: 'coursier' });
+      const colis = await f.creerColis(client, { statut: 'enlevement_planifie' });
+      const ville = await f.models.Ville.create({ nom: 'Ville enlèvement', pays: 'FR' });
+      await f.models.DemandeEnlevement.create({
+        reference: `ENL-T-${Date.now()}`,
+        userId: client.id,
+        colisId: colis.id,
+        contactNom: 'Client Test',
+        contactTelephone: '+33612345678',
+        pays: 'FR',
+        villeId: ville.id,
+        adresse: '1 rue du Test',
+        dateSouhaitee: '2026-10-08',
+        creneau: '08:00-12:00',
+        statut: 'planifie',
+        coursierId: autreCoursier.id,
+        pointDepotId: pointA.id,
+      });
+      for (const membre of [autreCoursier, agentA]) {
+        const res = await request(app)
+          .get(`/admin/colis/${colis.id}`)
+          .set('Authorization', await f.jeton(membre));
+        expect(res.status).toBe(200);
+      }
+      // Un coursier étranger à l’enlèvement ne le voit pas
+      const res = await request(app)
+        .get(`/admin/colis/${colis.id}`)
+        .set('Authorization', await f.jeton(coursier));
+      expect(res.status).toBe(404);
+    });
   });
 });
