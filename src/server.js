@@ -8,6 +8,7 @@ const logger = require('./utils/logger');
 const etatApplication = require('./utils/etatApplication');
 const arrierePlan = require('./utils/arrierePlan');
 const { demarrerTaches } = require('./jobs/taches');
+const { journaliserConfiguration } = require('./infrastructure/resend.service');
 
 // Charger toutes les associations de modèles
 require('./models');
@@ -55,6 +56,7 @@ const attendreRequetes = async (delaiMs) => {
     // sync() recréait les contraintes UNIQUE (21 index en double par démarrage).
     await sequelize.authenticate();
     logger.info('Connexion PostgreSQL établie');
+    journaliserConfiguration();
 
     // Tâches planifiées : un seul processus les exécute par créneau (jobs/taches.js)
     const minuteurTaches = demarrerTaches();

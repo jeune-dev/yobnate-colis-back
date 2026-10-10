@@ -1,33 +1,19 @@
-const nodemailer = require('nodemailer');
 const logger = require('../utils/logger');
 const arrierePlan = require('../utils/arrierePlan');
 const { formater } = require('../utils/devise');
+const { dateFr } = require('../templates/documents');
+const { envoyerEmail, resendConfigure, erreurTransitoire, masquer } = require('./resend.service');
 
 /**
- * Envoi des courriels transactionnels.
+ * Envoi des courriels transactionnels, tous par Resend (voir resend.service.js).
  *
  * Un échec d'envoi ne doit jamais faire échouer l'opération métier qui l'a
  * déclenché : les erreurs sont journalisées, pas propagées.
  */
 
-// Connexions SMTP réutilisées (pool) au lieu d'une poignée de main TLS par message,
-// et délais bornés : les valeurs par défaut de nodemailer (2 min de connexion,
-// 10 min d'inactivité) laissaient un envoi bloqué occuper des ressources très longtemps.
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: process.env.SMTP_USER
-    ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD }
-    : undefined,
-  pool: true,
-  maxConnections: Number(process.env.SMTP_MAX_CONNEXIONS) || 3,
-  connectionTimeout: 10000,
-  greetingTimeout: 10000,
-  socketTimeout: 30000,
-});
-
 const URL_PUBLIQUE = process.env.APP_PUBLIC_URL || '';
+/** Adresse lue par l'équipe, où arrivent les réponses des clients (en-tête Reply-To). */
+const REPONDRE_A = String(process.env.MAIL_REPLY_TO || '').trim() || null;
 
 const echapper = (valeur) =>
   String(valeur ?? '')
@@ -70,61 +56,36 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
 </body></html>`;
 
 /**
- * Le SMTP est-il réellement configuré ? Tant qu'il ne l'est pas (valeurs vides
- * ou d'exemple), aucun courriel ne peut partir : les parcours qui en dépendent,
- * comme la confirmation d'email, doivent alors se dégrader proprement.
- */
-const smtpConfigure = () => {
-  const hote = String(process.env.SMTP_HOST || '').trim();
-  const utilisateur = String(process.env.SMTP_USER || '').trim();
-  const exemple = (v) => !v || /A_RENSEIGNER|example\.com|^your_/i.test(v);
-  return !exemple(hote) && !exemple(utilisateur);
-};
-
-/**
  * Envoi d'un courriel, confié à la file d'arrière-plan : l'appelant (et donc la
- * requête HTTP) n'attend plus le serveur SMTP. Les échecs restent journalisés.
+ * requête HTTP) n'attend pas Resend. Les échecs restent journalisés.
  */
-const CODES_RESEAU_TRANSITOIRES = ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ECONNRESET'];
-/** Panne passagère (réseau, SMTP 4xx « réessayez plus tard ») : l'envoi est retenté. */
-const erreurSmtpTransitoire = (err) =>
-  CODES_RESEAU_TRANSITOIRES.includes(err.code) ||
-  (Number(err.responseCode) >= 400 && Number(err.responseCode) < 500);
-
-const sendMail = ({ to, subject, html, texte = null }) => {
+const sendMail = ({ to, subject, html, texte = null, repondreA = null }) => {
   if (!to) return Promise.resolve();
-  arrierePlan.lancer(
-    'email',
-    () =>
-      transporter.sendMail({
-        from: process.env.MAIL_FROM,
-        to,
-        subject,
-        html,
-        text: texte || undefined,
+  if (!resendConfigure()) {
+    logger.warn(`[resend] Email non envoyé à ${masquer(to)} — ${subject} : RESEND_API_KEY absente`);
+    return Promise.resolve();
+  }
+  arrierePlan.lancer('email', () => envoyerEmail({ to, subject, html, texte, repondreA }), {
+    // 3 tentatives (maintenant, +2 s, +8 s) sur une panne passagère (réseau, 429,
+    // 5xx) ; une adresse ou un expéditeur refusé n'est pas retenté
+    tentatives: Number(process.env.EMAIL_TENTATIVES) || 3,
+    estTransitoire: erreurTransitoire,
+    surEchec: (err) =>
+      logger.error(`[resend] Abandon de l'envoi à ${masquer(to)} — ${subject}`, {
+        message: err.message,
+        statut: err.statusCode,
       }),
-    {
-      // 3 tentatives (maintenant, +2 s, +8 s) sur une panne passagère ; une adresse
-      // refusée (5xx) n'est pas retentée
-      tentatives: Number(process.env.SMTP_TENTATIVES) || 3,
-      estTransitoire: erreurSmtpTransitoire,
-      surEchec: (err) =>
-        logger.error(`Échec envoi email à ${to}`, { message: err.message, subject }),
-    }
-  );
+  });
   return Promise.resolve();
 };
 
 /**
  * Envoi IMMÉDIAT, attendu par l'appelant, sans passer par la file : réservé aux
  * messages dont l'utilisateur a besoin pour continuer (code de confirmation). Lève
- * une erreur si le SMTP n'est pas configuré ou refuse le message, pour que
+ * une erreur si Resend n'est pas configuré ou refuse le message, pour que
  * l'appelant puisse le dire au lieu de laisser attendre un code qui n'arrivera pas.
  */
-const sendMailImmediat = async ({ to, subject, html }) => {
-  if (!smtpConfigure()) throw new Error('SMTP non configuré (SMTP_HOST / SMTP_USER)');
-  await transporter.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
-};
+const sendMailImmediat = (message) => envoyerEmail(message);
 
 /* ── Comptes ────────────────────────────────────────────────────────────── */
 
@@ -185,7 +146,7 @@ const sendColisStatutEmail = (destinataire, colis, evenement = {}) => {
           <tr><td style="color:#6b7280;">Statut</td><td><strong>${echapper(evenement.libelle || colis.statut)}</strong></td></tr>
           ${evenement.lieu ? `<tr><td style="color:#6b7280;">Lieu</td><td>${echapper(evenement.lieu)}</td></tr>` : ''}
           ${evenement.commentaire ? `<tr><td style="color:#6b7280;">Précision</td><td>${echapper(evenement.commentaire)}</td></tr>` : ''}
-          ${colis.dateLivraisonEstimee ? `<tr><td style="color:#6b7280;">Livraison estimée</td><td>${echapper(colis.dateLivraisonEstimee)}</td></tr>` : ''}
+          ${colis.dateLivraisonEstimee ? `<tr><td style="color:#6b7280;">Livraison estimée</td><td>${echapper(dateFr(colis.dateLivraisonEstimee))}</td></tr>` : ''}
         </table>`,
       bouton: URL_PUBLIQUE
         ? { url: `${URL_PUBLIQUE}/suivi/${colis.reference}`, libelle: 'Voir le suivi détaillé' }
@@ -207,7 +168,7 @@ const sendColisDisponibleEmail = (email, colis, point, prenom = '') =>
           ${point?.telephone ? `Tél. ${echapper(point.telephone)}` : ''}
         </p>
         ${colis.codeRetrait ? `<p>Code de retrait à présenter : <strong style="font-size:20px;letter-spacing:4px;">${echapper(colis.codeRetrait)}</strong></p>` : ''}
-        ${colis.dateLimiteRetrait ? `<p>À retirer avant le <strong>${echapper(colis.dateLimiteRetrait)}</strong>, muni d'une pièce d'identité.</p>` : ''}`,
+        ${colis.dateLimiteRetrait ? `<p>À retirer avant le <strong>${echapper(dateFr(colis.dateLimiteRetrait))}</strong>, muni d'une pièce d'identité.</p>` : ''}`,
     }),
   });
 
@@ -222,7 +183,7 @@ const sendFactureEmail = (user, facture) =>
       corps: `<p>Bonjour ${echapper(user.prenom)},</p>
         <p>La facture <strong>${echapper(facture.reference)}</strong> d'un montant de
         <strong>${echapper(formater(facture.montantTotal, facture.devise))}</strong> a été émise.</p>
-        ${facture.dateLimitePaiement ? `<p>Règlement attendu avant le <strong>${echapper(facture.dateLimitePaiement)}</strong>.</p>` : ''}`,
+        ${facture.dateLimitePaiement ? `<p>Règlement attendu avant le <strong>${echapper(dateFr(facture.dateLimitePaiement))}</strong>.</p>` : ''}`,
     }),
   });
 
@@ -253,7 +214,7 @@ const sendEnlevementPlanifieEmail = (user, demande) =>
     html: gabarit({
       titre: 'Votre enlèvement est planifié',
       corps: `<p>Bonjour ${echapper(user.prenom)},</p>
-        <p>Un coursier passera le <strong>${echapper(demande.dateSouhaitee)}</strong>
+        <p>Un coursier passera le <strong>${echapper(dateFr(demande.dateSouhaitee))}</strong>
         sur le créneau <strong>${echapper(demande.creneau)}</strong> à l'adresse indiquée.</p>
         <p>Merci de préparer vos colis fermés et étiquetés.</p>`,
     }),
@@ -274,6 +235,9 @@ const sendReclamationEmail = (user, reclamation, titre, corpsTexte) =>
  * Réponse de l'administrateur à une demande de contact d'un site vitrine.
  * L'objet est celui saisi par l'administrateur ; la demande d'origine est rappelée
  * sous la réponse. Le texte est échappé, les retours à la ligne sont conservés.
+ *
+ * C'est un échange : le client peut répondre, sa réponse part vers MAIL_REPLY_TO
+ * (et non vers l'adresse d'envoi, qui n'est pas lue).
  */
 const sendReponseDemandeContactEmail = (demande, { objet, reponse }) =>
   sendMail({
@@ -285,7 +249,11 @@ const sendReponseDemandeContactEmail = (demande, { objet, reponse }) =>
         <p style="white-space:pre-line;">${echapper(reponse)}</p>
         <p style="margin:20px 0 6px;color:#6b7280;font-size:13px;">Votre message :</p>
         <p style="margin:0;padding:12px;background:${COULEURS.primaireClair};border-left:4px solid ${COULEURS.secondaire};font-size:14px;white-space:pre-line;">${echapper(demande.message)}</p>`,
+      piedDePage: REPONDRE_A
+        ? 'Vous pouvez répondre directement à ce message : notre équipe le recevra.'
+        : 'Pour nous répondre, utilisez le formulaire de contact ou notre WhatsApp.',
     }),
+    repondreA: REPONDRE_A,
     texte: `Bonjour ${demande.prenom},\n\n${reponse}\n\n---\nVotre message :\n${demande.message}`,
   });
 
@@ -387,6 +355,18 @@ const remplacerVariables = (texte, variables, echapperValeurs = true) =>
     return echapperValeurs ? echapper(valeur) : String(valeur);
   });
 
+/** Date seule (2026-10-15) ou horodatage ISO : affiché au format français dans les modèles. */
+const DATE_ISO = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:?\d{2})?)?$/;
+const datesEnFrancais = (variables) =>
+  Object.fromEntries(
+    Object.entries(variables).map(([cle, valeur]) => [
+      cle,
+      valeur instanceof Date || (typeof valeur === 'string' && DATE_ISO.test(valeur))
+        ? dateFr(valeur)
+        : valeur,
+    ])
+  );
+
 const CACHE_MODELES_MS = 5 * 60 * 1000;
 let cacheModeles = { valeur: null, expireA: 0 };
 
@@ -415,7 +395,8 @@ const chargerModelesPersonnalises = async () => {
  * Envoie un courriel à partir de son code de modèle : la version personnalisée
  * par l'administrateur si elle existe, le gabarit par défaut sinon.
  */
-const envoyerModele = async (code, to, variables = {}, { immediat = false } = {}) => {
+const envoyerModele = async (code, to, variablesBrutes = {}, { immediat = false } = {}) => {
+  const variables = datesEnFrancais(variablesBrutes);
   const defaut = MODELES_PAR_DEFAUT[code];
   if (!defaut) throw new Error(`Modèle d'email inconnu : ${code}`);
   let personnalise = (await chargerModelesPersonnalises())[code];
@@ -447,7 +428,7 @@ const envoyerModele = async (code, to, variables = {}, { immediat = false } = {}
 module.exports = {
   sendMail,
   sendMailImmediat,
-  smtpConfigure,
+  resendConfigure,
   gabarit,
   MODELES_PAR_DEFAUT,
   envoyerModele,

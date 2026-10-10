@@ -3,7 +3,7 @@ const logger = require('./logger');
 /**
  * File d'envois en arrière-plan, en mémoire, à concurrence bornée.
  *
- * Les envois externes (email SMTP, push FCM, WhatsApp) ne doivent pas rallonger les
+ * Les envois externes (email Resend, push FCM, WhatsApp) ne doivent pas rallonger les
  * requêtes HTTP : un SMTP lent faisait durer un simple scan de colis plus de 8 s, et
  * le changement de statut d'un conteneur (un événement par colis) dépassait le délai
  * du proxy. La requête enregistre en base ce qui doit l'être, puis confie l'envoi à

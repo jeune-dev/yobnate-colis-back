@@ -14,7 +14,7 @@ formalités douanières, facturation multi-devise et service après-vente.
 - **Base de données :** PostgreSQL 16
 - **Auth :** JWT (access + refresh token) + blacklist, rôles multiples
 - **Upload :** Cloudflare R2 (via Multer mémoire, contenu vérifié par magic bytes)
-- **Email :** Nodemailer (SMTP), gabarits HTML en français
+- **Email :** Resend (API), gabarits HTML en français
 - **Documents :** étiquettes et bordereaux HTML imprimables avec code-barres
   Code 128 généré en interne (aucune dépendance externe)
 - **Documentation :** OpenAPI générée à partir des routes réelles (Swagger UI hors production)
@@ -77,7 +77,7 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
 - PostgreSQL 16
 - Redis 7 (facultatif ; fourni par docker-compose.prod.yml)
 - Bucket Cloudflare R2 (variables `R2_*`)
-- Compte SMTP (Gmail ou autre)
+- Compte Resend (clé API + domaine expéditeur vérifié)
 
 ## Installation
 

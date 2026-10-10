@@ -87,7 +87,7 @@ class AuthService {
    * ne peut pas se connecter ; c'est la confirmation qui ouvre la première session.
    *
    * L'envoi est attendu (et non confié à la file) : l'application doit savoir si le
-   * code est vraiment parti, au lieu d'afficher « code envoyé » quand le SMTP n'est
+   * code est vraiment parti, au lieu d'afficher « code envoyé » quand Resend n'est
    * pas configuré.
    *
    * @returns {Promise<boolean>} true si l'email est parti.
@@ -115,7 +115,7 @@ class AuthService {
     } catch (err) {
       // Le compte et le code existent : l'utilisateur pourra en redemander un.
       logger.error('Envoi du code de confirmation impossible', { message: err.message });
-      // En développement, sans SMTP, le code est journalisé pour pouvoir tester le parcours
+      // En développement, sans Resend, le code est journalisé pour pouvoir tester le parcours
       if (process.env.NODE_ENV === 'development') {
         logger.warn(`[DEV] Code de confirmation de ${user.email} : ${code}`);
       }
@@ -308,7 +308,7 @@ class AuthService {
     if (!user.isActive) throw new ForbiddenError('Ce compte a été désactivé', 'COMPTE_DESACTIVE');
     if (user.role === 'client' && !user.emailVerifie) {
       const { verification_email_obligatoire: obligatoire } = await parametreService.chargerTous();
-      // Plus de dérogation « SMTP non configuré » : elle laissait entrer des comptes
+      // Plus de dérogation « email non configuré » : elle laissait entrer des comptes
       // dont l'adresse n'avait jamais été prouvée. Le code d'erreur renvoie
       // l'application vers l'écran de saisie du code.
       if (obligatoire) {

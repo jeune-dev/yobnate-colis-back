@@ -14,14 +14,23 @@ process.env.DATABASE_URL = URL_BASE || 'postgres://ignore:ignore@localhost:1/ign
 process.env.NODE_ENV = 'test';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'j'.repeat(40);
 process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'r'.repeat(40);
-process.env.SMTP_HOST = 'smtp.test.local';
-process.env.SMTP_USER = 'test';
+process.env.RESEND_API_KEY = 're_test_e2e';
+process.env.MAIL_FROM = 'Yobante <test@yobante.test>';
 process.env.APP_PUBLIC_URL = 'https://app.test';
 
 // Services externes interceptés : mockEmails capturés, téléversements simulés
 const mockEmails = [];
-jest.mock('nodemailer', () => ({
-  createTransport: () => ({ sendMail: async (m) => mockEmails.push(m) }),
+jest.mock('resend', () => ({
+  Resend: class {
+    constructor() {
+      this.emails = {
+        send: (m) => {
+          mockEmails.push(m);
+          return Promise.resolve({ data: { id: `e2e-${mockEmails.length}` }, error: null });
+        },
+      };
+    }
+  },
 }));
 jest.mock('../../src/infrastructure/r2.service', () => {
   let n = 0;

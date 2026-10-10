@@ -16,12 +16,10 @@ process.env.JWT_REFRESH_SECRET =
   process.env.JWT_REFRESH_SECRET || 'test-jwt-refresh-secret-'.padEnd(48, 'y');
 process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
 
-// Aucun courriel réel : un port fermé fait échouer l'envoi immédiatement,
-// échec déjà absorbé par infrastructure/mailer.js.
-process.env.SMTP_HOST = '127.0.0.1';
-process.env.SMTP_PORT = '9';
-// Pas de réessai différé d'un envoi voué à l'échec (port fermé) après la fin d'un test
-process.env.SMTP_TENTATIVES = '1';
+// Aucun courriel réel : sans clé Resend, les envois sont journalisés puis ignorés
+// (infrastructure/mailer.js), et les envois immédiats échouent proprement.
+delete process.env.RESEND_API_KEY;
+process.env.EMAIL_TENTATIVES = '1';
 process.env.APP_PUBLIC_URL = '';
 process.env.API_PUBLIC_URL = '';
 
