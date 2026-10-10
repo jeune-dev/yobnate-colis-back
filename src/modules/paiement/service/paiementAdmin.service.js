@@ -117,6 +117,12 @@ class PaiementService {
     });
     if (!facture) throw new NotFoundError('Facture introuvable');
 
+    if (facture.type === 'avoir') {
+      throw new BadRequestError(
+        "Un avoir ne s'encaisse pas : il vient en déduction de la facture d'origine"
+      );
+    }
+
     if (!['en_attente', 'partiellement_payee'].includes(facture.statut)) {
       throw new BadRequestError(
         `Cette facture n'attend pas de règlement (statut : ${facture.statut})`

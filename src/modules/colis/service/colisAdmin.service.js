@@ -825,6 +825,18 @@ class ColisService {
     });
     const nomService = Object.fromEntries(services.map((sv) => [sv.id, sv.nom]));
     const comptes = Object.fromEntries(parStatut.map((r) => [r.statut, Number(r.total)]));
+    // Le CA toutes devises confondues n'a pas de sens : ventilation par devise.
+    const parDevise = await Colis.findAll({
+      where,
+      attributes: [
+        'devise',
+        [sequelize.fn('COUNT', col('id')), 'total'],
+        [sequelize.fn('SUM', col('montantTotal')), 'chiffreAffaires'],
+        [sequelize.fn('AVG', col('montantTotal')), 'panierMoyen'],
+      ],
+      group: ['devise'],
+      raw: true,
+    });
 
     return {
       message: 'Statistiques des expéditions',
@@ -833,6 +845,12 @@ class ColisService {
         chiffreAffaires: Number(totaux?.chiffreAffaires || 0),
         poidsTotalKg: Number(totaux?.poids || 0),
         panierMoyen: Number(Number(totaux?.panierMoyen || 0).toFixed(2)),
+        parDevise: parDevise.map((r) => ({
+          devise: r.devise,
+          total: Number(r.total),
+          chiffreAffaires: Number(r.chiffreAffaires || 0),
+          panierMoyen: Number(Number(r.panierMoyen || 0).toFixed(2)),
+        })),
         parStatut: STATUTS_COLIS.map((statut) => ({ statut, total: comptes[statut] || 0 })),
         parService: lignesService.map((r) => ({
           service: nomService[r.serviceId] || 'Inconnu',

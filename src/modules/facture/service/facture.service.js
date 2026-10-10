@@ -428,8 +428,23 @@ class FactureService {
         where,
         attributes: [
           'devise',
-          [sequelize.fn('SUM', sequelize.col('montantTotal')), 'facture'],
-          [sequelize.fn('SUM', sequelize.col('montantPaye')), 'encaisse'],
+          // Un avoir vient en déduction du facturé et n'est pas un encaissement.
+          [
+            sequelize.fn(
+              'SUM',
+              sequelize.literal(
+                'CASE WHEN "type" = \'avoir\' THEN -"montantTotal" ELSE "montantTotal" END'
+              )
+            ),
+            'facture',
+          ],
+          [
+            sequelize.fn(
+              'SUM',
+              sequelize.literal('CASE WHEN "type" = \'avoir\' THEN 0 ELSE "montantPaye" END')
+            ),
+            'encaisse',
+          ],
         ],
         group: ['devise'],
         raw: true,
