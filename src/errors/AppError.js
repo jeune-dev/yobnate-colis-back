@@ -27,8 +27,15 @@ class UnauthorizedError extends AppError {
   }
 }
 class ForbiddenError extends AppError {
-  constructor(message = 'Accès refusé', code = undefined) {
-    super(message, 403, true, code);
+  /**
+   * @param {string} [codeMetier] code renvoyé au client (`code`) pour qu'il réagisse
+   *   autrement qu'en affichant le message (ex : EMAIL_NON_CONFIRME)
+   * @param {object} [donnees] champs ajoutés à la réponse (ex : { email })
+   */
+  constructor(message = 'Accès refusé', codeMetier = null, donnees = null) {
+    super(message, 403, true, codeMetier || undefined);
+    this.codeMetier = codeMetier;
+    this.donnees = donnees;
   }
 }
 class NotFoundError extends AppError {

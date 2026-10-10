@@ -24,10 +24,7 @@ const {
   ForbiddenError,
 } = require('../../../errors/AppError');
 const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { formater } = require('../../../utils/devise');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const suiviService = require('./suivi.service');
@@ -534,7 +531,7 @@ class ColisService {
     }
 
     const televerses = await Promise.all(
-      files.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-express/colis' }))
+      files.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/colis' }))
     );
     await colis.update({ photos: [...colis.photos, ...televerses] });
     return { message: `${televerses.length} photo(s) ajoutée(s).`, colis };
@@ -547,13 +544,12 @@ class ColisService {
     if (!colis) throw new NotFoundError('Expédition introuvable');
     if (colis.estTermine) throw new BadRequestError('Cette expédition est clôturée');
 
-    const vocal = await uploadToCloudinary(fichier.buffer, {
-      folder: 'yobnate-express/vocaux',
-      resourceType: 'video',
+    const vocal = await uploadFile(fichier.buffer, {
+      folder: 'yobante-colis/vocaux',
     });
     const ancien = colis.vocalPublicId;
     await colis.update({ vocalUrl: vocal.url, vocalPublicId: vocal.publicId });
-    if (ancien) await deleteFromCloudinary(ancien, 'video').catch(() => {});
+    if (ancien) await deleteFile(ancien);
     return { message: 'Message vocal enregistré.', colis };
   };
 

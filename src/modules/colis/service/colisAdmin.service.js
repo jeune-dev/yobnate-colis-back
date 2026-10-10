@@ -17,10 +17,10 @@ const {
   DemandeEnlevement,
   TourneeCollecte,
 } = require('../../../models');
-const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
+const { BadRequestError, NotFoundError, ForbiddenError } = require('../../../errors/AppError');
 const { paginate, paginateResult, listerPagine } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
-const { uploadToCloudinary } = require('../../../infrastructure/uploadService');
+const { uploadFile } = require('../../../infrastructure/r2.service');
 const suiviService = require('./suivi.service');
 const tarificationService = require('../../tarification/service/tarification.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -29,7 +29,12 @@ const documents = require('../../../templates/documents');
 const perimetre = require('../../../utils/perimetre');
 const { versCsv } = require('../../../utils/csv');
 const cache = require('../../../utils/cache');
-const { EVENEMENTS_SUIVI, STATUTS_COLIS } = require('../../../config/colis');
+const {
+  EVENEMENTS_SUIVI,
+  STATUTS_COLIS,
+  evenementsAutorises,
+  transitionAutorisee,
+} = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
 const { genererCodeRetrait } = require('../../../utils/referenceGenerator');
 
@@ -204,6 +209,16 @@ class ColisService {
     'dateLivraisonEstimee',
   ];
 
+  /**
+   * Retire ce que le personnel de terrain ne doit pas lire : le code de retrait
+   * (qu'il doit obtenir du destinataire) et le coût de revient (marge). Seule
+   * l'existence du code est indiquée, pour le demander à la remise.
+   */
+  static masquerPourTerrain = (json) => {
+    const { codeRetrait, coutRevient: _cout, ...visible } = json;
+    return { ...visible, aCodeRetrait: Boolean(codeRetrait) };
+  };
+
   static getAllColis = async (filters = {}, pagination = {}, restriction = null) => {
     const where = perimetre.combiner(ColisService.construireFiltres(filters), restriction);
     const sortBy = ColisService.CHAMPS_TRIABLES.includes(filters.sortBy)
@@ -222,7 +237,10 @@ class ColisService {
 
     return {
       message: 'Liste des expéditions',
-      colis: rows.map((c) => ({ ...c.toJSON(), enRetard: c.estEnRetard })),
+      colis: rows.map((c) => {
+        const json = { ...c.toJSON(), enRetard: c.estEnRetard };
+        return restriction ? ColisService.masquerPourTerrain(json) : json;
+      }),
       pagination: paginateResult(count, pagination.page, pagination.limit),
     };
   };
@@ -234,16 +252,31 @@ class ColisService {
     return colis;
   };
 
-  static getColisById = async (id) => {
+  /**
+   * Événements que `user` peut enregistrer maintenant sur ce colis : ceux de son
+   * rôle dont le statut induit est une transition valide (les événements
+   * informatifs, sans changement d'état, restent toujours possibles).
+   */
+  static evenementsPossibles = (colis, user) => {
+    const permis = evenementsAutorises(user?.role);
+    return Object.entries(EVENEMENTS_SUIVI)
+      .filter(([code]) => !permis || permis.includes(code))
+      .filter(([, def]) => !def.statut || transitionAutorisee(colis.statut, def.statut))
+      .map(([code, def]) => ({ code, libelle: def.libelle, statutInduit: def.statut }));
+  };
+
+  static getColisById = async (id, user = null) => {
     const colis = await ColisService.chargerColis(id);
+    const complet = {
+      ...colis.toJSON(),
+      enRetard: colis.estEnRetard,
+      estInternational: colis.estInternational,
+      transitionsPossibles: colis.transitionsPossibles,
+      evenementsPossibles: ColisService.evenementsPossibles(colis, user),
+    };
     return {
       message: "Détail de l'expédition",
-      colis: {
-        ...colis.toJSON(),
-        enRetard: colis.estEnRetard,
-        estInternational: colis.estInternational,
-        transitionsPossibles: colis.transitionsPossibles,
-      },
+      colis: perimetre.restreint(user) ? ColisService.masquerPourTerrain(complet) : complet,
     };
   };
 
@@ -268,7 +301,10 @@ class ColisService {
       'Aucune expédition ne correspond à ce numéro'
     );
 
-    return { message: 'Expédition trouvée', colis };
+    return {
+      message: 'Expédition trouvée',
+      colis: restriction ? ColisService.masquerPourTerrain(colis.toJSON()) : colis,
+    };
   };
 
   /* ── Progression de l'acheminement ──────────────────────────────────────── */
@@ -278,7 +314,12 @@ class ColisService {
    * C'est l'unique voie de modification du statut : elle garantit le respect de la
    * machine à états, la mise à jour des stocks et la notification du client.
    */
-  static enregistrerEvenement = async (id, params, adminId) => {
+  static enregistrerEvenement = async (id, params, adminId, auteur = null) => {
+    const permis = evenementsAutorises(auteur?.role);
+    if (auteur && permis && !permis.includes(params.codeEvenement)) {
+      throw new ForbiddenError('Cet événement ne relève pas de votre mission');
+    }
+
     const colis = await Colis.findByPk(id, {
       include: [
         { model: User, as: 'client', attributes: ['id', 'email', 'prenom', 'notificationsEmail'] },
@@ -286,8 +327,12 @@ class ColisService {
     });
     if (!colis) throw new NotFoundError('Expédition introuvable');
 
-    // Le retrait en point suppose que le code remis au destinataire ait été contrôlé
-    if (params.codeEvenement === 'RETIRE' && colis.codeRetrait) {
+    // Le retrait en point suppose que le code remis au destinataire ait été contrôlé ;
+    // sur le terrain, la remise en main propre par le coursier l'exige aussi.
+    const remiseControlee =
+      params.codeEvenement === 'RETIRE' ||
+      (params.codeEvenement === 'LIVRE' && perimetre.restreint(auteur));
+    if (remiseControlee && colis.codeRetrait) {
       if (!params.codeRetrait)
         throw new BadRequestError('Le code de retrait du destinataire est requis');
       if (String(params.codeRetrait) !== String(colis.codeRetrait)) {
@@ -686,7 +731,7 @@ class ColisService {
     if (!colis) throw new NotFoundError('Expédition introuvable');
 
     const televerses = await Promise.all(
-      files.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-express/colis' }))
+      files.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/colis' }))
     );
     await colis.update({ photos: [...colis.photos, ...televerses] });
     await logActivity({
@@ -871,14 +916,15 @@ class ColisService {
   };
 
   /** Codes d'événements disponibles, pour alimenter les listes du back-office. */
-  static getCodesEvenements = () => ({
-    message: "Codes d'événements de suivi",
-    evenements: Object.entries(EVENEMENTS_SUIVI).map(([code, def]) => ({
-      code,
-      libelle: def.libelle,
-      statutInduit: def.statut,
-    })),
-  });
+  static getCodesEvenements = (user = null) => {
+    const permis = evenementsAutorises(user?.role);
+    return {
+      message: "Codes d'événements de suivi",
+      evenements: Object.entries(EVENEMENTS_SUIVI)
+        .filter(([code]) => !permis || permis.includes(code))
+        .map(([code, def]) => ({ code, libelle: def.libelle, statutInduit: def.statut })),
+    };
+  };
 }
 
 module.exports = ColisService;

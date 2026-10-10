@@ -8,10 +8,7 @@ const {
 } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { trierParProximite, boiteEnglobante } = require('../../../utils/geo');
 const { PAYS } = require('../../../config/pays');
 const { JOURS_SEMAINE, SERVICES_POINT, LIBELLES_TYPES_POINT } = require('../../../config/reseau');
@@ -469,8 +466,8 @@ class PointCollecteService {
     const point = await PointCollecte.findByPk(id);
     if (!point) throw new NotFoundError('Point de collecte introuvable');
 
-    const televerse = await uploadToCloudinary(file.buffer, { folder: 'yobnate-express/points' });
-    if (point.photoPublicId) await deleteFromCloudinary(point.photoPublicId);
+    const televerse = await uploadFile(file.buffer, { folder: 'yobante-colis/points' });
+    if (point.photoPublicId) await deleteFile(point.photoPublicId);
 
     await point.update({ photoUrl: televerse.url, photoPublicId: televerse.publicId });
     await logActivity({

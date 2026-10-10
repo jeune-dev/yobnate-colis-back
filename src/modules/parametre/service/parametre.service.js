@@ -174,7 +174,7 @@ class ParametreService {
     },
     adresse_reception_fr: {
       valeur:
-        '{"nom": "Yobnate Express — Réception France", "adresse": "", "codePostal": "", "ville": "Clermont-Ferrand", "telephone": "", "instructions": "Indiquez votre nom et votre numéro de suivi sur le colis."}',
+        '{"nom": "Yobante Colis — Réception France", "adresse": "", "codePostal": "", "ville": "Clermont-Ferrand", "telephone": "", "instructions": "Indiquez votre nom et votre numéro de suivi sur le colis."}',
       type: 'json',
       categorie: 'expedition',
       libelle: 'Adresse de réception des colis en France',
@@ -182,7 +182,7 @@ class ParametreService {
     },
     adresse_reception_sn: {
       valeur:
-        '{"nom": "Yobnate Express — Plateforme Dakar", "adresse": "", "quartier": "", "arrondissement": "", "departement": "Dakar", "pointRepere": "", "telephone": ""}',
+        '{"nom": "Yobante Colis — Plateforme Dakar", "adresse": "", "quartier": "", "arrondissement": "", "departement": "Dakar", "pointRepere": "", "telephone": ""}',
       type: 'json',
       categorie: 'expedition',
       libelle: 'Adresse de réception des colis au Sénégal (flux inverse)',
@@ -326,7 +326,7 @@ class ParametreService {
 
     // ── Identité de l entreprise (documents) ───────────────────────────────
     entreprise_nom: {
-      valeur: 'Yobnate Express',
+      valeur: 'Yobante Colis',
       type: 'texte',
       categorie: 'entreprise',
       libelle: 'Raison sociale',

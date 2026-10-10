@@ -17,6 +17,7 @@ const {
   validerDemandeSchema,
   refuserDemandeSchema,
   proposerTarifSchema,
+  listeColisAdminQuery,
 } = require('../validation/colis.validation');
 const { uuidParam } = require('../../../validations/common');
 const { Colis } = require('../../../models');
@@ -33,9 +34,9 @@ router.param(
   siUuid(perimetre.exigerPerimetre(Colis, perimetre.colis, 'Expédition introuvable'))
 );
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeColisAdminQuery, 'query'), ctrl.getAll);
 router.get('/statistiques', ctrl.statistiques);
-router.get('/export', admin, ctrl.exporter);
+router.get('/export', admin, validate(listeColisAdminQuery, 'query'), ctrl.exporter);
 router.get('/codes-evenements', ctrl.codesEvenements);
 router.get('/recherche/:numero', ctrl.rechercher);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);

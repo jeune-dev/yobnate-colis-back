@@ -1,5 +1,14 @@
 const Joi = require('joi');
-const { phone, devise, heureHHMM, dateISO } = require('../../../validations/common');
+const {
+  phone,
+  devise,
+  heureHHMM,
+  dateISO,
+  listeQuery,
+  filtres,
+  largeurNeDepassePasLongueur,
+} = require('../../../validations/common');
+const { CODES_PAYS } = require('../../../config/pays');
 const {
   TYPES_CONTENU,
   MODES_DEPOT,
@@ -25,7 +34,7 @@ const pieceSchema = Joi.object({
   longueurCm: Joi.number().positive().max(500).allow(null),
   largeurCm: Joi.number().positive().max(500).allow(null),
   hauteurCm: Joi.number().positive().max(500).allow(null),
-});
+}).custom(largeurNeDepassePasLongueur);
 
 const articleDouaneSchema = Joi.object({
   designation: Joi.string().min(2).max(255).required(),
@@ -320,7 +329,12 @@ const annulerColisSchema = Joi.object({
 
 const abonnerSuiviSchema = Joi.object({
   canal: Joi.string().valid('email', 'sms').default('email'),
-  destination: Joi.string().max(150).required(),
+  // Adresse email ou numéro selon le canal : une destination mal formée ne recevrait rien
+  destination: Joi.when('canal', {
+    is: 'sms',
+    then: phone.required(),
+    otherwise: Joi.string().trim().lowercase().email().max(150).required(),
+  }),
   profil: Joi.string().valid('expediteur', 'destinataire', 'tiers').default('destinataire'),
 });
 
@@ -329,7 +343,60 @@ const coutRevientSchema = Joi.object({
   coutRevient: Joi.number().min(0).precision(2).allow(null).required(),
 });
 
+/* ── Filtres des listes ─────────────────────────────────────────────────── */
+
+const statutColis = filtres.valeurs(STATUTS_COLIS);
+
+const listeColisClientQuery = listeQuery({
+  statut: statutColis,
+  categorie: filtres.valeurs(CATEGORIES_COLIS),
+  serviceId: filtres.id,
+  reference: filtres.recherche,
+  enCours: filtres.booleen,
+  dateDebut: filtres.date,
+  dateFin: filtres.date,
+});
+
+const listeColisRecusQuery = listeQuery({
+  statut: statutColis,
+  dateDebut: filtres.date,
+  dateFin: filtres.date,
+});
+
+const listeColisAdminQuery = listeQuery({
+  statut: Joi.alternatives().try(statutColis, Joi.array().items(statutColis).max(20)),
+  serviceId: filtres.id,
+  userId: filtres.id,
+  paysDepart: filtres.valeurs(CODES_PAYS),
+  paysArrivee: filtres.valeurs(CODES_PAYS),
+  villeDepartId: filtres.id,
+  villeArriveeId: filtres.id,
+  pointCollecteId: filtres.id,
+  pointActuelId: filtres.id,
+  rotationId: filtres.id,
+  coursierId: filtres.id,
+  tourneeCollecteId: filtres.id,
+  reference: filtres.recherche,
+  expediteur: filtres.recherche,
+  destinataire: filtres.recherche,
+  produit: filtres.recherche,
+  typeContenu: filtres.valeurs(TYPES_CONTENU),
+  categorie: filtres.valeurs(CATEGORIES_COLIS),
+  modeDepot: filtres.valeurs(MODES_DEPOT),
+  aEtudier: filtres.booleen,
+  etudeEnRetard: filtres.booleen,
+  sansRotation: filtres.booleen,
+  enRetard: filtres.booleen,
+  enSouffrance: filtres.booleen,
+  dateDebut: filtres.date,
+  dateFin: filtres.date,
+  sortOrder: filtres.sortOrder,
+});
+
 module.exports = {
+  listeColisAdminQuery,
+  listeColisClientQuery,
+  listeColisRecusQuery,
   coutRevientSchema,
   modifierColisClientSchema,
   repondrePropositionSchema,

@@ -16,16 +16,13 @@ const {
 } = require('../../../models');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
 const {
-  genererNumeroSuiviYobnate,
+  genererNumeroSuiviYobante,
   genererNumeroPiece,
   genererNumeroFactureCommerciale,
   genererCodeRetrait,
   genererRefEnlevement,
 } = require('../../../utils/referenceGenerator');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { envoyerModele, URL_PUBLIQUE } = require('../../../infrastructure/mailer');
 const logger = require('../../../utils/logger');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
@@ -514,19 +511,30 @@ class ColisDeclarationService {
     });
 
     // Téléversement hors transaction : la connexion base ne reste pas ouverte pendant l'I/O réseau
-    const photos = fichiersPhotos.length
-      ? await Promise.all(
-          fichiersPhotos.map((f) =>
-            uploadToCloudinary(f.buffer, { folder: 'yobnate-express/colis' })
-          )
-        )
-      : [];
-    const vocal = fichierVocal
-      ? await uploadToCloudinary(fichierVocal.buffer, {
-          folder: 'yobnate-express/vocaux',
-          resourceType: 'video',
-        })
-      : null;
+    // Fichier invalide (erreur levée tout de suite) ou refus de R2 : même traitement
+    const televerser = (buffer, options) =>
+      Promise.resolve().then(() => uploadFile(buffer, options));
+    const envois = await Promise.allSettled([
+      ...fichiersPhotos.map((f) => televerser(f.buffer, { folder: 'yobante-colis/colis' })),
+      ...(fichierVocal
+        ? [
+            televerser(fichierVocal.buffer, {
+              folder: 'yobante-colis/vocaux',
+            }),
+          ]
+        : []),
+    ]);
+    const photos = envois.slice(0, fichiersPhotos.length).map((e) => e.value);
+    const vocal = fichierVocal ? envois[fichiersPhotos.length].value : null;
+    const echec = envois.find((e) => e.status === 'rejected');
+    if (echec) {
+      // Un fichier refusé : ceux déjà envoyés ne doivent pas rester orphelins
+      await Promise.allSettled([
+        ...photos.filter(Boolean).map((p) => deleteFile(p.publicId)),
+        ...(vocal ? [deleteFile(vocal.publicId)] : []),
+      ]);
+      throw echec.reason;
+    }
 
     const international = villeDepart.pays !== villeArrivee.pays;
     const douaneRequise = international && typeContenu !== 'document';
@@ -643,7 +651,7 @@ class ColisDeclarationService {
             creePar: contexte.auteurId || userId,
           }),
           () =>
-            genererNumeroSuiviYobnate({
+            genererNumeroSuiviYobante({
               prefixe: parametres.prefixe_numero_suivi || 'PN',
               codeConteneur: parametres.code_conteneur_numero_suivi || 'CO',
               numeroConteneur,
@@ -815,8 +823,8 @@ class ColisDeclarationService {
       });
     } catch (err) {
       const aNettoyer = [
-        ...photos.map((p) => deleteFromCloudinary(p.publicId)),
-        ...(vocal ? [deleteFromCloudinary(vocal.publicId, 'video')] : []),
+        ...photos.map((p) => deleteFile(p.publicId)),
+        ...(vocal ? [deleteFile(vocal.publicId)] : []),
       ];
       if (aNettoyer.length) await Promise.allSettled(aNettoyer);
       throw err;

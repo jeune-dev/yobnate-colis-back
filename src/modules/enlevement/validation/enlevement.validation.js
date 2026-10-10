@@ -1,6 +1,7 @@
 const Joi = require('joi');
-const { pays, heureHHMM } = require('../../../validations/common');
-const { CRENEAUX_ENLEVEMENT } = require('../../../config/reseau');
+const { pays, heureHHMM, dateISO, listeQuery, filtres } = require('../../../validations/common');
+const { CRENEAUX_ENLEVEMENT, STATUTS_ENLEVEMENT } = require('../../../config/reseau');
+const { CODES_PAYS } = require('../../../config/pays');
 
 const creerEnlevementSchema = Joi.object({
   colisId: Joi.string().uuid().allow(null),
@@ -64,7 +65,29 @@ const cloturerSchema = Joi.object({
   pointDepotId: Joi.string().uuid().allow(null),
 });
 
+/* ── Filtres des listes ─────────────────────────────────────────────────── */
+
+const listeEnlevementsAdminQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_ENLEVEMENT),
+  pays: filtres.valeurs(CODES_PAYS),
+  villeId: filtres.id,
+  coursierId: filtres.id,
+  userId: filtres.id,
+  sansCoursier: filtres.booleen,
+  aTraiter: filtres.booleen,
+  // Comparées à la date souhaitée (jour, sans heure)
+  dateDebut: dateISO,
+  dateFin: dateISO,
+});
+
+const mesEnlevementsQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_ENLEVEMENT),
+  enCours: filtres.booleen,
+});
+
 module.exports = {
+  listeEnlevementsAdminQuery,
+  mesEnlevementsQuery,
   creerEnlevementSchema,
   modifierEnlevementSchema,
   annulerEnlevementSchema,

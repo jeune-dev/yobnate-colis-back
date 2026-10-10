@@ -10,6 +10,7 @@ const {
   updateRotationSchema,
   chargerColisSchema,
   changerStatutSchema,
+  listeRotationsQuery,
 } = require('../validation/rotation.validation');
 const { uuidParam } = require('../../../validations/common');
 const verrou = require('../../../middlewares/verrouOptimiste.middleware');
@@ -18,7 +19,7 @@ const { Rotation } = require('../../../models');
 /** Rotations : départs groupés (aériens ou maritimes) reliant les deux pays. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeRotationsQuery, 'query'), ctrl.getAll);
 router.get('/embarquables', ctrl.embarquables);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/manifeste', validate(uuidParam, 'params'), ctrl.manifeste);

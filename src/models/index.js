@@ -49,6 +49,7 @@ const ModeleEmail = require('./modeleEmail.model');
 
 // ── Comptes : cycle de vie et application mobile ────────────────────────────
 const DemandeSuppression = require('./demandeSuppression.model');
+const DemandeContact = require('./demandeContact.model');
 const AppVersion = require('./appVersion.model');
 
 // ── Exploitation ─────────────────────────────────────────────────────────────
@@ -274,6 +275,7 @@ Avis.belongsTo(User, { foreignKey: 'moderePar', as: 'moderateur' });
 Faq.belongsTo(User, { foreignKey: 'modifiePar', as: 'auteur' });
 SimulationDevis.belongsTo(Colis, { foreignKey: 'colisId', as: 'colis', onDelete: 'SET NULL' });
 ModeleEmail.belongsTo(User, { foreignKey: 'modifiePar', as: 'auteur' });
+DemandeContact.belongsTo(User, { foreignKey: 'traitePar', as: 'traiteur' });
 
 module.exports = {
   sequelize,
@@ -317,6 +319,7 @@ module.exports = {
   ActivityLog,
   Annonce,
   DemandeSuppression,
+  DemandeContact,
   AppVersion,
   ModeleEmail,
   // Exploitation

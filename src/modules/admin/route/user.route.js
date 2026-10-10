@@ -4,13 +4,16 @@ const auth = require('../../../middlewares/auth.middleware');
 const { admin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
-const { conditionsCommercialesSchema } = require('../validation/user.validation');
+const {
+  conditionsCommercialesSchema,
+  listeClientsQuery,
+} = require('../validation/user.validation');
 const { uuidParam, statutActifSchema } = require('../../../validations/common');
 
 /** Gestion des comptes clients. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeClientsQuery, 'query'), ctrl.getAll);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/colis', validate(uuidParam, 'params'), ctrl.getColis);
 router.patch(

@@ -1,5 +1,11 @@
 const Joi = require('joi');
-const { METHODES_PAIEMENT } = require('../../../config/facturation');
+const {
+  DEVISES,
+  METHODES_PAIEMENT,
+  STATUTS_PAIEMENT,
+  STATUTS_FACTURE,
+} = require('../../../config/facturation');
+const { listeQuery, filtres } = require('../../../validations/common');
 
 const recordPaiementSchema = Joi.object({
   methode: Joi.string()
@@ -20,4 +26,28 @@ const marquerEchoueSchema = Joi.object({
   motif: Joi.string().max(255).allow('', null),
 });
 
-module.exports = { recordPaiementSchema, rembourserSchema, marquerEchoueSchema };
+const listePaiementsQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_PAIEMENT),
+  methode: filtres.valeurs(METHODES_PAIEMENT),
+  devise: filtres.valeurs(DEVISES),
+  userId: filtres.id,
+  factureId: filtres.id,
+  pointCollecteId: filtres.id,
+  reference: filtres.recherche,
+  referenceTransaction: filtres.recherche,
+  dateDebut: filtres.date,
+  dateFin: filtres.date,
+});
+
+const mesFacturesQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_FACTURE),
+  impayees: filtres.booleen,
+});
+
+module.exports = {
+  listePaiementsQuery,
+  mesFacturesQuery,
+  recordPaiementSchema,
+  rembourserSchema,
+  marquerEchoueSchema,
+};

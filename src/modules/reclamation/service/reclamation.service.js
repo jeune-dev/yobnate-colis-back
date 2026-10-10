@@ -14,7 +14,7 @@ const notificationService = require('../../notification/service/notification.ser
 const parametreService = require('../../parametre/service/parametre.service');
 const { sendReclamationEmail } = require('../../../infrastructure/mailer');
 const { genererRefReclamation } = require('../../../utils/referenceGenerator');
-const { uploadToCloudinary } = require('../../../infrastructure/uploadService');
+const { uploadFile } = require('../../../infrastructure/r2.service');
 const { joursEcoules } = require('../../../utils/delais');
 const { PAYS } = require('../../../config/pays');
 
@@ -126,9 +126,8 @@ class ReclamationService {
     const piecesJointes = files.length
       ? await Promise.all(
           files.map(async (f) => {
-            const televerse = await uploadToCloudinary(f.buffer, {
-              folder: 'yobnate-express/reclamations',
-              resourceType: 'auto',
+            const televerse = await uploadFile(f.buffer, {
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })
@@ -223,9 +222,8 @@ class ReclamationService {
     const piecesJointes = files.length
       ? await Promise.all(
           files.map(async (f) => {
-            const televerse = await uploadToCloudinary(f.buffer, {
-              folder: 'yobnate-express/reclamations',
-              resourceType: 'auto',
+            const televerse = await uploadFile(f.buffer, {
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })
@@ -373,9 +371,8 @@ class ReclamationService {
     const piecesJointes = files.length
       ? await Promise.all(
           files.map(async (f) => {
-            const televerse = await uploadToCloudinary(f.buffer, {
-              folder: 'yobnate-express/reclamations',
-              resourceType: 'auto',
+            const televerse = await uploadFile(f.buffer, {
+              folder: 'yobante-colis/reclamations',
             });
             return { libelle: f.originalname, url: televerse.url, publicId: televerse.publicId };
           })

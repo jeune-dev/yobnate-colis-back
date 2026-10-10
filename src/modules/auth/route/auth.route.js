@@ -118,21 +118,45 @@ router.post('/login', ...connexionRateLimit, validate(loginSchema), authControll
  *       200: { description: Nouveau accessToken émis }
  *       401: { $ref: '#/components/responses/Unauthorized' }
  */
-// Confirmation de l'adresse email (lien envoyé à l'inscription)
+/**
+ * @swagger
+ * /auth/verify-email:
+ *   post:
+ *     tags: [Authentification]
+ *     summary: Confirmer l'adresse email avec le code reçu, et ouvrir la session
+ *     description: >
+ *       Le compte créé par /auth/register reste fermé tant que ce code n'est pas
+ *       confirmé (la connexion répond 403 avec `code: EMAIL_NON_CONFIRME`). Le code
+ *       est invalidé après 5 essais erronés. En cas de succès, renvoie les jetons
+ *       comme /auth/login.
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, code]
+ *             properties:
+ *               email: { type: string, format: email }
+ *               code: { type: string, pattern: '^[0-9]{6}$' }
+ *     responses:
+ *       200: { description: Adresse confirmée, session ouverte }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ */
+// Pas de otpEmailRateLimit ici : il partagerait le quota des renvois. Le code
+// lui-même est invalidé après 5 essais erronés.
 router.post(
   '/verify-email',
   authRateLimit,
   validate(verifierEmailSchema),
   authController.verifierEmail
 );
-router.get(
-  '/verify-email/:token',
-  validate(verifierEmailSchema, 'params'),
-  authController.verifierEmailLien
-);
+// Renvoi d'un code : limité en débit, la route déclenche un envoi d'email
 router.post(
   '/resend-verification',
   authRateLimit,
+  otpEmailRateLimit,
   validate(renvoyerVerificationSchema),
   authController.renvoyerVerification
 );

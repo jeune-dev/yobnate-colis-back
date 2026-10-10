@@ -1,12 +1,12 @@
 const multer = require('multer');
 const { uploadConfig } = require('../config/security');
-const { ServiceUnavailableError } = require('../errors/AppError');
+const { BadRequestError, ServiceUnavailableError } = require('../errors/AppError');
 
 /**
  * Réceptions de fichiers simultanées, par processus.
  *
  * multer garde chaque fichier en mémoire jusqu'à la fin de la requête (le fichier
- * est ensuite contrôlé puis envoyé à Cloudinary). Sans plafond, la mémoire croissait
+ * est ensuite contrôlé puis envoyé à Cloudflare R2). Sans plafond, la mémoire croissait
  * avec le nombre d'envois en cours : 30 déclarations simultanées de 20 Mo portaient
  * le processus à 568 Mo, au-delà de la limite de 512 Mo du conteneur de production
  * (arrêt brutal par le noyau, toutes les requêtes en cours perdues).
@@ -66,34 +66,96 @@ const limiterReceptions = (req, res, next) => {
   enAttente.push(tour);
 };
 
-/** Un middleware multer précédé du plafond de réceptions simultanées. */
-const avecPlafond = (middleware) => [limiterReceptions, middleware];
+/**
+ * Signatures binaires (magic bytes) des formats acceptés, comme dans sign-back :
+ * le contenu réel du fichier doit correspondre au type déclaré par le client.
+ * Protège contre les exécutables ou scripts déguisés en image, PDF ou audio.
+ * `types` : types déclarés compatibles ; `contentType` / `extension` : stockage R2.
+ */
+const commencePar = (buffer, octets, decalage = 0) =>
+  octets.every((octet, i) => buffer[decalage + i] === octet);
 
-// Signatures binaires (magic bytes) pour valider le vrai type de fichier,
-// indépendamment de l'extension ou du mimetype déclaré par le client.
-const MAGIC_BYTES = [
-  { mime: 'image/jpeg', bytes: [0xff, 0xd8, 0xff] },
-  { mime: 'image/png', bytes: [0x89, 0x50, 0x4e, 0x47] },
-  { mime: 'application/pdf', bytes: [0x25, 0x50, 0x44, 0x46] },
+const SIGNATURES = [
+  {
+    test: (b) => commencePar(b, [0x89, 0x50, 0x4e, 0x47]),
+    types: ['image/png'],
+    contentType: 'image/png',
+    extension: 'png',
+  },
+  {
+    test: (b) => commencePar(b, [0xff, 0xd8, 0xff]),
+    types: ['image/jpeg', 'image/jpg'],
+    contentType: 'image/jpeg',
+    extension: 'jpg',
+  },
+  {
+    test: (b) => commencePar(b, [0x25, 0x50, 0x44, 0x46]), // %PDF
+    types: ['application/pdf'],
+    contentType: 'application/pdf',
+    extension: 'pdf',
+  },
+  // Formats audio produits par les smartphones (message vocal)
+  {
+    test: (b) => commencePar(b, [0x66, 0x74, 0x79, 0x70], 4), // « ftyp » : m4a, mp4, 3gp
+    types: ['audio/mp4', 'audio/m4a', 'audio/x-m4a', 'audio/aac', 'audio/3gpp', 'video/mp4'],
+    contentType: 'audio/mp4',
+    extension: 'm4a',
+  },
+  {
+    test: (b) => commencePar(b, [0x49, 0x44, 0x33]) || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0), // ID3, trame MPEG / AAC
+    types: ['audio/mpeg', 'audio/mp3', 'audio/aac'],
+    contentType: 'audio/mpeg',
+    extension: 'mp3',
+  },
+  {
+    test: (b) => commencePar(b, [0x4f, 0x67, 0x67, 0x53]), // « OggS »
+    types: ['audio/ogg', 'audio/opus'],
+    contentType: 'audio/ogg',
+    extension: 'ogg',
+  },
+  {
+    test: (b) => commencePar(b, [0x1a, 0x45, 0xdf, 0xa3]),
+    types: ['audio/webm'],
+    contentType: 'audio/webm',
+    extension: 'webm',
+  },
+  {
+    test: (b) =>
+      commencePar(b, [0x52, 0x49, 0x46, 0x46]) && commencePar(b, [0x57, 0x41, 0x56, 0x45], 8), // RIFF…WAVE
+    types: ['audio/wav', 'audio/x-wav'],
+    contentType: 'audio/wav',
+    extension: 'wav',
+  },
 ];
 
-const isAllowedFile = (buffer) =>
-  MAGIC_BYTES.some((sig) => sig.bytes.every((byte, i) => buffer[i] === byte));
+/** Format réel d'un fichier d'après ses premiers octets (null : format refusé). */
+const typeFichier = (buffer) =>
+  buffer && buffer.length >= 4 ? SIGNATURES.find((s) => s.test(buffer)) || null : null;
 
-/** Signatures des formats audio produits par les smartphones (message vocal). */
-const commencePar = (buffer, octets, decalage = 0) =>
-  octets.every((byte, i) => buffer[decalage + i] === byte);
+/** Le contenu du fichier correspond-il au type qu'il déclare ? */
+const checkMagicBytes = (buffer, mimetype) =>
+  Boolean(typeFichier(buffer)?.types.includes(mimetype));
 
-const isAllowedAudio = (buffer) =>
-  Boolean(buffer) &&
-  buffer.length > 12 &&
-  (commencePar(buffer, [0x66, 0x74, 0x79, 0x70], 4) || // m4a / mp4 / 3gp : « ftyp »
-    commencePar(buffer, [0x49, 0x44, 0x33]) || // mp3 avec étiquette ID3
-    (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) || // trame MPEG / AAC ADTS
-    commencePar(buffer, [0x4f, 0x67, 0x67, 0x53]) || // ogg / opus : « OggS »
-    commencePar(buffer, [0x1a, 0x45, 0xdf, 0xa3]) || // webm
-    (commencePar(buffer, [0x52, 0x49, 0x46, 0x46]) &&
-      commencePar(buffer, [0x57, 0x41, 0x56, 0x45], 8))); // wav
+/**
+ * Middleware enchaîné après multer (single, array, fields) : chaque fichier reçu
+ * doit avoir un contenu conforme à son type déclaré, sinon la requête est refusée
+ * avant tout traitement ou stockage.
+ */
+const validateMagicBytes = (req, res, next) => {
+  const fichiers = [
+    ...(req.file ? [req.file] : []),
+    ...(Array.isArray(req.files) ? req.files : Object.values(req.files || {}).flat()),
+  ];
+  const invalide = fichiers.find((f) => !checkMagicBytes(f.buffer, f.mimetype));
+  if (invalide) {
+    return next(
+      new BadRequestError(
+        `Fichier invalide : "${invalide.originalname}". Le contenu ne correspond pas au type déclaré.`
+      )
+    );
+  }
+  next();
+};
 
 const storage = multer.memoryStorage();
 
@@ -103,6 +165,12 @@ const fileFilter = (req, file, cb) => {
   }
   cb(null, true);
 };
+
+/**
+ * Un middleware multer précédé du plafond de réceptions simultanées et suivi de
+ * la vérification du contenu des fichiers : aucune route ne peut l'oublier.
+ */
+const avecPlafond = (middleware) => [limiterReceptions, middleware, validateMagicBytes];
 
 const multerStandard = multer({
   storage,
@@ -158,7 +226,8 @@ const uploadColis = avecPlafond(
 module.exports = {
   upload,
   uploadColis,
-  isAllowedFile,
-  isAllowedAudio,
+  typeFichier,
+  checkMagicBytes,
+  validateMagicBytes,
   etatReceptions: () => ({ enCours: receptionsEnCours, enAttente: enAttente.length }),
 };

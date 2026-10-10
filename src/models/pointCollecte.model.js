@@ -9,7 +9,7 @@ const {
 } = require('../config/reseau');
 
 /**
- * Point de collecte du réseau — pièce maîtresse du dispositif Yobnate Express.
+ * Point de collecte du réseau — pièce maîtresse du dispositif Yobante Colis.
  *
  * L'administrateur déclare, pour chacun des deux pays desservis, les lieux
  * physiques où un client dépose son colis et où un destinataire vient le retirer.

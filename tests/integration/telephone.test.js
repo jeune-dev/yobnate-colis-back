@@ -55,10 +55,11 @@ describeDb('Vérification du téléphone (base réelle)', () => {
     const client = await f.creerUtilisateur();
     const entete = await f.jeton(client);
 
-    await request(app)
+    const envoi = await request(app)
       .post('/client/profil/telephone/code')
       .set('Authorization', entete)
       .expect(200);
+    expect(envoi.body.data).toEqual({ dejaVerifie: false });
     expect(whatsapp.envoyerWhatsapp).toHaveBeenCalledWith(
       expect.objectContaining({ telephone: client.telephone })
     );
@@ -69,6 +70,17 @@ describeDb('Vérification du téléphone (base réelle)', () => {
     expect(res.status).toBe(200);
     await client.reload();
     expect(client.telephoneVerifie).toBe(true);
+  });
+
+  test('numéro déjà vérifié : drapeau renvoyé, aucun code envoyé', async () => {
+    simulerWhatsapp();
+    const client = await f.creerUtilisateur({ telephoneVerifie: true });
+    const res = await request(app)
+      .post('/client/profil/telephone/code')
+      .set('Authorization', await f.jeton(client))
+      .expect(200);
+    expect(res.body.data).toEqual({ dejaVerifie: true });
+    expect(whatsapp.envoyerWhatsapp).not.toHaveBeenCalled();
   });
 
   test('5 codes faux : le bon code est ensuite refusé', async () => {

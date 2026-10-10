@@ -87,7 +87,11 @@ class PersonnelService {
 
   /** Le point d'affectation d'un agent doit exister et se situer dans son pays. */
   static validerAffectation = async (role, pays, pointCollecteId) => {
-    if (role !== 'agent_point' || !pointCollecteId) return;
+    if (role !== 'agent_point') return;
+    // Sans point, l'agent ne verrait aucun colis (périmètre vide)
+    if (!pointCollecteId) {
+      throw new BadRequestError('Un agent de point doit être rattaché à un point de collecte');
+    }
     const point = await PointCollecte.findByPk(pointCollecteId);
     if (!point) throw new BadRequestError('Point de collecte introuvable');
     if (point.pays !== pays)
@@ -131,11 +135,12 @@ class PersonnelService {
     const personne = await User.findOne({ where: { id, role: PersonnelService.ROLES_PERSONNEL } });
     if (!personne) throw new NotFoundError('Membre du personnel introuvable');
 
-    if (data.pointCollecteId !== undefined) {
+    // Le point et le pays restent cohérents, même quand un seul des deux change
+    if (data.pointCollecteId !== undefined || data.pays) {
       await PersonnelService.validerAffectation(
         personne.role,
         data.pays || personne.pays,
-        data.pointCollecteId
+        data.pointCollecteId !== undefined ? data.pointCollecteId : personne.pointCollecteId
       );
     }
 

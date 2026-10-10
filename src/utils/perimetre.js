@@ -10,7 +10,8 @@
  * Une ressource hors périmètre répond 404, comme une ressource inexistante :
  * son existence n'est pas révélée.
  */
-const { Op } = require('sequelize');
+const { Op, literal } = require('sequelize');
+const sequelize = require('../config/db');
 const { estAdmin } = require('../config/roles');
 const { NotFoundError, ForbiddenError } = require('../errors/AppError');
 
@@ -19,16 +20,40 @@ const AUCUN = { id: null };
 
 const restreint = (user) => Boolean(user) && !estAdmin(user.role);
 
+/** Colis rattachés aux demandes d'enlèvement qui vérifient `colonne = valeur`. */
+const colisDesEnlevements = (colonne, valeur) => ({
+  id: {
+    [Op.in]: literal(
+      `(SELECT "colisId" FROM demandes_enlevement WHERE "colisId" IS NOT NULL AND "${colonne}" = ${sequelize.escape(valeur)})`
+    ),
+  },
+});
+
 const colis = (user) => {
   if (!restreint(user)) return null;
+  // Les colis d'un enlèvement suivent l'enlèvement : coursier qui le ramasse,
+  // agent du point où il sera déposé.
   if (user.role === 'agent_point') {
     const p = user.pointCollecteId;
     return p
-      ? { [Op.or]: [{ pointCollecteDepartId: p }, { pointRetraitId: p }, { pointActuelId: p }] }
+      ? {
+          [Op.or]: [
+            { pointCollecteDepartId: p },
+            { pointRetraitId: p },
+            { pointActuelId: p },
+            colisDesEnlevements('pointDepotId', p),
+          ],
+        }
       : AUCUN;
   }
   if (user.role === 'coursier') {
-    return { [Op.or]: [{ coursierEnlevementId: user.id }, { coursierLivraisonId: user.id }] };
+    return {
+      [Op.or]: [
+        { coursierEnlevementId: user.id },
+        { coursierLivraisonId: user.id },
+        colisDesEnlevements('coursierId', user.id),
+      ],
+    };
   }
   return AUCUN;
 };

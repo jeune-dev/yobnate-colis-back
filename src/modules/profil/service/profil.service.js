@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { User, Colis, UserOtp } = require('../../../models');
 const { genererCodeParrainage } = require('../../../utils/referenceGenerator');
 const notificationService = require('../../notification/service/notification.service');
@@ -10,10 +11,7 @@ const {
 const whatsapp = require('../../../infrastructure/whatsapp');
 const AuthService = require('../../auth/service/auth.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 
 /** Espace personnel du client : profil, préférences et compte professionnel. */
 
@@ -29,7 +27,10 @@ class ProfilService {
       attributes: ['id', 'telephone', 'telephoneVerifie'],
     });
     if (!user) throw new NotFoundError('Utilisateur introuvable');
-    if (user.telephoneVerifie) return { message: 'Votre numéro est déjà vérifié.' };
+    // Drapeau lu par l'application : aucun code n'est envoyé, l'écran de saisie est inutile
+    if (user.telephoneVerifie) {
+      return { message: 'Votre numéro est déjà vérifié.', dejaVerifie: true };
+    }
     if (!whatsapp.estConfigure()) {
       throw new ServiceUnavailableError(
         'La vérification du numéro est momentanément indisponible. Réessayez plus tard.'
@@ -53,7 +54,10 @@ class ProfilService {
     });
     if (!envoye)
       throw new ServiceUnavailableError("Le code n'a pas pu être envoyé. Réessayez plus tard.");
-    return { message: 'Un code de vérification vous a été envoyé par WhatsApp.' };
+    return {
+      message: 'Un code de vérification vous a été envoyé par WhatsApp.',
+      dejaVerifie: false,
+    };
   };
 
   /** Vérifie le code ; au-delà de 5 essais erronés, un nouveau code doit être demandé. */
@@ -126,8 +130,8 @@ class ProfilService {
     const user = await User.findByPk(userId);
     if (!user) throw new NotFoundError('Utilisateur introuvable');
 
-    const uploaded = await uploadToCloudinary(file.buffer, { folder: 'yobnate-express/avatars' });
-    if (user.avatarPublicId) await deleteFromCloudinary(user.avatarPublicId);
+    const uploaded = await uploadFile(file.buffer, { folder: 'yobante-colis/avatars' });
+    if (user.avatarPublicId) await deleteFile(user.avatarPublicId);
 
     await user.update({ avatarUrl: uploaded.url, avatarPublicId: uploaded.publicId });
     return { message: 'Photo de profil mise à jour.', utilisateur: user.toSafeJSON() };
@@ -160,14 +164,11 @@ class ProfilService {
     if (!user.numeroIdentificationFiscale) {
       throw new BadRequestError("Renseignez d'abord votre numéro NINEA ou SIRET dans votre profil");
     }
-
-    const resourceType = file.mimetype === 'application/pdf' ? 'raw' : 'image';
-    const fichier = await uploadToCloudinary(file.buffer, {
-      folder: 'yobnate-express/justificatifs',
-      resourceType,
+    const fichier = await uploadFile(file.buffer, {
+      folder: 'yobante-colis/justificatifs',
     });
     if (user.justificatifProPublicId) {
-      await deleteFromCloudinary(user.justificatifProPublicId).catch(() => {});
+      await deleteFile(user.justificatifProPublicId);
     }
     await user.update({
       justificatifProUrl: fichier.url,
@@ -237,6 +238,12 @@ class ProfilService {
     const user = await User.findByPk(userId);
     if (!user) throw new NotFoundError('Utilisateur introuvable');
 
+    // Un téléphone ne reçoit les push que du compte connecté : si un autre compte
+    // a gardé ce jeton (déconnexion qui n'a pas pu l'invalider), il le perd ici.
+    await User.update(
+      { deviceToken: null, devicePlatform: null },
+      { where: { deviceToken: token, id: { [Op.ne]: userId } } }
+    );
     await user.update({ deviceToken: token, devicePlatform: platform });
     return { message: 'Token de notification enregistré.' };
   };

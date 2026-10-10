@@ -8,7 +8,7 @@ const notificationService = require('../../notification/service/notification.ser
 const parametreService = require('../../parametre/service/parametre.service');
 const tarificationService = require('../../tarification/service/tarification.service');
 const documents = require('../../../templates/documents');
-const { uploadToCloudinary } = require('../../../infrastructure/uploadService');
+const { uploadFile } = require('../../../infrastructure/r2.service');
 
 /**
  * Formalités douanières du corridor France - Sénégal.
@@ -260,9 +260,8 @@ class DouaneService {
     if (!file) throw new BadRequestError('Aucun document fourni');
     const declaration = await DouaneService.chargerDeclaration(id);
 
-    const televerse = await uploadToCloudinary(file.buffer, {
-      folder: 'yobnate-express/douane',
-      resourceType: 'auto',
+    const televerse = await uploadFile(file.buffer, {
+      folder: 'yobante-colis/douane',
     });
 
     const document = {

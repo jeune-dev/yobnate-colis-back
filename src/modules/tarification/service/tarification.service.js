@@ -650,11 +650,16 @@ class TarificationService {
       zoneDakar,
     });
 
-    // 2. Poids facturé — à défaut de colis détaillés, une pièce par article choisi
-    const piecesRetenues =
-      !pieces.length && !poidsReelKg && lignesForfait
-        ? TarificationService.piecesDepuisForfait(lignesForfait, categorie)
-        : pieces;
+    // 2. Poids facturé — à défaut de colis détaillés, une pièce par article choisi.
+    // Des documents sans forfait sur le trajet sont tarifés au poids : une
+    // enveloppe standard, faute de quoi le colis partirait à 0 kg (refusé en base).
+    const sansPoids = !pieces.length && !poidsReelKg;
+    let piecesRetenues = pieces;
+    if (sansPoids && lignesForfait) {
+      piecesRetenues = TarificationService.piecesDepuisForfait(lignesForfait, categorie);
+    } else if (sansPoids && categorie === 'documents') {
+      piecesRetenues = [{ designation: 'Enveloppe', typeEmballage: 'enveloppe', poidsKg: 0.5 }];
+    }
     const coefficient = Number(
       service.coefficientVolumetrique || params.coefficient_volumetrique_defaut
     );
@@ -895,7 +900,7 @@ class TarificationService {
       detailDouane: {
         ...douane,
         commentaire: douane.applicable
-          ? 'Droits et taxes avancés par Yobnate Express et refacturés (DDP)'
+          ? 'Droits et taxes avancés par Yobante Colis et refacturés (DDP)'
           : international && contenu !== 'document'
             ? 'Droits et taxes estimés, à régler par le destinataire au dédouanement (DAP)'
             : 'Aucune formalité douanière',

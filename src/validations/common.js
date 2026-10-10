@@ -1,22 +1,42 @@
 const Joi = require('joi');
-const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const { validerTelephone, validerEmail } = require('../utils/validationIdentifiants');
 
-// Seuls la France et le Sénégal sont couverts par le service pour le moment
-const PAYS_TELEPHONE_AUTORISES = ['FR', 'SN'];
-
+/**
+ * Téléphone France ou Sénégal, normalisé au format E.164 (ex : +221771234567).
+ * Sans indicatif, le numéro est rattaché au champ `pays` voisin (Sénégal à défaut).
+ * Le refus nomme le problème : indicatif, nombre de chiffres ou plage non attribuée.
+ */
 const phone = Joi.string()
   .trim()
   .custom((value, helpers) => {
-    const numero = parsePhoneNumberFromString(value);
-    if (!numero || !numero.isValid() || !PAYS_TELEPHONE_AUTORISES.includes(numero.country)) {
-      return helpers.error('any.invalid');
-    }
-    return numero.number; // normalisé au format E.164 (ex: +221771234567)
-  })
-  .messages({
-    'any.invalid':
-      'Numéro de téléphone invalide (format international, France ou Sénégal uniquement)',
+    const paysParDefaut = helpers.state.ancestors?.[0]?.pays;
+    const resultat = validerTelephone(value, { paysParDefaut });
+    return resultat.valide ? resultat.valeur : helpers.message(resultat.raison);
   });
+
+/** Adresse email, contrôlée règle par règle et enregistrée en minuscules. */
+const email = Joi.string()
+  .trim()
+  .custom((value, helpers) => {
+    const resultat = validerEmail(value);
+    return resultat.valide ? resultat.valeur : helpers.message(resultat.raison);
+  });
+
+/**
+ * Nom ou prénom d'une personne (la mise en forme — NOM en capitales, Prénom —
+ * est appliquée à l'enregistrement par le modèle User).
+ */
+const nomPersonne = (libelle) =>
+  Joi.string()
+    .trim()
+    .min(2)
+    .max(50)
+    .messages({
+      'string.empty': `Indiquez votre ${libelle}`,
+      'any.required': `Indiquez votre ${libelle}`,
+      'string.min': `Votre ${libelle} doit comporter au moins 2 caractères`,
+      'string.max': `Votre ${libelle} ne peut pas dépasser 50 caractères`,
+    });
 
 const password = Joi.string()
   .min(8)
@@ -84,8 +104,49 @@ const paginationQuery = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(20),
 }).unknown(true);
 
+/**
+ * Filtres d'une liste (paramètres d'URL) : seuls les champs déclarés sont contrôlés,
+ * les autres (tri, options propres à un écran) passent tels quels. Une valeur vide
+ * (`?statut=`) reste acceptée : le service l'ignore, comme avant. `limit` n'a pas de
+ * plafond ici : utils/paginate le ramène à 100, sans refuser la requête.
+ */
+const listeQuery = (champs) =>
+  Joi.object({
+    page: Joi.number().integer().min(1),
+    limit: Joi.number().integer().min(1),
+    ...champs,
+  })
+    .fork([...Object.keys(champs), 'page', 'limit'], (schema) => schema.allow(''))
+    .unknown(true);
+
+/** Briques des filtres : identifiant, booléen « true/false », recherche, période, tri. */
+const filtres = {
+  id: Joi.string().uuid().messages({ 'string.guid': 'Identifiant invalide' }),
+  booleen: Joi.boolean(),
+  recherche: Joi.string().trim().max(100),
+  valeurs: (liste) => Joi.string().valid(...liste),
+  // Horodatage (createdAt) : date seule ou date-heure ISO 8601
+  date: Joi.string().isoDate().messages({ 'string.isoDate': 'Date invalide (format ISO 8601)' }),
+  sortOrder: Joi.string().lowercase().valid('asc', 'desc'),
+};
+
+/**
+ * Contrôle d'un objet portant `longueurCm` / `largeurCm` : la longueur est le
+ * plus grand côté, la largeur ne peut donc pas la dépasser (égalité admise
+ * pour une base carrée). Ignoré si l'une des deux est absente.
+ */
+const largeurNeDepassePasLongueur = (value, helpers) => {
+  const absente = (v) => v === null || v === undefined;
+  if (absente(value?.longueurCm) || absente(value?.largeurCm)) return value;
+  return Number(value.largeurCm) > Number(value.longueurCm)
+    ? helpers.message('La largeur ne peut pas être supérieure à la longueur')
+    : value;
+};
+
 module.exports = {
   phone,
+  email,
+  nomPersonne,
   password,
   pays,
   devise,
@@ -100,4 +161,7 @@ module.exports = {
   articleParam,
   statutActifSchema,
   paginationQuery,
+  listeQuery,
+  filtres,
+  largeurNeDepassePasLongueur,
 };

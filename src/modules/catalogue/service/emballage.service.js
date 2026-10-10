@@ -1,9 +1,6 @@
 const { Emballage } = require('../../../models');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
-const {
-  uploadToCloudinary,
-  deleteFromCloudinary,
-} = require('../../../infrastructure/uploadService');
+const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 
 /**
@@ -91,7 +88,7 @@ class EmballageService {
 
   static remove = async (id, adminId) => {
     const emballage = await EmballageService.charger(id);
-    await Promise.allSettled((emballage.photos || []).map((p) => deleteFromCloudinary(p.publicId)));
+    await Promise.allSettled((emballage.photos || []).map((p) => deleteFile(p.publicId)));
     await emballage.destroy();
     await logActivity({
       userId: adminId,
@@ -111,7 +108,7 @@ class EmballageService {
       );
     }
     const photos = await Promise.all(
-      fichiers.map((f) => uploadToCloudinary(f.buffer, { folder: 'yobnate-express/emballages' }))
+      fichiers.map((f) => uploadFile(f.buffer, { folder: 'yobante-colis/emballages' }))
     );
     await emballage.update({ photos: [...(emballage.photos || []), ...photos] });
     await logActivity({
@@ -129,7 +126,7 @@ class EmballageService {
     if (restantes.length === (emballage.photos || []).length) {
       throw new NotFoundError('Photo introuvable');
     }
-    await deleteFromCloudinary(publicId).catch(() => {});
+    await deleteFile(publicId);
     await emballage.update({ photos: restantes });
     await logActivity({
       userId: adminId,

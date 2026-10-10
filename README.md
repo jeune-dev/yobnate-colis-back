@@ -13,7 +13,7 @@ formalités douanières, facturation multi-devise et service après-vente.
 - **ORM :** Sequelize 6
 - **Base de données :** PostgreSQL 16
 - **Auth :** JWT (access + refresh token) + blacklist, rôles multiples
-- **Upload :** Cloudinary (via Multer mémoire)
+- **Upload :** Cloudflare R2 (via Multer mémoire, contenu vérifié par magic bytes)
 - **Email :** Nodemailer (SMTP), gabarits HTML en français
 - **Documents :** étiquettes et bordereaux HTML imprimables avec code-barres
   Code 128 généré en interne (aucune dépendance externe)
@@ -76,7 +76,7 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
 - Node.js 22
 - PostgreSQL 16
 - Redis 7 (facultatif ; fourni par docker-compose.prod.yml)
-- Compte Cloudinary
+- Bucket Cloudflare R2 (variables `R2_*`)
 - Compte SMTP (Gmail ou autre)
 
 ## Installation
@@ -207,7 +207,7 @@ src/
 │       └── validation/  # Schémas Joi
 ├── config/              # DB, sécurité, Redis, OpenAPI, référentiels (rôles, pays, colis…)
 ├── errors/              # AppError et erreurs typées
-├── infrastructure/      # Email, Cloudinary, WhatsApp, push
+├── infrastructure/      # Email, stockage R2, WhatsApp, push
 ├── jobs/                # Tâches planifiées (node-cron)
 ├── middlewares/         # Auth, rôles, périmètre, validation, débit, upload, erreurs
 ├── migrations/          # Migrations Sequelize

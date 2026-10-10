@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const compression = require('compression');
 
 const { corsConfig } = require('./config/security');
+const r2 = require('./infrastructure/r2.service');
 const sequelize = require('./config/db');
 const redis = require('./config/redis');
 const logger = require('./utils/logger');
@@ -40,7 +41,7 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
         styleSrc: isProd ? ["'self'"] : ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', 'https://res.cloudinary.com'],
+        imgSrc: ["'self'", 'data:', ...(r2.PUBLIC_URL ? [r2.PUBLIC_URL] : [])],
         connectSrc: ["'self'"],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],

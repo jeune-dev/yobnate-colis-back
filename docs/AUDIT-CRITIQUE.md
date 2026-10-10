@@ -1,4 +1,4 @@
-# Audit critique du backend — Yobnate Colis
+# Audit critique du backend — Yobante Colis
 
 Audit du 27/09/2026, sur `main` au commit `a693962`. Les corrections sont sur la branche
 `claude/amazing-carson-4ya8x3` (commit `f0c67f7`).
@@ -41,9 +41,9 @@ Audit du 27/09/2026, sur `main` au commit `a693962`. Les corrections sont sur la
 | Schéma | Migrations `sequelize-cli` (dont `CONCURRENTLY`), `sync()` absent du démarrage |
 | Auth | JWT HS256, 1 h. Refresh token 7 jours, à usage unique. Liste de révocation en base, contrôlée à chaque requête. `tokenVersion`. bcrypt coût 12 |
 | Cache | `Map` en mémoire **par processus** (TTL, borne 10 000 entrées, anti-ruée `memoiser`) |
-| Envois externes | SMTP (nodemailer en pool), FCM, WhatsApp Cloud API, Cloudinary, par une file en mémoire |
+| Envois externes | SMTP (nodemailer en pool), FCM, WhatsApp Cloud API, Cloudflare R2, par une file en mémoire |
 | Tâches | `setInterval` dans le processus web, réservation atomique en base (`taches_planifiees`) |
-| Fichiers | multer en **mémoire**, puis Cloudinary |
+| Fichiers | multer en **mémoire**, contenu vérifié (magic bytes), puis Cloudflare R2 |
 | Temps réel | Aucun WebSocket |
 | Production | Docker Compose : 1 conteneur API (`cpus: 1`, 512 Mo), PostgreSQL (512 Mo), Redis (compteurs des limiteurs), Nginx sur l'hôte. Alternative : PM2 cluster |
 
@@ -307,7 +307,7 @@ liste) change le contrat des applications : non faite, recommandée (P2).
 | SMTP | 10 s connexion, 30 s socket, pool de 3 | **Aucun, avant** | Non | **Corrigé** : 3 tentatives (maintenant, +2 s, +8 s) sur les erreurs passagères (réseau, 4xx) ; une adresse refusée (5xx) n'est pas retentée |
 | FCM (push) | 10 s | Non | Non | Jetons invalides (404 UNREGISTERED) jamais retirés (P4) ; jeton OAuth sans anti-ruée (P4) |
 | WhatsApp | 10 s | Non | Non | P3 si les messages deviennent contractuels |
-| Cloudinary | Avant la transaction de déclaration | — | — | Correct. Nettoyage des fichiers orphelins en cas d'échec |
+| Cloudflare R2 | Avant la transaction de déclaration | — | — | Correct. Nettoyage des fichiers orphelins en cas d'échec |
 
 **File d'envois partagée** (mesuré, délai réduit à 1 s pour l'essai) :
 
@@ -322,7 +322,7 @@ liste) change le contrat des applications : non faite, recommandée (P2).
 
 ## 15. Transactions
 
-- Aucune transaction ne contient d'appel externe : les téléversements Cloudinary sont faits
+- Aucune transaction ne contient d'appel externe : les téléversements R2 sont faits
   avant la transaction, les envois passent par la file après validation.
 - Les transactions sont courtes : moins de 10 requêtes indexées.
 - `compte.pseudonymiser` calculait bcrypt (~250 ms) **sous le verrou** du compte. **Corrigé** :

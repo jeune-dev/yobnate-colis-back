@@ -3,6 +3,8 @@ const activityLogController = require('../controller/activityLog.controller');
 const auth = require('../../../middlewares/auth.middleware');
 const { admin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
+const validate = require('../../../middlewares/validate.middleware');
+const { listeJournalQuery } = require('../validation/activityLog.validation');
 
 /**
  * @swagger
@@ -43,6 +45,6 @@ router.use(auth, checkActiveUser, admin);
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  */
-router.get('/', activityLogController.getAll);
+router.get('/', validate(listeJournalQuery, 'query'), activityLogController.getAll);
 
 module.exports = router;

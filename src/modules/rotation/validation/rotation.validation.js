@@ -1,6 +1,7 @@
 const Joi = require('joi');
-const { pays, devise } = require('../../../validations/common');
-const { MODES_TRANSPORT } = require('../../../config/reseau');
+const { pays, devise, listeQuery, filtres } = require('../../../validations/common');
+const { MODES_TRANSPORT, STATUTS_ROTATION } = require('../../../config/reseau');
+const { CODES_PAYS } = require('../../../config/pays');
 
 const createRotationSchema = Joi.object({
   modeTransport: Joi.string()
@@ -55,7 +56,18 @@ const repartirCoutSchema = Joi.object({
   devise: devise.required(),
 });
 
+const listeRotationsQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_ROTATION),
+  modeTransport: filtres.valeurs(MODES_TRANSPORT),
+  paysDepart: filtres.valeurs(CODES_PAYS),
+  paysArrivee: filtres.valeurs(CODES_PAYS),
+  ouvertes: filtres.booleen,
+  dateDebut: filtres.date,
+  dateFin: filtres.date,
+});
+
 module.exports = {
+  listeRotationsQuery,
   repartirCoutSchema,
   createRotationSchema,
   updateRotationSchema,

@@ -4,7 +4,7 @@
  *
  * La base indiquée est ENTIÈREMENT VIDÉE puis reconstruite : n'utiliser qu'une base
  * dédiée aux tests. Exécution :
- *   E2E_DATABASE_URL=postgres://user:mdp@localhost:5432/yobnate_e2e npx jest tests/e2e
+ *   E2E_DATABASE_URL=postgres://user:mdp@localhost:5432/yobante_e2e npx jest tests/e2e
  * Sans E2E_DATABASE_URL, la suite est ignorée.
  */
 const URL_BASE = process.env.E2E_DATABASE_URL;
@@ -23,11 +23,12 @@ const mockEmails = [];
 jest.mock('nodemailer', () => ({
   createTransport: () => ({ sendMail: async (m) => mockEmails.push(m) }),
 }));
-jest.mock('../../src/infrastructure/uploadService', () => {
+jest.mock('../../src/infrastructure/r2.service', () => {
   let n = 0;
   return {
-    uploadToCloudinary: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `f${n}` }),
-    deleteFromCloudinary: async () => {},
+    uploadFile: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `r2:f${n}` }),
+    deleteFile: async () => {},
+    PUBLIC_URL: 'https://test',
   };
 });
 
@@ -62,11 +63,10 @@ decrire('Parcours complets (base réelle)', () => {
     const r = await request(app).post('/auth/register').send(champs);
     expect(r.status).toBe(201);
     await attendre(30);
-    const jeton = dernierEmail(champs.email, /Confirmez/)?.html.match(
-      /(?:token=|verify-email\/)([a-f0-9]{64})/
-    )?.[1];
-    expect(jeton).toBeDefined();
-    return jeton;
+    expect(r.body.data.verificationRequise).toBe(true);
+    const code = dernierEmail(champs.email, /code de confirmation/)?.html.match(/>(\d{6})</)?.[1];
+    expect(code).toBeDefined();
+    return code;
   };
 
   beforeAll(async () => {
@@ -176,7 +176,10 @@ decrire('Parcours complets (base réelle)', () => {
       .post('/auth/login')
       .send({ identifiant: 'parrain@test.fr', password: 'Motdepasse1!' });
     expect(r.status).toBe(403);
-    await request(app).post('/auth/verify-email').send({ token: jetonA }).expect(200);
+    await request(app)
+      .post('/auth/verify-email')
+      .send({ email: 'parrain@test.fr', code: jetonA })
+      .expect(200);
     r = await request(app)
       .post('/auth/login')
       .send({ identifiant: '+33612340001', password: 'Motdepasse1!' });
@@ -194,7 +197,10 @@ decrire('Parcours complets (base réelle)', () => {
       pays: 'FR',
       codeParrainage: code,
     });
-    await request(app).post('/auth/verify-email').send({ token: jetonB }).expect(200);
+    await request(app)
+      .post('/auth/verify-email')
+      .send({ email: 'filleul@test.fr', code: jetonB })
+      .expect(200);
     r = await request(app)
       .post('/auth/login')
       .send({ identifiant: 'filleul@test.fr', password: 'Motdepasse1!' });

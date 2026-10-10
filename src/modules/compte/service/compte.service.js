@@ -17,8 +17,7 @@ const {
 const { STATUTS_TERMINAUX } = require('../../../config/colis');
 const { BadRequestError, ConflictError, NotFoundError } = require('../../../errors/AppError');
 const JWTUtils = require('../../../utils/jwtUtils');
-const logger = require('../../../utils/logger');
-const { deleteFromCloudinary } = require('../../../infrastructure/uploadService');
+const { deleteFile } = require('../../../infrastructure/r2.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
 
@@ -115,7 +114,7 @@ class CompteService {
       const ancienAvatar = user.avatarPublicId;
       await user.update(
         {
-          nom: 'Compte',
+          nom: 'COMPTE',
           prenom: 'Supprimé',
           email: `supprime-${neutre}@yobante.invalid`,
           telephone: `X${neutre.slice(0, 19)}`,
@@ -155,11 +154,8 @@ class CompteService {
     });
 
     JWTUtils.invaliderCache(userId);
-    if (avatar) {
-      await deleteFromCloudinary(avatar).catch((err) =>
-        logger.warn('Avatar non supprimé du stockage', { userId, message: err.message })
-      );
-    }
+    // Échec journalisé par deleteFile, sans bloquer la suppression du compte
+    if (avatar) await deleteFile(avatar);
     await logActivity({
       userId: auteurId,
       action: 'compte.suppression',

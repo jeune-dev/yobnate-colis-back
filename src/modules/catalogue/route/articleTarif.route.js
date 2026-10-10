@@ -8,6 +8,7 @@ const { upload } = require('../../../middlewares/upload.middleware');
 const {
   createArticleTarifSchema,
   updateArticleTarifSchema,
+  listeArticlesTarifQuery,
 } = require('../validation/catalogue.validation');
 const { uuidParam } = require('../../../validations/common');
 const verrou = require('../../../middlewares/verrouOptimiste.middleware');
@@ -16,7 +17,7 @@ const { ArticleTarif } = require('../../../models');
 /** Grille forfaitaire : prix par article, colonnes Dakar et autres régions. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeArticlesTarifQuery, 'query'), ctrl.getAll);
 router.post('/', validate(createArticleTarifSchema), ctrl.create);
 router.put(
   '/:id',

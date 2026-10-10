@@ -1,5 +1,14 @@
 const Joi = require('joi');
-const { pays, devise, dateISO, heureHHMM } = require('../../../validations/common');
+const {
+  pays,
+  devise,
+  dateISO,
+  heureHHMM,
+  listeQuery,
+  filtres,
+  largeurNeDepassePasLongueur,
+} = require('../../../validations/common');
+const { CODES_PAYS } = require('../../../config/pays');
 const { CATEGORIES_COLIS } = require('../../../config/colis');
 const {
   MODES_TRANSPORT,
@@ -52,8 +61,10 @@ const createArticleTarifSchema = Joi.object({
   modeTransport: champsArticle.modeTransport.default('maritime'),
   paysDepart: pays.default('FR'),
   paysArrivee: pays.default('SN'),
-});
-const updateArticleTarifSchema = Joi.object({ ...champsArticle, code }).min(1);
+}).custom(largeurNeDepassePasLongueur);
+const updateArticleTarifSchema = Joi.object({ ...champsArticle, code })
+  .min(1)
+  .custom(largeurNeDepassePasLongueur);
 
 /* ── Emballages ─────────────────────────────────────────────────────────── */
 
@@ -80,8 +91,10 @@ const createEmballageSchema = Joi.object({
   code: code.required(),
   libelle: champsEmballage.libelle.required(),
   prix: champsEmballage.prix.required(),
-});
-const updateEmballageSchema = Joi.object({ ...champsEmballage, code }).min(1);
+}).custom(largeurNeDepassePasLongueur);
+const updateEmballageSchema = Joi.object({ ...champsEmballage, code })
+  .min(1)
+  .custom(largeurNeDepassePasLongueur);
 
 /* ── Tournées de collecte ───────────────────────────────────────────────── */
 
@@ -165,7 +178,38 @@ const apercuModeleSchema = Joi.object({
 /** Retrait d'une photo d'emballage, désignée par son identifiant de stockage. */
 const retirerPhotoSchema = Joi.object({ publicId: Joi.string().max(150).required() });
 
+/* ── Filtres des listes ─────────────────────────────────────────────────── */
+
+const listeArticlesTarifQuery = listeQuery({
+  categorie: filtres.valeurs(CATEGORIES_COLIS),
+  modeTransport: filtres.valeurs(MODES_TRANSPORT),
+  paysDepart: filtres.valeurs(CODES_PAYS),
+  paysArrivee: filtres.valeurs(CODES_PAYS),
+  isActive: filtres.booleen,
+});
+
+const listeEmballagesQuery = listeQuery({
+  type: filtres.valeurs(['contenant', 'prestation']),
+  categorie: filtres.valeurs(CATEGORIES_COLIS),
+  isActive: filtres.booleen,
+});
+
+const listeAnnoncesQuery = listeQuery({
+  emplacement: filtres.valeurs(EMPLACEMENTS_ANNONCE),
+  isActive: filtres.booleen,
+});
+
+const listeTourneesQuery = listeQuery({
+  statut: filtres.valeurs(STATUTS_TOURNEE),
+  pays: filtres.valeurs(CODES_PAYS),
+  aVenir: filtres.booleen,
+});
+
 module.exports = {
+  listeAnnoncesQuery,
+  listeArticlesTarifQuery,
+  listeEmballagesQuery,
+  listeTourneesQuery,
   createArticleTarifSchema,
   updateArticleTarifSchema,
   createEmballageSchema,

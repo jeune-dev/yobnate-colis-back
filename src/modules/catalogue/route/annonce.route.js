@@ -5,7 +5,11 @@ const { admin } = require('../../../middlewares/requireRole.middleware');
 const checkActiveUser = require('../../../middlewares/checkActiveUser.middleware');
 const validate = require('../../../middlewares/validate.middleware');
 const { upload } = require('../../../middlewares/upload.middleware');
-const { createAnnonceSchema, updateAnnonceSchema } = require('../validation/catalogue.validation');
+const {
+  createAnnonceSchema,
+  updateAnnonceSchema,
+  listeAnnoncesQuery,
+} = require('../validation/catalogue.validation');
 const { uuidParam } = require('../../../validations/common');
 const verrou = require('../../../middlewares/verrouOptimiste.middleware');
 const { Annonce } = require('../../../models');
@@ -13,7 +17,7 @@ const { Annonce } = require('../../../models');
 /** Messages publiés sur la page d'accueil de l'application. */
 router.use(auth, checkActiveUser, admin);
 
-router.get('/', ctrl.getAll);
+router.get('/', validate(listeAnnoncesQuery, 'query'), ctrl.getAll);
 router.post('/', validate(createAnnonceSchema), ctrl.create);
 router.put(
   '/:id',

@@ -13,13 +13,23 @@ describe('Périmètre du personnel', () => {
     expect(perimetre.paiements({ role: 'super_admin' })).toBeNull();
   });
 
-  test('agent : colis de son point (départ, retrait ou présence)', () => {
+  test('agent : colis de son point (départ, retrait, présence ou dépôt d’un enlèvement)', () => {
     const where = perimetre.colis({ role: 'agent_point', pointCollecteId: 'p1' });
-    expect(where[Op.or]).toEqual([
+    expect(where[Op.or].slice(0, 3)).toEqual([
       { pointCollecteDepartId: 'p1' },
       { pointRetraitId: 'p1' },
       { pointActuelId: 'p1' },
     ]);
+    expect(where[Op.or][3].id[Op.in].val).toContain('"pointDepotId" = \'p1\'');
+  });
+
+  test('coursier : colis qui lui sont affectés ou rattachés à ses enlèvements', () => {
+    const where = perimetre.colis({ role: 'coursier', id: 'c1' });
+    expect(where[Op.or].slice(0, 2)).toEqual([
+      { coursierEnlevementId: 'c1' },
+      { coursierLivraisonId: 'c1' },
+    ]);
+    expect(where[Op.or][2].id[Op.in].val).toContain('"coursierId" = \'c1\'');
   });
 
   test('agent sans point rattaché : ne voit rien', () => {
@@ -75,6 +85,25 @@ describe('Gestionnaire d’erreurs', () => {
     const err = new Error('détail interne');
     err.name = nom;
     expect(executer(err).statut).toBe(statut);
+  });
+
+  test.each(['22P02', '22001', '22003', '22007', '22008'])(
+    'valeur refusée par PostgreSQL (%s) → 400, pas 500',
+    (code) => {
+      const err = new Error('invalid input value for enum enum_colis_statut: "xyz"');
+      err.name = 'SequelizeDatabaseError';
+      err.parent = { code };
+      const { statut, corps } = executer(err, 'production');
+      expect(statut).toBe(400);
+      expect(corps.message).toBe('Paramètre invalide');
+    }
+  );
+
+  test('autre erreur PostgreSQL : reste une 500 masquée', () => {
+    const err = new Error('relation "x" does not exist');
+    err.name = 'SequelizeDatabaseError';
+    err.parent = { code: '42P01' };
+    expect(executer(err, 'production').statut).toBe(500);
   });
 
   test('erreur inattendue en production : message interne masqué', () => {

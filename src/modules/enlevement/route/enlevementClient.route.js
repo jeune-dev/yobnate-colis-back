@@ -7,6 +7,7 @@ const {
   creerEnlevementSchema,
   modifierEnlevementSchema,
   annulerEnlevementSchema,
+  mesEnlevementsQuery,
 } = require('../validation/enlevement.validation');
 const { uuidParam } = require('../../../validations/common');
 
@@ -14,7 +15,7 @@ const { uuidParam } = require('../../../validations/common');
 router.use(auth, checkActiveUser);
 
 router.get('/creneaux', ctrl.creneaux);
-router.get('/', ctrl.getMes);
+router.get('/', validate(mesEnlevementsQuery, 'query'), ctrl.getMes);
 router.post('/', validate(creerEnlevementSchema), ctrl.create);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.put('/:id', validate(uuidParam, 'params'), validate(modifierEnlevementSchema), ctrl.update);

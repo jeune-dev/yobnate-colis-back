@@ -1,5 +1,12 @@
 const { Op } = require('sequelize');
-const { DemandeEnlevement, User, Ville, PointCollecte, Colis } = require('../../../models');
+const {
+  sequelize,
+  DemandeEnlevement,
+  User,
+  Ville,
+  PointCollecte,
+  Colis,
+} = require('../../../models');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../../../errors/AppError');
 const perimetre = require('../../../utils/perimetre');
 const { paginate, paginateResult } = require('../../../utils/paginate');
@@ -138,8 +145,10 @@ class EnlevementService {
       creneau: creneau || demande.creneau,
     });
 
-    // Le colis rattaché passe en enlèvement programmé
+    // Le colis rattaché est confié au coursier (il le voit dans ses missions)
+    // et passe en enlèvement programmé
     if (demande.colis) {
+      await Colis.update({ coursierEnlevementId: coursierId }, { where: { id: demande.colis.id } });
       await suiviService
         .enregistrerEvenement(
           demande.colis,
@@ -318,11 +327,18 @@ class EnlevementService {
    */
   static getTournee = async (coursierId, date) => {
     const jour = date || new Date().toISOString().slice(0, 10);
+    // Le jour de passage est celui fixé à la planification, à défaut celui souhaité
     const demandes = await DemandeEnlevement.findAll({
       where: {
         coursierId,
-        dateSouhaitee: jour,
         statut: { [Op.in]: ['planifie', 'en_cours'] },
+        [Op.or]: [
+          sequelize.where(
+            sequelize.fn('DATE', sequelize.col('DemandeEnlevement.datePlanifiee')),
+            jour
+          ),
+          { datePlanifiee: null, dateSouhaitee: jour },
+        ],
       },
       include: EnlevementService.INCLUDE_DETAIL,
       order: [['creneau', 'ASC']],
