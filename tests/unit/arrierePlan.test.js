@@ -14,8 +14,9 @@ describe('File d’envois en arrière-plan', () => {
     for (let i = 0; i < 10; i += 1) arrierePlan.lancer('push', () => attendre(200));
     const debut = Date.now();
     let envoyeApres = null;
-    arrierePlan.lancer('email', async () => {
+    arrierePlan.lancer('email', () => {
       envoyeApres = Date.now() - debut;
+      return Promise.resolve();
     });
     await attendre(20);
     expect(envoyeApres).not.toBeNull();
@@ -28,10 +29,11 @@ describe('File d’envois en arrière-plan', () => {
     const echecs = [];
     arrierePlan.lancer(
       'email',
-      async () => {
+      () => {
         appels += 1;
-        if (appels < 3)
-          throw Object.assign(new Error('SMTP indisponible'), { code: 'ECONNECTION' });
+        return appels < 3
+          ? Promise.reject(Object.assign(new Error('Resend indisponible'), { code: 'ECONNECTION' }))
+          : Promise.resolve();
       },
       {
         tentatives: 3,
@@ -46,9 +48,9 @@ describe('File d’envois en arrière-plan', () => {
     let definitif = 0;
     arrierePlan.lancer(
       'email',
-      async () => {
+      () => {
         definitif += 1;
-        throw Object.assign(new Error('Adresse refusée'), { responseCode: 550 });
+        return Promise.reject(Object.assign(new Error('Adresse refusée'), { responseCode: 550 }));
       },
       {
         tentatives: 3,

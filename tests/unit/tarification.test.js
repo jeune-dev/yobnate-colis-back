@@ -50,39 +50,45 @@ const mockArticles = [
 ];
 
 jest.mock('../../src/models', () => ({
-  Tarif: { findAll: jest.fn(async () => []) },
-  Surcharge: { findAll: jest.fn(async () => []) },
-  ServiceExpedition: { findAll: jest.fn(async () => []) },
+  Tarif: { findAll: jest.fn(() => Promise.resolve([])) },
+  Surcharge: { findAll: jest.fn(() => Promise.resolve([])) },
+  ServiceExpedition: { findAll: jest.fn(() => Promise.resolve([])) },
   Ville: { findByPk: jest.fn() },
   Zone: {},
   ArticleTarif: {
-    findAll: jest.fn(async ({ where }) => mockArticles.filter((a) => where.id.includes(a.id))),
-    findOne: jest.fn(async () => mockArticles[0]),
+    findAll: jest.fn(({ where }) =>
+      Promise.resolve(mockArticles.filter((a) => where.id.includes(a.id)))
+    ),
+    findOne: jest.fn(() => Promise.resolve(mockArticles[0])),
   },
   Emballage: {
-    findAll: jest.fn(async () => [
-      {
-        id: 'e-barigot',
-        code: 'BARIGOT',
-        libelle: 'Barigot',
-        isActive: true,
-        prix: 24,
-        devise: 'EUR',
-        stock: 5,
-        categoriesEligibles: ['colis_moyen', 'colis_xxl'],
-      },
-    ]),
+    findAll: jest.fn(() =>
+      Promise.resolve([
+        {
+          id: 'e-barigot',
+          code: 'BARIGOT',
+          libelle: 'Barigot',
+          isActive: true,
+          prix: 24,
+          devise: 'EUR',
+          stock: 5,
+          categoriesEligibles: ['colis_moyen', 'colis_xxl'],
+        },
+      ])
+    ),
   },
-  ParametreSysteme: { findAll: jest.fn(async () => []) },
+  ParametreSysteme: { findAll: jest.fn(() => Promise.resolve([])) },
 }));
 
 jest.mock('../../src/utils/delais', () => ({
-  calculerDateLivraisonEstimee: jest.fn(async () => ({
-    dateEstimee: new Date('2026-10-20'),
-    dateAuPlusTot: new Date('2026-10-10'),
-    delaiApplique: 25,
-    departReporte: false,
-  })),
+  calculerDateLivraisonEstimee: jest.fn(() =>
+    Promise.resolve({
+      dateEstimee: new Date('2026-10-20'),
+      dateAuPlusTot: new Date('2026-10-10'),
+      delaiApplique: 25,
+      departReporte: false,
+    })
+  ),
 }));
 
 const tarification = require('../../src/modules/tarification/service/tarification.service');

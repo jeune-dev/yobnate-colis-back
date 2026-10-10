@@ -62,20 +62,30 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
 const sendMail = ({ to, subject, html, texte = null, repondreA = null }) => {
   if (!to) return Promise.resolve();
   if (!resendConfigure()) {
-    logger.warn(`[resend] Email non envoyé à ${masquer(to)} — ${subject} : RESEND_API_KEY absente`);
+    logger.warn('[EMAIL] ⛔ NON ENVOYÉ — RESEND_API_KEY absente', {
+      a: masquer(to),
+      sujet: subject,
+    });
     return Promise.resolve();
   }
-  arrierePlan.lancer('email', () => envoyerEmail({ to, subject, html, texte, repondreA }), {
-    // 3 tentatives (maintenant, +2 s, +8 s) sur une panne passagère (réseau, 429,
-    // 5xx) ; une adresse ou un expéditeur refusé n'est pas retenté
-    tentatives: Number(process.env.EMAIL_TENTATIVES) || 3,
-    estTransitoire: erreurTransitoire,
-    surEchec: (err) =>
-      logger.error(`[resend] Abandon de l'envoi à ${masquer(to)} — ${subject}`, {
-        message: err.message,
-        statut: err.statusCode,
-      }),
-  });
+  // 3 tentatives (maintenant, +2 s, +8 s) sur une panne passagère (réseau, 429, 5xx) ;
+  // une adresse ou un expéditeur refusé n'est pas retenté
+  const tentativesMax = Number(process.env.EMAIL_TENTATIVES) || 3;
+  let tentative = 0;
+  logger.info('[EMAIL] Mis en file d’envoi', { a: masquer(to), sujet: subject });
+  arrierePlan.lancer(
+    'email',
+    () => {
+      tentative += 1;
+      return envoyerEmail({ to, subject, html, texte, repondreA, tentative, tentativesMax });
+    },
+    {
+      tentatives: tentativesMax,
+      estTransitoire: erreurTransitoire,
+      // L'échec de chaque tentative est déjà journalisé par envoyerEmail
+      surEchec: () => {},
+    }
+  );
   return Promise.resolve();
 };
 

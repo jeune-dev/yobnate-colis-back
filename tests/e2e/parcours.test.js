@@ -35,7 +35,7 @@ jest.mock('resend', () => ({
 jest.mock('../../src/infrastructure/r2.service', () => {
   let n = 0;
   return {
-    uploadFile: async () => ({ url: `https://test/f${++n}.jpg`, publicId: `r2:f${n}` }),
+    uploadFile: () => Promise.resolve({ url: `https://test/f${++n}.jpg`, publicId: `r2:f${n}` }),
     deleteFile: async () => {},
     PUBLIC_URL: 'https://test',
   };

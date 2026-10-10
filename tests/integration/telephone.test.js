@@ -33,9 +33,9 @@ describeDb('Vérification du téléphone (base réelle)', () => {
   const simulerWhatsapp = () => {
     const envois = [];
     jest.spyOn(whatsapp, 'estConfigure').mockReturnValue(true);
-    jest.spyOn(whatsapp, 'envoyerWhatsapp').mockImplementation(async (msg) => {
+    jest.spyOn(whatsapp, 'envoyerWhatsapp').mockImplementation((msg) => {
       envois.push(msg);
-      return true;
+      return Promise.resolve(true);
     });
     return () => envois.at(-1)?.message.match(/(\d{6})/)[1];
   };

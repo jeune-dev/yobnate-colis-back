@@ -3,8 +3,7 @@ const logger = require('../utils/logger');
 
 /**
  * Envoi des courriels par l'API Resend (https://resend.com), seul canal email du
- * projet. Chaque envoi est journalisé avec le préfixe [resend] : départ, succès
- * (avec l'identifiant Resend, à retrouver dans le tableau de bord), échec.
+ * projet. Chaque envoi est journalisé avec le préfixe [EMAIL] (voir envoyerEmail).
  *
  * Variables : RESEND_API_KEY (clé « re_… ») et MAIL_FROM, dont le domaine doit
  * être vérifié dans Resend (sinon Resend refuse tout destinataire autre que le
@@ -73,26 +72,55 @@ const texteDepuisHtml = (html) =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+/** Explication lisible des refus Resend les plus fréquents, ajoutée au log d'échec. */
+const AIDE_ERREURS = {
+  400: 'requête refusée : adresse du destinataire ou de MAIL_FROM invalide',
+  401: 'RESEND_API_KEY manquante ou mal formée',
+  403: 'clé refusée, ou domaine de MAIL_FROM non vérifié dans Resend (seul le propriétaire du compte reçoit alors les emails)',
+  422: 'champ invalide (MAIL_FROM, destinataire ou contenu)',
+  429: 'limite de débit Resend atteinte',
+};
+
+const aide = (statut) =>
+  AIDE_ERREURS[statut] ||
+  (statut >= 500 ? 'Resend indisponible' : statut ? null : 'Resend injoignable (réseau)');
+
 /**
  * Envoie un courriel et attend la réponse de Resend.
+ *
+ * Chaque envoi laisse une ligne lisible dans les logs, à chercher avec « [EMAIL] » :
+ *   [EMAIL] ✅ ENVOYÉ      — accepté par Resend (id à retrouver dans resend.com → Emails)
+ *   [EMAIL] ❌ ÉCHEC       — refusé ou injoignable, avec le statut et la raison
+ *   [EMAIL] ⛔ NON ENVOYÉ  — Resend non configuré
+ *
  * @param {object} message
  * @param {string} [message.texte] version texte ; déduite du HTML si absente
  * @param {string} [message.repondreA] adresse de réponse (en-tête Reply-To)
+ * @param {number} [message.tentative] numéro de la tentative (journalisation)
+ * @param {number} [message.tentativesMax] nombre de tentatives prévues (journalisation)
  * @returns {Promise<{ id: string }>} identifiant Resend du message
  * @throws {Error} avec `statusCode` et `nomErreur` si Resend refuse ou est injoignable
  */
-const envoyerEmail = async ({ to, subject, html, texte = null, repondreA = null }) => {
+const envoyerEmail = async ({
+  to,
+  subject,
+  html,
+  texte = null,
+  repondreA = null,
+  tentative = 1,
+  tentativesMax = 1,
+}) => {
+  const contexte = { a: masquer(to), sujet: subject };
   if (!resendConfigure()) {
     const err = new Error('Resend non configuré (RESEND_API_KEY manquante)');
-    err.statusCode = 400;
-    logger.error(`[resend] Envoi impossible à ${masquer(to)} — ${subject}`, {
-      raison: err.message,
-    });
+    err.statusCode = 401;
+    logger.error('[EMAIL] ⛔ NON ENVOYÉ — RESEND_API_KEY absente', contexte);
     throw err;
   }
 
   const debut = Date.now();
-  logger.info(`[resend] Envoi en cours à ${masquer(to)} — ${subject}`);
+  const essai = tentativesMax > 1 ? ` (tentative ${tentative}/${tentativesMax})` : '';
+  logger.info(`[EMAIL] Envoi en cours${essai}`, contexte);
 
   let reponse;
   try {
@@ -113,19 +141,26 @@ const envoyerEmail = async ({ to, subject, html, texte = null, repondreA = null 
 
   const { data, error } = reponse;
   if (error) {
-    logger.error(`[resend] Échec de l'envoi à ${masquer(to)} — ${subject}`, {
-      erreur: error.name,
-      statut: error.statusCode,
-      message: error.message,
-      dureeMs: Date.now() - debut,
-    });
     const err = new Error(error.message || 'Erreur Resend');
     err.statusCode = error.statusCode;
     err.nomErreur = error.name;
+    const suite =
+      tentative < tentativesMax && erreurTransitoire(err)
+        ? 'nouvelle tentative prévue'
+        : 'email NON envoyé';
+    logger.error(`[EMAIL] ❌ ÉCHEC${essai} — ${suite}`, {
+      ...contexte,
+      statut: error.statusCode,
+      erreur: error.name,
+      raison: error.message,
+      explication: aide(error.statusCode),
+      dureeMs: Date.now() - debut,
+    });
     throw err;
   }
 
-  logger.info(`[resend] Email envoyé à ${masquer(to)} — ${subject}`, {
+  logger.info(`[EMAIL] ✅ ENVOYÉ${essai}`, {
+    ...contexte,
     idResend: data?.id,
     dureeMs: Date.now() - debut,
   });
@@ -136,12 +171,12 @@ const envoyerEmail = async ({ to, subject, html, texte = null, repondreA = null 
 const journaliserConfiguration = () => {
   if (resendConfigure()) {
     logger.info(
-      `[resend] Envoi des emails actif — expéditeur : ${process.env.MAIL_FROM || '(MAIL_FROM vide)'}`
+      `[EMAIL] Resend actif — expéditeur : ${process.env.MAIL_FROM || '(MAIL_FROM vide)'}`
     );
     if (!process.env.MAIL_FROM)
-      logger.warn('[resend] MAIL_FROM est vide : Resend refusera les envois');
+      logger.warn('[EMAIL] MAIL_FROM est vide : Resend refusera tous les envois');
   } else {
-    logger.warn('[resend] RESEND_API_KEY absente : aucun email ne sera envoyé');
+    logger.warn('[EMAIL] ⛔ RESEND_API_KEY absente : AUCUN email ne sera envoyé');
   }
 };
 
