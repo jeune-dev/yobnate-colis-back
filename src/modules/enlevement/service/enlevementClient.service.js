@@ -16,6 +16,7 @@ const notificationService = require('../../notification/service/notification.ser
 const parametreService = require('../../parametre/service/parametre.service');
 const { genererRefEnlevement } = require('../../../utils/referenceGenerator');
 const { CRENEAUX_ENLEVEMENT } = require('../../../config/reseau');
+const { chargerJoursFeries } = require('../../../utils/delais');
 
 /**
  * Demandes d'enlèvement à domicile côté client.
@@ -49,8 +50,11 @@ class EnlevementService {
     return Number((prixHt * (1 + Number(parametres.tva_fr || 0) / 100)).toFixed(2));
   };
 
-  /** Une demande se prend au plus tôt pour le lendemain et au plus tard sous 30 jours. */
-  static validerDate = (dateSouhaitee) => {
+  /**
+   * Une demande se prend au plus tôt pour le lendemain, au plus tard sous 30 jours,
+   * ni un dimanche ni un jour férié du pays (aucun coursier ne passe).
+   */
+  static validerDate = async (dateSouhaitee, pays = null) => {
     const demain = new Date();
     demain.setDate(demain.getDate() + 1);
     const limite = new Date();
@@ -63,10 +67,18 @@ class EnlevementService {
     if (jour > limite.toISOString().slice(0, 10)) {
       throw new BadRequestError('Un enlèvement ne peut pas être programmé à plus de 30 jours');
     }
+    if (new Date(`${jour}T12:00:00Z`).getUTCDay() === 0) {
+      throw new BadRequestError("Les enlèvements n'ont pas lieu le dimanche");
+    }
+    if (pays && (await chargerJoursFeries(pays, jour, jour)).has(jour)) {
+      throw new BadRequestError(
+        "Cette date est un jour férié : choisissez un autre jour d'enlèvement"
+      );
+    }
   };
 
   static creerDemande = async (userId, data) => {
-    EnlevementService.validerDate(data.dateSouhaitee);
+    await EnlevementService.validerDate(data.dateSouhaitee, data.pays);
     if (!CRENEAUX_ENLEVEMENT.includes(data.creneau)) {
       throw new BadRequestError(
         `Créneau invalide. Créneaux disponibles : ${CRENEAUX_ENLEVEMENT.join(', ')}`
@@ -218,7 +230,9 @@ class EnlevementService {
         'Cette demande est déjà prise en charge : contactez le service client'
       );
     }
-    if (data.dateSouhaitee) EnlevementService.validerDate(data.dateSouhaitee);
+    if (data.dateSouhaitee) {
+      await EnlevementService.validerDate(data.dateSouhaitee, data.pays || demande.pays);
+    }
 
     await demande.update(data);
     return { message: "Demande d'enlèvement mise à jour.", demande };

@@ -12,6 +12,7 @@ const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service')
 const { trierParProximite, boiteEnglobante } = require('../../../utils/geo');
 const { PAYS } = require('../../../config/pays');
 const { JOURS_SEMAINE, SERVICES_POINT, LIBELLES_TYPES_POINT } = require('../../../config/reseau');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Gestion du réseau de points de collecte.
@@ -539,7 +540,7 @@ class PointCollecteService {
 
     const periode = {};
     if (dateDebut) periode[Op.gte] = new Date(dateDebut);
-    if (dateFin) periode[Op.lte] = new Date(dateFin);
+    if (dateFin) periode[Op.lte] = borneFin(dateFin);
     const filtreDate = Object.getOwnPropertySymbols(periode).length ? { createdAt: periode } : {};
 
     const [deposes, aRetirer, enStock, retires] = await Promise.all([

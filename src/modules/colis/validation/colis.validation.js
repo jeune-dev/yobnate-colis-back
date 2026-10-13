@@ -303,6 +303,8 @@ const enregistrerEvenementSchema = Joi.object({
   motif: Joi.string().max(255).allow('', null),
   codeRetrait: Joi.string().max(10).allow('', null),
   visiblePublic: Joi.boolean().default(true),
+  /** Administrateur seulement : remettre le colis malgré une facture impayée (tracé). */
+  remiseSansReglement: Joi.boolean().default(false),
 });
 
 const enregistrerEvenementLotSchema = Joi.object({

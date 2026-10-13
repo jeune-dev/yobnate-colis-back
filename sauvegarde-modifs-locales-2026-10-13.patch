@@ -1,0 +1,204 @@
+diff --git a/.env.example b/.env.example
+index e7820dd..ee6b130 100644
+--- a/.env.example
++++ b/.env.example
+@@ -106,10 +106,23 @@ R2_SECRET_ACCESS_KEY=
+ R2_BUCKET_NAME=yobante-colis
+ R2_PUBLIC_URL=
+ 
+-# ─── Email — SMTP (nodemailer) ────────────────────────────────────────────────
+-# OBLIGATOIRE : sans SMTP_HOST / SMTP_USER, aucun code de confirmation n'est envoyé et
+-# les nouveaux comptes ne peuvent pas s'activer (en NODE_ENV=development, le code est
+-# alors écrit dans les logs pour pouvoir tester).
++# ─── Email — Resend (recommandé) ou SMTP ───────────────────────────────────────
++# OBLIGATOIRE : sans RESEND_API_KEY ni SMTP_HOST / SMTP_USER, aucun code de confirmation
++# n'est envoyé et les nouveaux comptes ne peuvent pas s'activer (en NODE_ENV=development,
++# le code est alors écrit dans les logs pour pouvoir tester).
++#
++# Resend (https://resend.com) : renseigner RESEND_API_KEY suffit, le SMTP est alors ignoré.
++#  1. resend.com → Domains → Add domain, ajouter les enregistrements DNS (SPF, DKIM)
++#     chez le registrar et attendre le statut « Verified ».
++#  2. API Keys → Create API key, permission « Sending access » limitée à ce domaine.
++#  3. MAIL_FROM doit utiliser le domaine vérifié (ex. noreply@votre-domaine.com).
++#     Sans domaine vérifié, seul onboarding@resend.dev fonctionne, et uniquement
++#     vers l'adresse du compte Resend (tests).
++RESEND_API_KEY=
++# Adresse de réponse facultative (ex. contact@votre-domaine.com)
++MAIL_REPLY_TO=
++#
++# SMTP (alternative, utilisé seulement si RESEND_API_KEY est vide)
+ SMTP_HOST=
+ SMTP_PORT=587
+ SMTP_SECURE=false
+diff --git a/README.md b/README.md
+index 4e0cd58..eb31a84 100644
+--- a/README.md
++++ b/README.md
+@@ -14,7 +14,7 @@ formalités douanières, facturation multi-devise et service après-vente.
+ - **Base de données :** PostgreSQL 16
+ - **Auth :** JWT (access + refresh token) + blacklist, rôles multiples
+ - **Upload :** Cloudflare R2 (via Multer mémoire, contenu vérifié par magic bytes)
+-- **Email :** Nodemailer (SMTP), gabarits HTML en français
++- **Email :** Resend (API HTTP) ou Nodemailer (SMTP), gabarits HTML en français
+ - **Documents :** étiquettes et bordereaux HTML imprimables avec code-barres
+   Code 128 généré en interne (aucune dépendance externe)
+ - **Documentation :** OpenAPI générée à partir des routes réelles (Swagger UI hors production)
+@@ -77,7 +77,7 @@ Le service ne dessert que le corridor **France ⇄ Sénégal** :
+ - PostgreSQL 16
+ - Redis 7 (facultatif ; fourni par docker-compose.prod.yml)
+ - Bucket Cloudflare R2 (variables `R2_*`)
+-- Compte SMTP (Gmail ou autre)
++- Compte Resend avec domaine vérifié (ou compte SMTP)
+ 
+ ## Installation
+ 
+diff --git a/src/infrastructure/mailer.js b/src/infrastructure/mailer.js
+index e631be6..df3d4a1 100644
+--- a/src/infrastructure/mailer.js
++++ b/src/infrastructure/mailer.js
+@@ -27,6 +27,58 @@ const transporter = nodemailer.createTransport({
+   socketTimeout: 30000,
+ });
+ 
++/**
++ * Transport Resend (API HTTP) : choisi dès que RESEND_API_KEY est renseignée, à la
++ * place du SMTP. Passe par HTTPS (443), donc fonctionne aussi chez les hébergeurs
++ * qui bloquent les ports SMTP sortants. Même interface que nodemailer (`sendMail`)
++ * et mêmes propriétés d'erreur (`code`, `responseCode`) pour la logique de réessai.
++ */
++const RESEND_URL = 'https://api.resend.com/emails';
++
++const resendConfigure = () => {
++  const cle = String(process.env.RESEND_API_KEY || '').trim();
++  return Boolean(cle) && !/A_RENSEIGNER|^your_/i.test(cle);
++};
++
++const resendTransporter = {
++  sendMail: async ({ from, to, subject, html, text }) => {
++    let reponse;
++    try {
++      reponse = await fetch(RESEND_URL, {
++        method: 'POST',
++        headers: {
++          Authorization: `Bearer ${process.env.RESEND_API_KEY.trim()}`,
++          'Content-Type': 'application/json',
++        },
++        body: JSON.stringify({
++          from,
++          to: Array.isArray(to) ? to : [to],
++          subject,
++          html,
++          ...(text ? { text } : {}),
++          ...(process.env.MAIL_REPLY_TO ? { reply_to: process.env.MAIL_REPLY_TO } : {}),
++        }),
++        signal: AbortSignal.timeout(15000),
++      });
++    } catch (err) {
++      const erreur = new Error(`Resend injoignable : ${err.message}`);
++      erreur.code = err.name === 'TimeoutError' ? 'ETIMEDOUT' : 'ECONNECTION';
++      throw erreur;
++    }
++    const corps = await reponse.json().catch(() => ({}));
++    if (!reponse.ok) {
++      const erreur = new Error(`Resend ${reponse.status} : ${corps.message || corps.name || ''}`);
++      // 429 (quota) et 5xx sont passagers : traduits en 4xx « réessayez » façon SMTP ;
++      // les autres 4xx (clé, domaine non vérifié, adresse invalide) sont définitifs.
++      erreur.responseCode = reponse.status === 429 || reponse.status >= 500 ? 451 : 550;
++      throw erreur;
++    }
++    return { messageId: corps.id };
++  },
++};
++
++const transport = () => (resendConfigure() ? resendTransporter : transporter);
++
+ const URL_PUBLIQUE = process.env.APP_PUBLIC_URL || '';
+ 
+ const echapper = (valeur) =>
+@@ -70,11 +122,13 @@ const gabarit = ({ titre, corps, bouton = null, piedDePage = '' }) => `
+ </body></html>`;
+ 
+ /**
+- * Le SMTP est-il réellement configuré ? Tant qu'il ne l'est pas (valeurs vides
+- * ou d'exemple), aucun courriel ne peut partir : les parcours qui en dépendent,
+- * comme la confirmation d'email, doivent alors se dégrader proprement.
++ * L'envoi d'email est-il réellement configuré (Resend ou SMTP) ? Tant qu'il ne
++ * l'est pas (valeurs vides ou d'exemple), aucun courriel ne peut partir : les
++ * parcours qui en dépendent, comme la confirmation d'email, doivent alors se
++ * dégrader proprement.
+  */
+ const smtpConfigure = () => {
++  if (resendConfigure()) return true;
+   const hote = String(process.env.SMTP_HOST || '').trim();
+   const utilisateur = String(process.env.SMTP_USER || '').trim();
+   const exemple = (v) => !v || /A_RENSEIGNER|example\.com|^your_/i.test(v);
+@@ -96,7 +150,7 @@ const sendMail = ({ to, subject, html, texte = null }) => {
+   arrierePlan.lancer(
+     'email',
+     () =>
+-      transporter.sendMail({
++      transport().sendMail({
+         from: process.env.MAIL_FROM,
+         to,
+         subject,
+@@ -122,8 +176,10 @@ const sendMail = ({ to, subject, html, texte = null }) => {
+  * l'appelant puisse le dire au lieu de laisser attendre un code qui n'arrivera pas.
+  */
+ const sendMailImmediat = async ({ to, subject, html }) => {
+-  if (!smtpConfigure()) throw new Error('SMTP non configuré (SMTP_HOST / SMTP_USER)');
+-  await transporter.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
++  if (!smtpConfigure()) {
++    throw new Error('Email non configuré (RESEND_API_KEY ou SMTP_HOST / SMTP_USER)');
++  }
++  await transport().sendMail({ from: process.env.MAIL_FROM, to, subject, html });
+ };
+ 
+ /* ── Comptes ────────────────────────────────────────────────────────────── */
+diff --git a/src/modules/adresse/service/adresse.service.js b/src/modules/adresse/service/adresse.service.js
+index e1b4018..fa1d810 100644
+--- a/src/modules/adresse/service/adresse.service.js
++++ b/src/modules/adresse/service/adresse.service.js
+@@ -43,14 +43,26 @@ class AdresseService {
+ 
+   static getMesAdresses = async (userId, filters = {}, pagination = {}) => {
+     const where = { userId };
+-    if (filters.type) where[Op.or] = [{ type: filters.type }, { type: 'les_deux' }];
++    // Chaque critère est un bloc distinct : type et recherche ne s'écrasent plus
++    const criteres = [];
++    if (filters.type) criteres.push({ [Op.or]: [{ type: filters.type }, { type: 'les_deux' }] });
+     if (filters.pays) where.pays = filters.pays;
+-    if (filters.search) {
+-      where[Op.or] = [
+-        { libelle: { [Op.iLike]: `%${filters.search}%` } },
+-        { nom: { [Op.iLike]: `%${filters.search}%` } },
++    const search = typeof filters.search === 'string' ? filters.search.trim().slice(0, 100) : '';
++    if (search) {
++      // Caractères joker de LIKE neutralisés : « 50% » cherche littéralement « 50% »
++      const motif = `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
++      const ou = [
++        { libelle: { [Op.iLike]: motif } },
++        { nom: { [Op.iLike]: motif } },
++        { entreprise: { [Op.iLike]: motif } },
+       ];
++      // Numéro saisi avec ou sans espaces / indicatif : « 77 123 45 » trouve +2217712345…
++      // Le 0 national en tête (06…, 07…) est ignoré : les numéros sont enregistrés en +33 / +221
++      const chiffres = search.replace(/\D/g, '').replace(/^0+/, '');
++      if (chiffres.length >= 3) ou.push({ telephone: { [Op.like]: `%${chiffres}%` } });
++      criteres.push({ [Op.or]: ou });
+     }
++    if (criteres.length) where[Op.and] = criteres;
+ 
+     const { limit, offset } = paginate(pagination);
+     const { rows, count } = await Adresse.findAndCountAll({
+diff --git a/tests/helpers/env.js b/tests/helpers/env.js
+index 1f70bac..a9c8d34 100644
+--- a/tests/helpers/env.js
++++ b/tests/helpers/env.js
+@@ -18,6 +18,7 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL || 'error';
+ 
+ // Aucun courriel réel : un port fermé fait échouer l'envoi immédiatement,
+ // échec déjà absorbé par infrastructure/mailer.js.
++process.env.RESEND_API_KEY = '';
+ process.env.SMTP_HOST = '127.0.0.1';
+ process.env.SMTP_PORT = '9';
+ // Pas de réessai différé d'un envoi voué à l'échec (port fermé) après la fin d'un test

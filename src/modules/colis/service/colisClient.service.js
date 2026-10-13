@@ -33,6 +33,7 @@ const notificationService = require('../../notification/service/notification.ser
 const parametreService = require('../../parametre/service/parametre.service');
 const facturationService = require('../../facture/service/facturation.service');
 const documents = require('../../../templates/documents');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Espace client : consultation et suivi des expéditions, actions du client
@@ -109,7 +110,7 @@ class ColisService {
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
       if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.createdAt[Op.lte] = borneFin(filters.dateFin);
     }
 
     const { limit, offset } = paginate(pagination);
@@ -171,7 +172,7 @@ class ColisService {
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
       if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.createdAt[Op.lte] = borneFin(filters.dateFin);
     }
 
     const { limit, offset } = paginate(pagination);

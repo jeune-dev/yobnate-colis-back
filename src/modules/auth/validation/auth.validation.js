@@ -9,7 +9,8 @@ const registerSchema = Joi.object({
     .required()
     .messages({ 'any.required': 'Le numéro de téléphone est obligatoire' }),
   password: password.required(),
-  pays: pays.default('SN'),
+  // Absent : déduit de l'indicatif du téléphone (un +33 n'est pas un client sénégalais)
+  pays,
   villeId: Joi.string().uuid(),
   adresse: Joi.string().max(255).allow('', null),
   typeCompte: Joi.string().valid('particulier', 'entreprise').default('particulier'),
@@ -23,7 +24,11 @@ const registerSchema = Joi.object({
   codePostal: Joi.string().max(10).allow('', null),
   // Code personnel d'un client existant (programme de parrainage)
   codeParrainage: Joi.string().trim().uppercase().max(12).allow('', null),
-});
+}).custom((valeur) =>
+  valeur.pays
+    ? valeur
+    : { ...valeur, pays: String(valeur.telephone || '').startsWith('+33') ? 'FR' : 'SN' }
+);
 
 /**
  * Connexion par email ou par numéro de téléphone : `identifiant` accepte l'un ou

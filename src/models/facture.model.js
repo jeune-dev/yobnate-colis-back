@@ -11,8 +11,15 @@ const { PAYEURS } = require('../config/colis');
  * en port dû, le destinataire.
  */
 class Facture extends Model {
+  /** Reste dû : total, moins les règlements encaissés, moins les avoirs imputés. */
   get soldeDu() {
-    return Number((Number(this.montantTotal) - Number(this.montantPaye)).toFixed(2));
+    return Number(
+      (
+        Number(this.montantTotal) -
+        Number(this.montantPaye) -
+        Number(this.montantAvoirs || 0)
+      ).toFixed(2)
+    );
   }
 
   get estSoldee() {
@@ -52,6 +59,8 @@ Facture.init(
     motifRemise: { type: DataTypes.STRING(255), allowNull: true },
     montantTotal: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
     montantPaye: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
+    /** Cumul des avoirs imputés sur cette facture : ils réduisent le reste dû sans être des encaissements. */
+    montantAvoirs: { type: DataTypes.DECIMAL(12, 2), allowNull: false, defaultValue: 0 },
     /** Lignes détaillées reprises du moteur de tarification. */
     lignes: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
 

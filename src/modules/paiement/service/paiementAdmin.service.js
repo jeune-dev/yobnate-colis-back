@@ -9,7 +9,9 @@ const { sendPaiementConfirmeEmail } = require('../../../infrastructure/mailer');
 const { versCsv } = require('../../../utils/csv');
 const { arrondir } = require('../../../utils/devise');
 const { genererRefPaiement } = require('../../../utils/referenceGenerator');
-const { METHODES_PAR_PAYS } = require('../../../config/facturation');
+const avoirService = require('../../facture/service/avoir.service');
+const { METHODES_PAR_PAYS, METHODES_PAR_DEVISE } = require('../../../config/facturation');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Encaissements et remboursements.
@@ -21,6 +23,12 @@ const { METHODES_PAR_PAYS } = require('../../../config/facturation');
  */
 
 class PaiementService {
+  /** Paiements dont tout ou partie reste à rembourser. */
+  static STATUTS_REMBOURSABLES = ['succes', 'partiel'];
+
+  /** Paiements effectivement encaissés, remboursés ou non depuis. */
+  static STATUTS_ENCAISSES = ['succes', 'partiel', 'rembourse'];
+
   static INCLUDE_DETAIL = [
     {
       model: Facture,
@@ -47,7 +55,7 @@ class PaiementService {
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
       if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.createdAt[Op.lte] = borneFin(filters.dateFin);
     }
     return where;
   };
@@ -136,6 +144,13 @@ class PaiementService {
     if (montant > solde) {
       throw new BadRequestError(
         `Le montant (${montant}) dépasse le solde dû (${solde} ${facture.devise})`
+      );
+    }
+
+    const methodesDevise = METHODES_PAR_DEVISE[facture.devise];
+    if (methodesDevise && !methodesDevise.includes(data.methode)) {
+      throw new BadRequestError(
+        `Le moyen de paiement « ${data.methode} » ne règle pas une facture en ${facture.devise}`
       );
     }
 
@@ -243,10 +258,14 @@ class PaiementService {
   };
 
   /**
-   * Rembourse tout ou partie d'un paiement encaissé.
-   * La facture repasse au statut correspondant au solde restant dû.
+   * Rembourse tout ou partie d'un paiement encaissé, en une ou plusieurs fois.
+   *
+   * Par défaut, la somme rendue n'est plus due : un avoir du même montant est imputé
+   * sur la facture, qui garde son statut (geste commercial, prestation non rendue).
+   * Avec `rouvrirFacture`, la somme redevient due et la facture repasse au statut
+   * correspondant à son solde (paiement contesté, encaissement erroné).
    */
-  static rembourser = async (id, { montant, motif }, adminId) => {
+  static rembourser = async (id, { montant, motif, rouvrirFacture = false }, adminId) => {
     const paiement = await Paiement.findByPk(id, {
       include: [
         { model: Facture, as: 'facture' },
@@ -254,8 +273,8 @@ class PaiementService {
       ],
     });
     if (!paiement) throw new NotFoundError('Paiement introuvable');
-    if (paiement.statut !== 'succes') {
-      throw new BadRequestError('Seul un paiement réussi peut être remboursé');
+    if (!PaiementService.STATUTS_REMBOURSABLES.includes(paiement.statut)) {
+      throw new BadRequestError('Seul un paiement encaissé peut être remboursé');
     }
 
     const facture = paiement.facture;
@@ -274,6 +293,7 @@ class PaiementService {
     }
     if (!motif) throw new BadRequestError('Le motif du remboursement est requis');
 
+    let avoir = null;
     await sequelize.transaction(async (t) => {
       // Verrous paiement puis facture (même ordre partout) : deux remboursements
       // simultanés ne peuvent pas rendre deux fois la même somme.
@@ -289,7 +309,10 @@ class PaiementService {
         Number(paiementVerrouille.montant) - Number(paiementVerrouille.montantRembourse),
         facture.devise
       );
-      if (paiementVerrouille.statut !== 'succes' || montantRembourse > resteRemboursable) {
+      if (
+        !PaiementService.STATUTS_REMBOURSABLES.includes(paiementVerrouille.statut) ||
+        montantRembourse > resteRemboursable
+      ) {
         throw new BadRequestError('Ce paiement a déjà été remboursé entre-temps');
       }
 
@@ -307,23 +330,39 @@ class PaiementService {
         { transaction: t }
       );
 
-      const nouveauPaye = arrondir(
-        Number(factureVerrouillee.montantPaye) - montantRembourse,
+      const nouveauPaye = Math.max(
+        0,
+        arrondir(Number(factureVerrouillee.montantPaye) - montantRembourse, facture.devise)
+      );
+
+      if (!rouvrirFacture) {
+        // La somme rendue n'est plus due : le statut de la facture ne bouge pas
+        await factureVerrouillee.update({ montantPaye: nouveauPaye }, { transaction: t });
+        ({ avoir } = await avoirService.emettre({
+          factureOrigineId: facture.id,
+          userId: facture.userId,
+          devise: facture.devise,
+          montant: montantRembourse,
+          libelle: `Remboursement ${paiement.reference} — ${motif}`,
+          mentions: `Avoir émis au titre du remboursement ${paiement.reference}`,
+          emisePar: adminId,
+          transaction: t,
+        }));
+        return;
+      }
+
+      const reste = arrondir(
+        Number(factureVerrouillee.montantTotal) -
+          nouveauPaye -
+          Number(factureVerrouillee.montantAvoirs),
         facture.devise
       );
+      const credite = nouveauPaye + Number(factureVerrouillee.montantAvoirs) > 0;
       await factureVerrouillee.update(
         {
-          montantPaye: Math.max(0, nouveauPaye),
-          statut:
-            nouveauPaye <= 0
-              ? 'en_attente'
-              : nouveauPaye >= Number(factureVerrouillee.montantTotal)
-                ? 'payee'
-                : 'partiellement_payee',
-          datePaiementComplet:
-            nouveauPaye >= Number(factureVerrouillee.montantTotal)
-              ? factureVerrouillee.datePaiementComplet
-              : null,
+          montantPaye: nouveauPaye,
+          statut: reste <= 0 ? 'payee' : credite ? 'partiellement_payee' : 'en_attente',
+          datePaiementComplet: reste <= 0 ? factureVerrouillee.datePaiementComplet : null,
         },
         { transaction: t }
       );
@@ -346,12 +385,15 @@ class PaiementService {
       action: 'admin.paiement.rembourser',
       entite: 'Paiement',
       entiteId: id,
-      details: { montant: montantRembourse, motif },
+      details: { montant: montantRembourse, motif, rouvrirFacture, avoirId: avoir?.id || null },
     });
 
     return {
-      message: `Remboursement de ${montantRembourse} ${facture.devise} enregistré.`,
+      message:
+        `Remboursement de ${montantRembourse} ${facture.devise} enregistré.` +
+        (avoir ? ` Avoir ${avoir.reference} imputé sur la facture.` : ' La somme redevient due.'),
       paiement,
+      avoir,
     };
   };
 
@@ -393,7 +435,8 @@ class PaiementService {
     const paiements = await Paiement.findAll({
       where: {
         pointCollecteId,
-        statut: 'succes',
+        // Ce qui a été encaissé ce jour-là, même remboursé depuis
+        statut: { [Op.in]: PaiementService.STATUTS_ENCAISSES },
         payeAt: { [Op.between]: [debut, fin] },
       },
       include: [{ model: Facture, as: 'facture', attributes: ['id', 'reference'] }],
@@ -472,7 +515,13 @@ class PaiementService {
   };
 
   static getStatistiques = async (filters = {}) => {
-    const where = { ...PaiementService.construireFiltres(filters), statut: 'succes' };
+    // Tout ce qui a été encaissé, remboursé en partie ou en totalité depuis : le brut
+    // reste juste et le remboursé se lit à côté (avant, un paiement remboursé même
+    // partiellement disparaissait des deux)
+    const where = {
+      ...PaiementService.construireFiltres(filters),
+      statut: { [Op.in]: PaiementService.STATUTS_ENCAISSES },
+    };
 
     const [parMethode, parDevise] = await Promise.all([
       Paiement.findAll({
@@ -481,7 +530,8 @@ class PaiementService {
           'methode',
           'devise',
           [sequelize.fn('COUNT', sequelize.col('id')), 'nombre'],
-          [sequelize.fn('SUM', sequelize.col('montant')), 'total'],
+          [sequelize.fn('SUM', sequelize.col('montant')), 'brut'],
+          [sequelize.fn('SUM', sequelize.col('montantRembourse')), 'rembourse'],
         ],
         group: ['methode', 'devise'],
         raw: true,
@@ -505,7 +555,10 @@ class PaiementService {
           methode: r.methode,
           devise: r.devise,
           nombre: Number(r.nombre),
-          total: Number(r.total || 0),
+          brut: Number(r.brut || 0),
+          rembourse: Number(r.rembourse || 0),
+          // Net en caisse pour ce moyen de paiement
+          total: Number(r.brut || 0) - Number(r.rembourse || 0),
         })),
         parDevise: parDevise.map((r) => ({
           devise: r.devise,

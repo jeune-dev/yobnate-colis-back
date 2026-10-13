@@ -44,7 +44,17 @@ const TRANSITIONS_AUTORISEES = {
   arrive: ['disponible_retrait', 'en_livraison', 'en_douane', 'incident'],
   disponible_retrait: ['recupere', 'en_livraison', 'retourne', 'incident'],
   en_livraison: ['livre', 'disponible_retrait', 'incident'],
-  incident: ['en_transit', 'en_livraison', 'disponible_retrait', 'retourne', 'annule'],
+  // Un incident survenu au départ (avarie constatée, colis bloqué) se règle en
+  // remettant le colis dans le circuit : nouvelle réception ou tri
+  incident: [
+    'receptionne',
+    'en_preparation',
+    'en_transit',
+    'en_livraison',
+    'disponible_retrait',
+    'retourne',
+    'annule',
+  ],
   livre: [],
   recupere: [],
   retourne: [],
@@ -84,7 +94,12 @@ const EVENEMENTS_SUIVI = {
   LIV_ECHEC: { libelle: 'Tentative de livraison infructueuse', statut: null },
   LIVRE: { libelle: 'Remis au destinataire', statut: 'livre' },
   RETIRE: { libelle: 'Retiré par le destinataire', statut: 'recupere' },
-  REFUSE: { libelle: 'Colis refusé par le destinataire', statut: 'incident' },
+  // Le destinataire ne peut refuser qu'un colis arrivé jusqu'à lui
+  REFUSE: {
+    libelle: 'Colis refusé par le destinataire',
+    statut: 'incident',
+    depuis: ['arrive', 'disponible_retrait', 'en_livraison'],
+  },
   RETOUR: { libelle: 'Retour expéditeur', statut: 'retourne' },
   PERDU: { libelle: 'Colis déclaré perdu', statut: 'incident' },
   AVARIE: { libelle: 'Colis endommagé', statut: 'incident' },

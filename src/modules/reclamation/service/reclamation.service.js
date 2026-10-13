@@ -15,6 +15,7 @@ const parametreService = require('../../parametre/service/parametre.service');
 const { sendReclamationEmail } = require('../../../infrastructure/mailer');
 const { genererRefReclamation } = require('../../../utils/referenceGenerator');
 const { uploadFile } = require('../../../infrastructure/r2.service');
+const avoirService = require('../../facture/service/avoir.service');
 const { joursEcoules } = require('../../../utils/delais');
 const { PAYS } = require('../../../config/pays');
 
@@ -474,24 +475,32 @@ class ReclamationService {
       );
 
       if (indemnite > 0) {
-        const reference = await genererRefReclamation(t);
-        avoir = await Facture.create(
-          {
-            reference: reference.replace('REC-', 'AVO-'),
-            userId: reclamation.userId,
-            type: 'avoir',
-            devise: reclamation.devise,
-            montantHt: indemnite,
-            montantTotal: indemnite,
-            statut: 'en_attente',
-            lignes: [
-              { libelle: `Indemnisation réclamation ${reclamation.reference}`, montant: indemnite },
-            ],
-            mentions: `Avoir émis au titre de la réclamation ${reclamation.reference}`,
-            emisePar: agentId,
-          },
-          { transaction: t }
-        );
+        // Imputé sur la facture de l'expédition quand elle peut l'absorber : le client
+        // doit d'autant moins. Sinon l'avoir reste dû au client, à lui rembourser.
+        const factureColis = reclamation.colisId
+          ? await Facture.findOne({
+              where: {
+                colisId: reclamation.colisId,
+                devise: reclamation.devise,
+                type: { [Op.ne]: 'avoir' },
+                statut: { [Op.notIn]: ['annulee', 'brouillon'] },
+              },
+              transaction: t,
+            })
+          : null;
+        const compensable = factureColis
+          ? Number(factureColis.montantTotal) - Number(factureColis.montantAvoirs)
+          : 0;
+        ({ avoir } = await avoirService.emettre({
+          factureOrigineId: factureColis && indemnite <= compensable ? factureColis.id : null,
+          userId: reclamation.userId,
+          devise: reclamation.devise,
+          montant: indemnite,
+          libelle: `Indemnisation réclamation ${reclamation.reference}`,
+          mentions: `Avoir émis au titre de la réclamation ${reclamation.reference}`,
+          emisePar: agentId,
+          transaction: t,
+        }));
       }
     });
 

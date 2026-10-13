@@ -99,11 +99,6 @@ const articleParam = Joi.object({
 /** Activation / désactivation d'une ressource : l'état cible est explicite. */
 const statutActifSchema = Joi.object({ isActive: Joi.boolean().required() });
 
-const paginationQuery = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
-}).unknown(true);
-
 /**
  * Filtres d'une liste (paramètres d'URL) : seuls les champs déclarés sont contrôlés,
  * les autres (tri, options propres à un écran) passent tels quels. Une valeur vide
@@ -160,7 +155,6 @@ module.exports = {
   referenceParam,
   articleParam,
   statutActifSchema,
-  paginationQuery,
   listeQuery,
   filtres,
   largeurNeDepassePasLongueur,

@@ -208,8 +208,11 @@ const sendPaiementConfirmeEmail = (user, paiement, facture) =>
         <strong>${echapper(formater(paiement.montant, paiement.devise || facture.devise))}</strong>
         pour la facture ${echapper(facture.reference)}.</p>
         ${
-          Number(facture.montantTotal) - Number(facture.montantPaye) > 0
-            ? `<p>Solde restant dû : <strong>${echapper(formater(Number(facture.montantTotal) - Number(facture.montantPaye), facture.devise))}</strong>.</p>`
+          Number(facture.montantTotal) -
+            Number(facture.montantPaye) -
+            Number(facture.montantAvoirs || 0) >
+          0
+            ? `<p>Solde restant dû : <strong>${echapper(formater(Number(facture.montantTotal) - Number(facture.montantPaye) - Number(facture.montantAvoirs || 0), facture.devise))}</strong>.</p>`
             : '<p>Cette facture est intégralement soldée.</p>'
         }`,
     }),

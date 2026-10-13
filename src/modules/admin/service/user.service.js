@@ -4,6 +4,7 @@ const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const JWTUtils = require('../../../utils/jwtUtils');
+const { FACTURES_DUES, SQL_SOLDE_DU } = require('../../facture/service/avoir.service');
 
 /**
  * Gestion des comptes clients (particuliers et entreprises).
@@ -58,7 +59,7 @@ class UserService {
 
     const facturesOuvertes = {
       userId: id,
-      statut: { [Op.in]: ['en_attente', 'partiellement_payee'] },
+      ...FACTURES_DUES,
     };
     const [nbColisEnvoyes, nbColisLivres, encours, soldes] = await Promise.all([
       Colis.count({ where: { userId: id } }),
@@ -68,10 +69,7 @@ class UserService {
       // euros et des francs CFA n'a pas de sens
       Facture.findAll({
         where: facturesOuvertes,
-        attributes: [
-          'devise',
-          [sequelize.fn('SUM', sequelize.literal('"montantTotal" - "montantPaye"')), 'solde'],
-        ],
+        attributes: ['devise', [sequelize.fn('SUM', sequelize.literal(SQL_SOLDE_DU)), 'solde']],
         group: ['devise'],
         raw: true,
       }),

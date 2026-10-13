@@ -37,6 +37,7 @@ const {
 } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
 const { genererCodeRetrait } = require('../../../utils/referenceGenerator');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Back-office des expéditions.
@@ -196,7 +197,7 @@ class ColisService {
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
       if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.createdAt[Op.lte] = borneFin(filters.dateFin);
     }
     return where;
   };
@@ -262,6 +263,7 @@ class ColisService {
     return Object.entries(EVENEMENTS_SUIVI)
       .filter(([code]) => !permis || permis.includes(code))
       .filter(([, def]) => !def.statut || transitionAutorisee(colis.statut, def.statut))
+      .filter(([, def]) => !def.depuis || def.depuis.includes(colis.statut))
       .map(([code, def]) => ({ code, libelle: def.libelle, statutInduit: def.statut }));
   };
 
@@ -332,20 +334,79 @@ class ColisService {
     const remiseControlee =
       params.codeEvenement === 'RETIRE' ||
       (params.codeEvenement === 'LIVRE' && perimetre.restreint(auteur));
-    if (remiseControlee && colis.codeRetrait) {
-      if (!params.codeRetrait)
-        throw new BadRequestError('Le code de retrait du destinataire est requis');
-      if (String(params.codeRetrait) !== String(colis.codeRetrait)) {
-        throw new BadRequestError('Code de retrait incorrect');
+    if (remiseControlee) {
+      // Un retrait en point exige toujours un code : un colis mis à disposition en
+      // reçoit un (événement DISPO) ; sans code, le colis n'a pas été mis à disposition
+      if (params.codeEvenement === 'RETIRE' && !colis.codeRetrait) {
+        throw new BadRequestError(
+          "Ce colis n'a pas de code de retrait : générez-en un et communiquez-le au destinataire"
+        );
       }
+      if (colis.codeRetrait) {
+        if (!params.codeRetrait)
+          throw new BadRequestError('Le code de retrait du destinataire est requis');
+        if (String(params.codeRetrait) !== String(colis.codeRetrait)) {
+          throw new BadRequestError('Code de retrait incorrect');
+        }
+      }
+    }
+
+    if (['RETIRE', 'LIVRE'].includes(params.codeEvenement)) {
+      await ColisService.verifierReglementAvantRemise(colis, params, auteur);
     }
 
     return suiviService.enregistrerEvenement(colis, params, { auteurId: adminId });
   };
 
-  /** Applique le même événement à une sélection de colis (traitement par lot). */
-  static enregistrerEvenementEnLot = (colisIds, params, adminId) =>
-    suiviService.enregistrerEvenementsEnLot(colisIds, params, { auteurId: adminId });
+  /**
+   * Un colis ne quitte nos mains qu'une fois sa facture réglée, sauf client autorisé
+   * au paiement différé. Un administrateur peut passer outre (`remiseSansReglement`),
+   * ce qui est tracé au journal ; le personnel de terrain, jamais.
+   */
+  static verifierReglementAvantRemise = async (colis, params, auteur) => {
+    const factures = await Facture.findAll({
+      where: {
+        colisId: colis.id,
+        type: { [Op.ne]: 'avoir' },
+        statut: { [Op.in]: ['en_attente', 'partiellement_payee'] },
+      },
+    });
+    const impayees = factures.filter((f) => f.soldeDu > 0);
+    if (!impayees.length) return;
+
+    const client = colis.userId
+      ? await User.findByPk(colis.userId, { attributes: ['id', 'paiementDiffereAutorise'] })
+      : null;
+    if (client?.paiementDiffereAutorise) return;
+
+    const detail = impayees.map((f) => `${f.reference} (${f.soldeDu} ${f.devise})`).join(', ');
+    if (params.remiseSansReglement && auteur && !perimetre.restreint(auteur)) {
+      await logActivity({
+        userId: auteur.id,
+        action: 'admin.colis.remise_sans_reglement',
+        entite: 'Colis',
+        entiteId: colis.id,
+        details: { factures: detail, codeEvenement: params.codeEvenement },
+      });
+      return;
+    }
+    throw new BadRequestError(
+      `Facture impayée : ${detail}. Encaissez le solde avant de remettre le colis.`
+    );
+  };
+
+  /**
+   * Applique le même événement à une sélection de colis (traitement par lot). La
+   * remise au destinataire se fait colis par colis : code et règlement à contrôler.
+   */
+  static enregistrerEvenementEnLot = (colisIds, params, adminId) => {
+    if (['RETIRE', 'LIVRE'].includes(params.codeEvenement)) {
+      throw new BadRequestError(
+        'La remise au destinataire se fait colis par colis (code de retrait et règlement contrôlés)'
+      );
+    }
+    return suiviService.enregistrerEvenementsEnLot(colisIds, params, { auteurId: adminId });
+  };
 
   /**
    * Corrige la pesée après contrôle en agence et recalcule le prix.

@@ -48,13 +48,6 @@ class ConflictError extends AppError {
     super(message, 409);
   }
 }
-class ValidationError extends AppError {
-  constructor(message = 'Données invalides', details = []) {
-    super(message, 422);
-    this.details = details;
-  }
-}
-
 /** Dépendance externe indisponible ou non configurée (canal d'envoi, prestataire). */
 class ServiceUnavailableError extends AppError {
   constructor(message = 'Service temporairement indisponible') {
@@ -69,6 +62,5 @@ module.exports = {
   ForbiddenError,
   NotFoundError,
   ConflictError,
-  ValidationError,
   ServiceUnavailableError,
 };

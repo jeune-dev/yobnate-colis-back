@@ -1,12 +1,19 @@
 const Joi = require('joi');
-const { pays, heureHHMM, dateISO, listeQuery, filtres } = require('../../../validations/common');
+const {
+  pays,
+  phone,
+  heureHHMM,
+  dateISO,
+  listeQuery,
+  filtres,
+} = require('../../../validations/common');
 const { CRENEAUX_ENLEVEMENT, STATUTS_ENLEVEMENT } = require('../../../config/reseau');
 const { CODES_PAYS } = require('../../../config/pays');
 
 const creerEnlevementSchema = Joi.object({
   colisId: Joi.string().uuid().allow(null),
   contactNom: Joi.string().min(2).max(120).required(),
-  contactTelephone: Joi.string().max(20).required(),
+  contactTelephone: phone.required(),
   pays: pays.required(),
   villeId: Joi.string().uuid().required(),
   adresse: Joi.string().min(3).max(255).required(),
@@ -32,7 +39,7 @@ const creerEnlevementSchema = Joi.object({
 
 const modifierEnlevementSchema = Joi.object({
   contactNom: Joi.string().min(2).max(120),
-  contactTelephone: Joi.string().max(20),
+  contactTelephone: phone,
   adresse: Joi.string().min(3).max(255),
   complementAdresse: Joi.string().max(255).allow('', null),
   dateSouhaitee: Joi.string().pattern(/^\d{4}-\d{2}-\d{2}$/),

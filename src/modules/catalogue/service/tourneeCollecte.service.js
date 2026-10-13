@@ -136,6 +136,9 @@ class TourneeCollecteService {
 
   static create = async (data, adminId) => {
     const pays = data.pays || 'FR';
+    if (String(data.dateCollecte) < new Date().toISOString().slice(0, 10)) {
+      throw new BadRequestError('La date de collecte est déjà passée');
+    }
     await TourneeCollecteService.validerReferences(data, pays);
     const tournee = await TourneeCollecte.create({
       ...data,
@@ -158,6 +161,9 @@ class TourneeCollecteService {
     const tournee = await TourneeCollecteService.charger(id, []);
     if (['terminee', 'annulee'].includes(tournee.statut)) {
       throw new BadRequestError('Une tournée terminée ou annulée ne peut plus être modifiée');
+    }
+    if (data.dateCollecte && String(data.dateCollecte) < new Date().toISOString().slice(0, 10)) {
+      throw new BadRequestError('La date de collecte est déjà passée');
     }
     await TourneeCollecteService.validerReferences(
       { dateCollecte: tournee.dateCollecte, ...data },

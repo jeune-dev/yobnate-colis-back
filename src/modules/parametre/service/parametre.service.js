@@ -468,6 +468,48 @@ class ParametreService {
     };
   };
 
+  /**
+   * Bornes des paramètres numériques : une faute de frappe (TVA à 500 %, taux de
+   * change à 0) fausserait toute la tarification. Par défaut, pas de valeur négative.
+   */
+  static PLAGES = {
+    tva_fr: { min: 0, max: 100 },
+    tva_sn: { min: 0, max: 100 },
+    taux_assurance_pourcent: { min: 0, max: 100 },
+    surcharge_carburant_pourcent: { min: 0, max: 100 },
+    taux_droits_douane_defaut: { min: 0, max: 100 },
+    parrainage_remise_filleul_pourcent: { min: 0, max: 100 },
+    remise_professionnelle_pourcent: { min: 0, max: 100 },
+    taux_change_eur_xof: { min: 1, max: 10000 },
+    arrondi_poids_kg: { min: 0.01, max: 10 },
+    coefficient_volumetrique_defaut: { min: 1000, max: 10000 },
+    delai_garde_defaut_jours: { min: 1, max: 365 },
+    nb_tentatives_livraison_max: { min: 1, max: 10 },
+  };
+
+  static verifierPlage = (cle, nombre) => {
+    const { min = 0, max = Infinity } = ParametreService.PLAGES[cle] || {};
+    if (nombre < min || nombre > max) {
+      throw new BadRequestError(
+        max === Infinity
+          ? `${cle} doit être supérieur ou égal à ${min}`
+          : `${cle} doit être compris entre ${min} et ${max}`
+      );
+    }
+  };
+
+  /** Préfixes repris dans les numéros de suivi : lettres et chiffres uniquement. */
+  static FORMATS = {
+    prefixe_numero_suivi: {
+      motif: /^[A-Z0-9]{1,4}$/,
+      message: '1 à 4 lettres majuscules ou chiffres',
+    },
+    code_conteneur_numero_suivi: {
+      motif: /^[A-Z0-9]{1,4}$/,
+      message: '1 à 4 lettres majuscules ou chiffres',
+    },
+  };
+
   static updateParametre = async (cle, valeur, adminId) => {
     const parametre = await ParametreSysteme.findOne({ where: { cle } });
     if (!parametre) throw new NotFoundError('Paramètre introuvable');
@@ -475,6 +517,11 @@ class ParametreService {
 
     if (parametre.type === 'nombre' && Number.isNaN(Number(valeur))) {
       throw new BadRequestError('La valeur doit être numérique');
+    }
+    if (parametre.type === 'nombre') ParametreService.verifierPlage(cle, Number(valeur));
+    const format = ParametreService.FORMATS[cle];
+    if (format && !format.motif.test(String(valeur))) {
+      throw new BadRequestError(`${cle} : ${format.message}`);
     }
     if (parametre.type === 'json') {
       try {

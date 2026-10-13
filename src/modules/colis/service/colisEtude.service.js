@@ -1,11 +1,20 @@
 const { Op } = require('sequelize');
-const { sequelize, Colis, User, PointCollecte, DemandeEnlevement } = require('../../../models');
+const {
+  sequelize,
+  Colis,
+  User,
+  PointCollecte,
+  DemandeEnlevement,
+  DeclarationDouane,
+  ServiceExpedition,
+} = require('../../../models');
 const { arrondir, formater } = require('../../../utils/devise');
 const { envoyerModele, URL_PUBLIQUE } = require('../../../infrastructure/mailer');
 const { BadRequestError, NotFoundError } = require('../../../errors/AppError');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const suiviService = require('./suivi.service');
 const parametreService = require('../../parametre/service/parametre.service');
+const tarificationService = require('../../tarification/service/tarification.service');
 
 /**
  * Étude des demandes des catégories 2 et 3 par l'administrateur : validation
@@ -18,19 +27,21 @@ class ColisEtudeService {
   /* ── Étude des demandes (catégories 2 et 3) ─────────────────────────────── */
 
   /**
-   * Décompose un montant TTC arrêté par l'administrateur (prix ajusté ou
-   * proposition tarifaire) en hors taxes et TVA, selon le pays de facturation.
+   * Décompose un montant TTC arrêté par l'administrateur en hors taxes et TVA, selon
+   * le pays de facturation. Prix ajusté : surcharges et assurance déjà calculées sont
+   * conservées. Proposition sur devis (`extras`) : voir montantsAvecExtras.
    */
-  static montantsDepuisTtc = (colis, montantTotal, parametres, { forfaitGlobal = false } = {}) => {
+  static montantsDepuisTtc = (colis, montantTotal, parametres, { extras = null } = {}) => {
     const devise = colis.devise;
     const paysFacturation = colis.payeur === 'destinataire' ? colis.paysArrivee : colis.paysDepart;
     const tauxTva = Number(paysFacturation === 'FR' ? parametres.tva_fr : parametres.tva_sn);
+    if (extras) return ColisEtudeService.montantsAvecExtras(colis, montantTotal, tauxTva, extras);
     const droits = Number(colis.montantDroitsDouane || 0);
     const total = arrondir(montantTotal, devise);
     const ht = arrondir((total - droits) / (1 + tauxTva / 100), devise);
     const tva = arrondir(total - droits - ht, devise);
-    const surcharges = forfaitGlobal ? 0 : Number(colis.montantSurcharges || 0);
-    const assurance = forfaitGlobal ? 0 : Number(colis.montantAssurance || 0);
+    const surcharges = Number(colis.montantSurcharges || 0);
+    const assurance = Number(colis.montantAssurance || 0);
     const fret = arrondir(Math.max(0, ht - surcharges - assurance), devise);
     return {
       colonnes: {
@@ -53,6 +64,93 @@ class ColisEtudeService {
         total,
       },
     };
+  };
+
+  /**
+   * Proposition sur devis : le montant saisi est le prix du transport TTC ; la prime
+   * d'assurance (soumise à TVA) et, en DDP, les droits et taxes avancés s'y ajoutent.
+   */
+  static montantsAvecExtras = (colis, transportTtc, tauxTva, { assurance = 0, droits = 0 }) => {
+    const devise = colis.devise;
+    const fret = arrondir(Number(transportTtc) / (1 + tauxTva / 100), devise);
+    const ht = arrondir(fret + assurance, devise);
+    const tva = arrondir((ht * tauxTva) / 100, devise);
+    const total = arrondir(ht + tva + droits, devise);
+    return {
+      colonnes: {
+        montantFret: fret,
+        montantSurcharges: 0,
+        montantAssurance: assurance,
+        montantDroitsDouane: droits,
+        montantTva: tva,
+        montantTotal: total,
+      },
+      montants: {
+        fret,
+        surcharges: 0,
+        assurance,
+        totalHt: ht,
+        tauxTva,
+        tva,
+        droitsDouane: droits,
+        creditParrainage: 0,
+        creditParrainageHt: 0,
+        total,
+      },
+    };
+  };
+
+  /**
+   * Assurance (si souscrite) et droits à l'import (en DDP) d'une proposition : la
+   * déclaration en douane, quand elle existe, fait foi pour les droits estimés.
+   */
+  static extrasProposition = async (colis, parametres, transaction) => {
+    const tauxChange = Number(parametres.taux_change_eur_xof);
+    const deviseValeur = colis.deviseValeur || colis.devise;
+    let assurance = 0;
+    if (colis.assuranceSouscrite) {
+      const service = colis.serviceId
+        ? await ServiceExpedition.findByPk(colis.serviceId, { transaction })
+        : null;
+      assurance = tarificationService.calculerAssurance({
+        valeurDeclaree: colis.valeurDeclaree,
+        deviseValeur,
+        service,
+        parametres,
+        deviseCible: colis.devise,
+        tauxChange,
+      }).montant;
+    }
+
+    let droits = 0;
+    if (colis.incoterm === 'DDP') {
+      const declaration = await DeclarationDouane.findOne({
+        where: { colisId: colis.id },
+        transaction,
+      });
+      if (
+        declaration &&
+        Number(declaration.droitsEstimes) + Number(declaration.taxesEstimees) > 0
+      ) {
+        droits = arrondir(
+          Number(declaration.droitsEstimes) + Number(declaration.taxesEstimees),
+          colis.devise
+        );
+      } else {
+        const douane = tarificationService.calculerDroitsDouane({
+          international: colis.paysDepart !== colis.paysArrivee,
+          typeContenu: colis.typeContenu,
+          incoterm: colis.incoterm,
+          valeurDeclaree: colis.valeurDeclaree,
+          deviseValeur,
+          parametres,
+          deviseCible: colis.devise,
+          tauxChange,
+        });
+        droits = douane.applicable ? douane.total : 0;
+      }
+    }
+    return { assurance: Number(assurance) || 0, droits: Number(droits) || 0 };
   };
 
   /**
@@ -236,8 +334,9 @@ class ColisEtudeService {
         'en_attente_validation',
         'devis_propose',
       ]);
+      const extras = await ColisEtudeService.extrasProposition(verrouille, parametres, t);
       const calcul = ColisEtudeService.montantsDepuisTtc(verrouille, montantTotal, parametres, {
-        forfaitGlobal: true,
+        extras,
       });
 
       await verrouille.update(

@@ -26,7 +26,7 @@ exports.enregistrer = asyncHandler(async (req, res) => {
 
 exports.rembourser = asyncHandler(async (req, res) => {
   const result = await service.rembourser(req.params.id, req.body, req.user.id);
-  return ok(res, { paiement: result.paiement }, result.message);
+  return ok(res, { paiement: result.paiement, avoir: result.avoir }, result.message);
 });
 
 exports.marquerEchoue = asyncHandler(async (req, res) => {

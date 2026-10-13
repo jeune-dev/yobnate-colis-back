@@ -25,6 +25,15 @@ const METHODES_PAR_PAYS = {
   FR: ['carte', 'virement', 'paypal', 'especes'],
 };
 
+/**
+ * Moyens de paiement acceptés selon la devise de la facture : le mobile money
+ * sénégalais ne règle pas une facture en euros, PayPal pas une facture en francs CFA.
+ */
+const METHODES_PAR_DEVISE = {
+  XOF: ['wave', 'orange_money', 'free_money', 'carte', 'virement', 'especes'],
+  EUR: ['carte', 'virement', 'paypal', 'especes'],
+};
+
 const STATUTS_PAIEMENT = ['en_attente', 'succes', 'echoue', 'rembourse', 'partiel'];
 
 const STATUTS_FACTURE = [
@@ -64,6 +73,7 @@ module.exports = {
   DECIMALES_DEVISE,
   METHODES_PAIEMENT,
   METHODES_PAR_PAYS,
+  METHODES_PAR_DEVISE,
   STATUTS_PAIEMENT,
   STATUTS_FACTURE,
   TYPES_SURCHARGE,

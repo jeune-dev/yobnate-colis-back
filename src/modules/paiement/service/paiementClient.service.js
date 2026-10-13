@@ -6,6 +6,7 @@ const parametreService = require('../../parametre/service/parametre.service');
 const facturationService = require('../../facture/service/facturation.service');
 const documents = require('../../../templates/documents');
 const { METHODES_PAR_PAYS } = require('../../../config/facturation');
+const { FACTURES_DUES } = require('../../facture/service/avoir.service');
 
 /**
  * Espace facturation du client : consultation de ses factures, de ses règlements
@@ -32,9 +33,10 @@ class PaiementService {
     ...facture.toJSON(),
     soldeDu: facture.soldeDu,
     estEchue: facture.estEchue,
-    lienPaiement: ['en_attente', 'partiellement_payee'].includes(facture.statut)
-      ? facturationService.lienPaiement(facture, parametres)
-      : null,
+    lienPaiement:
+      facture.type !== 'avoir' && ['en_attente', 'partiellement_payee'].includes(facture.statut)
+        ? facturationService.lienPaiement(facture, parametres)
+        : null,
   });
 
   static getMesFactures = async (userId, filters = {}, pagination = {}) => {
@@ -101,13 +103,14 @@ class PaiementService {
   /** Récapitulatif de l'encours du client, toutes devises confondues. */
   static getMonEncours = async (userId) => {
     const impayees = await Facture.findAll({
-      where: { userId, statut: { [Op.in]: ['en_attente', 'partiellement_payee'] } },
+      where: { userId, ...FACTURES_DUES },
       attributes: [
         'id',
         'reference',
         'devise',
         'montantTotal',
         'montantPaye',
+        'montantAvoirs',
         'dateLimitePaiement',
       ],
     });

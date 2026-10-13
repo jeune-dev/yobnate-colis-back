@@ -14,6 +14,9 @@ const {
   UserOtp,
   DemandeSuppression,
 } = require('../../../models');
+const { sendMail, gabarit } = require('../../../infrastructure/mailer');
+
+const echapperHtml = (valeur) => String(valeur).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const { STATUTS_TERMINAUX } = require('../../../config/colis');
 const { BadRequestError, ConflictError, NotFoundError } = require('../../../errors/AppError');
 const JWTUtils = require('../../../utils/jwtUtils');
@@ -189,6 +192,26 @@ class CompteService {
       entiteId: demande.id,
       lienCible: '/admin/suppressions-compte',
     });
+    // Le titulaire est prévenu à son adresse : une demande déposée par un tiers se
+    // signale ainsi avant que l'administrateur ne la traite
+    const titulaire = await User.findOne({
+      where: { email: String(email).trim().toLowerCase() },
+      attributes: ['id', 'prenom', 'email'],
+    });
+    if (titulaire) {
+      await sendMail({
+        to: titulaire.email,
+        subject: 'Demande de suppression de votre compte Yobante Colis',
+        html: gabarit({
+          titre: 'Demande de suppression de compte',
+          corps: `<p>Bonjour ${echapperHtml(titulaire.prenom || '')},</p>
+            <p>Nous avons reçu une demande de suppression de votre compte Yobante Colis.
+            Elle sera traitée sous 30 jours, après vérification de votre identité.</p>
+            <p><strong>Vous n'êtes pas à l'origine de cette demande ?</strong> Répondez à ce
+            message ou contactez notre service client : elle ne sera pas exécutée.</p>`,
+        }),
+      }).catch(() => {});
+    }
     // Réponse identique que le compte existe ou non : aucune énumération possible
     return {
       message:

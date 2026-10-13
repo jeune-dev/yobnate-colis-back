@@ -187,8 +187,4 @@ const versSvg = (
   );
 };
 
-/** Variante encodée en base64, directement insérable dans un attribut `src`. */
-const versDataUri = (texte, options) =>
-  `data:image/svg+xml;base64,${Buffer.from(versSvg(texte, options), 'utf8').toString('base64')}`;
-
-module.exports = { versSvg, versDataUri, encoder, largeurs, estEncodable };
+module.exports = { versSvg, encoder, largeurs, estEncodable };

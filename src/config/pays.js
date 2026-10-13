@@ -39,6 +39,4 @@ const estCorridorAutorise = (paysDepart, paysArrivee) =>
 
 const estInternational = (paysDepart, paysArrivee) => paysDepart !== paysArrivee;
 
-const getPays = (code) => PAYS[code] || null;
-
-module.exports = { PAYS, CODES_PAYS, estCorridorAutorise, estInternational, getPays };
+module.exports = { PAYS, CODES_PAYS, estCorridorAutorise, estInternational };

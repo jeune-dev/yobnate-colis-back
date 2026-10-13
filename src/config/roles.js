@@ -7,7 +7,6 @@ const ROLES = ['client', 'coursier', 'agent_point', 'admin', 'super_admin'];
 
 const ROLES_PERSONNEL = ['coursier', 'agent_point', 'admin', 'super_admin'];
 const ROLES_ADMIN = ['admin', 'super_admin'];
-const ROLES_OPERATIONNELS = ['coursier', 'agent_point', 'admin', 'super_admin'];
 
 const LIBELLES_ROLES = {
   client: 'Client',
@@ -23,7 +22,6 @@ module.exports = {
   ROLES,
   ROLES_PERSONNEL,
   ROLES_ADMIN,
-  ROLES_OPERATIONNELS,
   LIBELLES_ROLES,
   estAdmin,
 };

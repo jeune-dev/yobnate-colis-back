@@ -48,14 +48,6 @@ const bcryptConfig = {
   saltRounds: 12,
 };
 
-// MED-02 : politique de mot de passe renforcée
-const passwordPolicy = {
-  minLength: 8,
-  requireUppercase: true,
-  requireNumber: true,
-  requireSpecialChar: true,
-};
-
 // En développement, on désactive le rate limiting pour ne pas bloquer les tests
 // (un dashboard fait naturellement beaucoup de requêtes, doublées par React StrictMode).
 const _skipEnDev = () => process.env.NODE_ENV !== 'production';
@@ -110,7 +102,6 @@ const uploadConfig = {
 module.exports = {
   jwtConfig,
   bcryptConfig,
-  passwordPolicy,
   rateLimitConfig,
   authRateLimitConfig,
   corsConfig,

@@ -313,11 +313,6 @@ const corpsEtiquette = (colis, { piece = null, point = null } = {}) => {
   </div>`;
 };
 
-const genererEtiquette = (colis, options = {}) => {
-  const numero = options.piece?.numeroSuivi || colis.reference;
-  return page(`Étiquette ${numero}`, corpsEtiquette(colis, options), STYLE_ETIQUETTE);
-};
-
 /** Planche regroupant les étiquettes de toutes les pièces d'une expédition. */
 const genererEtiquettes = (colis, pieces = [], point = null) => {
   const liste = pieces.length ? pieces : [null];
@@ -446,7 +441,8 @@ const genererFactureTransport = (facture, colis, entreprise = {}) => {
     .join('');
   const client =
     facture.User?.nomComplet || `${facture.User?.prenom || ''} ${facture.User?.nom || ''}`.trim();
-  const solde = Number(facture.montantTotal) - Number(facture.montantPaye);
+  const solde =
+    Number(facture.montantTotal) - Number(facture.montantPaye) - Number(facture.montantAvoirs || 0);
 
   const contenu = `
     ${entete(entreprise, {
@@ -494,8 +490,17 @@ const genererFactureTransport = (facture, colis, entreprise = {}) => {
       <tr class="total"><td>Total à régler</td><td class="droite">${echapper(formater(facture.montantTotal, devise))}</td></tr>
       ${
         Number(facture.montantPaye) > 0
-          ? `<tr><td>Déjà réglé</td><td class="droite">${echapper(formater(facture.montantPaye, devise))}</td></tr>
-      <tr class="solde"><td>Solde dû</td><td class="droite">${echapper(formater(solde, devise))}</td></tr>`
+          ? `<tr><td>Déjà réglé</td><td class="droite">${echapper(formater(facture.montantPaye, devise))}</td></tr>`
+          : ''
+      }
+      ${
+        Number(facture.montantAvoirs || 0) > 0
+          ? `<tr><td>Avoirs imputés</td><td class="droite">- ${echapper(formater(facture.montantAvoirs, devise))}</td></tr>`
+          : ''
+      }
+      ${
+        Number(facture.montantPaye) > 0 || Number(facture.montantAvoirs || 0) > 0
+          ? `<tr class="solde"><td>Solde dû</td><td class="droite">${echapper(formater(Math.max(0, solde), devise))}</td></tr>`
           : ''
       }
     </table>
@@ -703,7 +708,6 @@ const genererInventaire = (inventaire, entreprise = {}) => {
 };
 
 module.exports = {
-  genererEtiquette,
   genererEtiquettes,
   genererFactureCommerciale,
   genererFactureTransport,

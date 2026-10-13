@@ -9,6 +9,7 @@ const documents = require('../../../templates/documents');
 const { genererRefRotation, genererNumeroManifeste } = require('../../../utils/referenceGenerator');
 const { estInternational, PAYS } = require('../../../config/pays');
 const { arrondir, convertir } = require('../../../utils/devise');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Rotations : les départs groupés qui relient physiquement les deux pays.
@@ -58,7 +59,7 @@ class RotationService {
     if (filters.dateDebut || filters.dateFin) {
       where.dateDepartPrevue = {};
       if (filters.dateDebut) where.dateDepartPrevue[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.dateDepartPrevue[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.dateDepartPrevue[Op.lte] = borneFin(filters.dateFin);
     }
 
     const { limit, offset } = paginate(pagination);

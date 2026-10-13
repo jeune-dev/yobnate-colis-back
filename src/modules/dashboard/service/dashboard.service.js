@@ -16,6 +16,7 @@ const simulationService = require('../../mesure/service/simulation.service');
 const cache = require('../../../utils/cache');
 const { STATUTS_COLIS } = require('../../../config/colis');
 const { PAYS } = require('../../../config/pays');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Tableau de bord administrateur.
@@ -44,7 +45,7 @@ class DashboardService {
    */
   /** Période d'analyse : 30 derniers jours par défaut. */
   static periode = ({ dateDebut, dateFin } = {}) => {
-    const fin = dateFin ? new Date(dateFin) : new Date();
+    const fin = dateFin ? borneFin(dateFin) : new Date();
     const debut = dateDebut ? new Date(dateDebut) : new Date(fin.getTime() - 30 * 24 * 3600 * 1000);
     const cle = `${debut.toISOString().slice(0, 10)}:${fin.toISOString().slice(0, 10)}`;
     return { debut, fin, cle };

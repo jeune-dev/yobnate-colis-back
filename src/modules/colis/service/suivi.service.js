@@ -18,6 +18,7 @@ const {
 const { PAYS } = require('../../../config/pays');
 const { ajouterJoursCalendaires } = require('../../../utils/delais');
 const { apresCommit } = require('../../../utils/transactions');
+const { genererCodeRetrait } = require('../../../utils/referenceGenerator');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
 const parametreService = require('../../parametre/service/parametre.service');
@@ -95,6 +96,9 @@ class SuiviService {
     return maj;
   };
 
+  /** Statuts où le colis a quitté tout point (transport international, tournée de livraison). */
+  static HORS_POINT = ['en_transit', 'en_livraison'];
+
   /** Champs relus sous verrou avant d'appliquer un événement (voir enregistrerEvenement). */
   static CHAMPS_VERROUILLES = [
     'statut',
@@ -119,6 +123,15 @@ class SuiviService {
     if (!transitionAutorisee(statutActuel, nouveauStatut)) {
       throw new BadRequestError(
         `Transition de statut invalide : ${statutActuel} vers ${nouveauStatut}`
+      );
+    }
+  };
+
+  /** Certains événements n'ont de sens qu'à une étape donnée (ex. refus par le destinataire). */
+  static verifierEtapeEvenement = (definition, statutActuel) => {
+    if (definition.depuis && !definition.depuis.includes(statutActuel)) {
+      throw new BadRequestError(
+        `« ${definition.libelle} » n'est pas possible au statut ${statutActuel}`
       );
     }
   };
@@ -155,6 +168,7 @@ class SuiviService {
 
     const definition = EVENEMENTS_SUIVI[codeEvenement];
     if (!definition) throw new BadRequestError(`Code d'événement inconnu : ${codeEvenement}`);
+    SuiviService.verifierEtapeEvenement(definition, colis.statut);
 
     // Contrôle anticipé (sans transaction) pour refuser vite une transition invalide ;
     // il est refait sous verrou ci-dessous, sur l'état réel en base.
@@ -176,6 +190,7 @@ class SuiviService {
         colis.changed(champ, false);
       }
       const nouveauStatut = statutForce || definition.statut || colis.statut;
+      SuiviService.verifierEtapeEvenement(definition, colis.statut);
       SuiviService.verifierTransition(colis.statut, nouveauStatut);
 
       const ancienPointId = colis.pointActuelId;
@@ -191,13 +206,24 @@ class SuiviService {
       if (codeEvenement === 'ANNULE') maj.annuleMotif = motif || commentaire || null;
       if (nouveauStatut === 'incident') maj.motifIncident = motif || commentaire || null;
 
-      // Un colis livré, retiré ou retourné ne réside plus dans aucun point
-      if (statutEstTerminal(nouveauStatut)) maj.pointActuelId = null;
+      // Un colis livré, retiré ou retourné, parti à l'international ou confié au
+      // coursier de distribution ne réside plus dans aucun point
+      if (statutEstTerminal(nouveauStatut) || SuiviService.HORS_POINT.includes(nouveauStatut)) {
+        maj.pointActuelId = null;
+      }
+
+      // Mis à disposition sans code (colis prévu en livraison à domicile, replié en
+      // point) : un code est créé, sans quoi n'importe qui pourrait le retirer
+      if (codeEvenement === 'DISPO' && !colis.codeRetrait) {
+        maj.codeRetrait = genererCodeRetrait();
+      }
 
       await colis.update(maj, { transaction });
+      // `null` est une sortie de point : ne pas retomber sur l'ancien point (le stock
+      // du point quitté n'était alors jamais décrémenté)
       await SuiviService.majStockPoints(
         ancienPointId,
-        maj.pointActuelId ?? ancienPointId,
+        'pointActuelId' in maj ? maj.pointActuelId : ancienPointId,
         transaction
       );
 
@@ -273,7 +299,11 @@ class SuiviService {
         notificationService.notifier({
           userId: colis.userId,
           titre: `Colis ${colis.reference} — ${evenement.libelle}`,
-          message: evenement.lieu ? `${evenement.libelle} · ${evenement.lieu}` : evenement.libelle,
+          message:
+            (evenement.lieu ? `${evenement.libelle} · ${evenement.lieu}` : evenement.libelle) +
+            (codeEvenement === 'DISPO' && colis.codeRetrait
+              ? ` · Code de retrait : ${colis.codeRetrait}`
+              : ''),
           type: 'colis',
           niveau: nouveauStatut === 'incident' ? 'critique' : 'info',
           entite: 'Colis',

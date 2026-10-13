@@ -94,13 +94,13 @@ describeDb('Périmètre du personnel (base réelle)', () => {
       const autrePoint = await request(app)
         .post(`/admin/paiements/factures/${facture.id}`)
         .set('Authorization', entete)
-        .send({ methode: 'wave', montant: 10, pointCollecteId: pointB.id });
+        .send({ methode: 'especes', montant: 10, pointCollecteId: pointB.id });
       expect(autrePoint.status).toBe(403);
 
       const res = await request(app)
         .post(`/admin/paiements/factures/${facture.id}`)
         .set('Authorization', entete)
-        .send({ methode: 'wave', montant: 10 });
+        .send({ methode: 'especes', montant: 10 });
       expect(res.status).toBe(201);
       expect(res.body.data.paiement.pointCollecteId).toBe(pointA.id);
     });
@@ -110,7 +110,7 @@ describeDb('Périmètre du personnel (base réelle)', () => {
       const res = await request(app)
         .post(`/admin/paiements/factures/${facture.id}`)
         .set('Authorization', await f.jeton(agentA))
-        .send({ methode: 'wave', montant: 10 });
+        .send({ methode: 'especes', montant: 10 });
       expect(res.status).toBe(404);
       expect(await f.models.Paiement.count({ where: { factureId: facture.id } })).toBe(0);
     });

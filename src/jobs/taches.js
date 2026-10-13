@@ -4,6 +4,7 @@ const logger = require('../utils/logger');
 const suiviService = require('../modules/colis/service/suivi.service');
 const notificationService = require('../modules/notification/service/notification.service');
 const factureService = require('../modules/facture/service/facture.service');
+const { FACTURES_DUES } = require('../modules/facture/service/avoir.service');
 const { cleanupExpiredTokens } = require('./cleanupExpiredTokens.job');
 const visiteService = require('../modules/mesure/service/visite.service');
 const simulationService = require('../modules/mesure/service/simulation.service');
@@ -109,7 +110,7 @@ const JOURS_RELANCE = [1, 7, 14, 30];
 const relancerFacturesEchues = async () => {
   const echues = await Facture.findAll({
     where: {
-      statut: { [Op.in]: ['en_attente', 'partiellement_payee'] },
+      ...FACTURES_DUES,
       dateLimitePaiement: { [Op.in]: JOURS_RELANCE.map(ilYA) },
     },
     attributes: ['id'],

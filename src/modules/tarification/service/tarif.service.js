@@ -258,7 +258,11 @@ class TarifService {
     ]);
 
     const codesPays = Object.keys(PAYS);
-    const corridors = codesPays.flatMap((d) => codesPays.map((a) => ({ depart: d, arrivee: a })));
+    // Corridors internationaux seulement : aucun service intérieur n'est proposé, un
+    // trajet France → France sans tarif n'est pas une anomalie
+    const corridors = codesPays
+      .flatMap((d) => codesPays.map((a) => ({ depart: d, arrivee: a })))
+      .filter(({ depart, arrivee }) => depart !== arrivee);
     const anomalies = [];
 
     for (const service of services) {

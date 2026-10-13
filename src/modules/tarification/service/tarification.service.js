@@ -638,6 +638,18 @@ class TarificationService {
       );
     }
 
+    // Marchandises dangereuses : interdites en fret aérien, sans objet pour des documents
+    if (marchandiseDangereuse && service.modeTransport === 'aerien') {
+      throw new BadRequestError(
+        `Les marchandises dangereuses ne sont pas acceptées en fret aérien (service « ${service.nom} »)`
+      );
+    }
+    if (marchandiseDangereuse && categorie === 'documents') {
+      throw new BadRequestError(
+        'Un envoi de documents ne peut pas contenir de marchandise dangereuse'
+      );
+    }
+
     // 1. Grille forfaitaire éventuelle : colonne Dakar ou autres régions
     const villeSn = TarificationService.villeSenegalaise(villeDepart, villeArrivee);
     const zoneDakar = Boolean(villeSn?.zoneTarifDakar);
@@ -947,6 +959,9 @@ class TarificationService {
         offres.push(
           await TarificationService.calculerDevis({
             ...params,
+            // Le devis reçoit `poidsKg` (comme la déclaration) ; le moteur attend
+            // `poidsReelKg` : sans cette reprise, le poids était ignoré (0,5 kg facturé)
+            poidsReelKg: params.poidsReelKg ?? (params.pieces?.length ? null : params.poidsKg),
             service,
             villeDepart,
             villeArrivee,

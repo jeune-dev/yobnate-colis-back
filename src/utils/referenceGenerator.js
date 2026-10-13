@@ -134,8 +134,9 @@ const genererNumeroSuiviYobante = async ({
 const genererNumeroPiece = (numeroSuivi, ordre) =>
   `${numeroSuivi}-${String(ordre).padStart(2, '0')}`;
 
-const genererRefColis = () => genererNumeroSuivi();
 const genererRefFacture = (transaction = null) => referenceAnnuelle('FAC', { transaction });
+/** Avoirs : séquence propre, pour ne laisser ni trou dans les FAC ni doublon entre AVO. */
+const genererRefAvoir = (transaction = null) => referenceAnnuelle('AVO', { transaction });
 const genererRefPaiement = (transaction = null) => referenceAnnuelle('PAY', { transaction });
 const genererRefRotation = (transaction = null) =>
   referenceAnnuelle('ROT', { longueur: 4, transaction });
@@ -164,8 +165,8 @@ module.exports = {
   genererNumeroSuiviYobante,
   initialesClient,
   genererNumeroPiece,
-  genererRefColis,
   genererRefFacture,
+  genererRefAvoir,
   genererRefPaiement,
   genererRefRotation,
   genererRefEnlevement,

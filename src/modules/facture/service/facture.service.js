@@ -9,7 +9,8 @@ const documents = require('../../../templates/documents');
 const { versCsv } = require('../../../utils/csv');
 const { arrondir } = require('../../../utils/devise');
 const { sendFactureEmail } = require('../../../infrastructure/mailer');
-const { genererRefFacture } = require('../../../utils/referenceGenerator');
+const avoirService = require('./avoir.service');
+const { borneFin } = require('../../../utils/periode');
 
 /**
  * Facturation.
@@ -75,16 +76,16 @@ class FactureService {
     if (filters.payeur) where.payeur = filters.payeur;
     if (filters.reference) where.reference = { [Op.iLike]: `%${filters.reference}%` };
     if (filters.impayees === 'true' || filters.impayees === true) {
-      where.statut = { [Op.in]: ['en_attente', 'partiellement_payee'] };
+      Object.assign(where, avoirService.FACTURES_DUES);
     }
     if (filters.echues === 'true' || filters.echues === true) {
-      where.statut = { [Op.in]: ['en_attente', 'partiellement_payee'] };
+      Object.assign(where, avoirService.FACTURES_DUES);
       where.dateLimitePaiement = { [Op.lt]: new Date().toISOString().slice(0, 10) };
     }
     if (filters.dateDebut || filters.dateFin) {
       where.createdAt = {};
       if (filters.dateDebut) where.createdAt[Op.gte] = new Date(filters.dateDebut);
-      if (filters.dateFin) where.createdAt[Op.lte] = new Date(filters.dateFin);
+      if (filters.dateFin) where.createdAt[Op.lte] = borneFin(filters.dateFin);
     }
     return where;
   };
@@ -145,8 +146,10 @@ class FactureService {
     }
 
     const totaux = FactureService.recalculerTotal(facture, { remise: montantRemise });
-    if (totaux.montantTotal < Number(facture.montantPaye)) {
-      throw new BadRequestError('Le nouveau total serait inférieur au montant déjà encaissé');
+    if (totaux.montantTotal < Number(facture.montantPaye) + Number(facture.montantAvoirs)) {
+      throw new BadRequestError(
+        'Le nouveau total serait inférieur au montant déjà encaissé ou compensé par avoir'
+      );
     }
 
     await facture.update({ ...totaux, motifRemise: motif });
@@ -229,43 +232,24 @@ class FactureService {
       throw new BadRequestError("L'avoir ne peut pas dépasser le montant de la facture d'origine");
     }
 
-    const avoir = await sequelize.transaction(async (t) => {
-      // Facture d'origine verrouillée : deux avoirs émis en même temps sont sérialisés,
-      // et le cumul des avoirs déjà émis est relu avant d'en accepter un nouveau.
-      await Facture.findByPk(id, { attributes: ['id'], lock: t.LOCK.UPDATE, transaction: t });
-      const dejaAccorde = Number(
-        (await Facture.sum('montantTotal', {
-          where: { factureOrigineId: id, type: 'avoir' },
-          transaction: t,
-        })) || 0
-      );
-      const reste = arrondir(Number(facture.montantTotal) - dejaAccorde, facture.devise);
-      if (montantAvoir > reste) {
-        throw new BadRequestError(
-          `L'avoir dépasse le montant encore compensable de la facture (${reste} ${facture.devise}, ${dejaAccorde} déjà accordés)`
-        );
-      }
-      const reference = await genererRefFacture(t);
-      return Facture.create(
-        {
-          reference: reference.replace('FAC-', 'AVO-'),
-          userId: facture.userId,
-          colisId: null,
-          factureOrigineId: id,
-          type: 'avoir',
-          devise: facture.devise,
-          montantHt: montantAvoir,
-          montantTotal: montantAvoir,
-          statut: 'en_attente',
-          lignes: [
-            { libelle: `Avoir sur facture ${facture.reference} — ${motif}`, montant: montantAvoir },
-          ],
-          mentions: `Avoir émis sur la facture ${facture.reference}`,
-          emisePar: adminId,
-        },
-        { transaction: t }
-      );
-    });
+    if (facture.type === 'avoir') throw new BadRequestError('Un avoir ne se compense pas');
+    if (['annulee', 'brouillon'].includes(facture.statut)) {
+      throw new BadRequestError(`Un avoir ne s'émet pas sur une facture ${facture.statut}`);
+    }
+
+    // Imputé sur la facture d'origine (verrouillée), dans la séquence propre des avoirs
+    const { avoir } = await sequelize.transaction((t) =>
+      avoirService.emettre({
+        factureOrigineId: id,
+        userId: facture.userId,
+        devise: facture.devise,
+        montant: montantAvoir,
+        libelle: `Avoir sur facture ${facture.reference} — ${motif}`,
+        mentions: `Avoir émis sur la facture ${facture.reference}`,
+        emisePar: adminId,
+        transaction: t,
+      })
+    );
 
     await notificationService.notifier({
       userId: facture.userId,
@@ -292,6 +276,8 @@ class FactureService {
   /** Relance le client sur une facture échue. */
   static relancer = async (id, adminId) => {
     const facture = await FactureService.chargerFacture(id);
+    if (facture.type === 'avoir')
+      throw new BadRequestError('Un avoir ne fait pas l’objet de relance');
     if (facture.estSoldee) throw new BadRequestError('Cette facture est déjà soldée');
 
     await notificationService.notifier({
@@ -321,7 +307,7 @@ class FactureService {
   static relancerEchues = async (adminId) => {
     const echues = await Facture.findAll({
       where: {
-        statut: { [Op.in]: ['en_attente', 'partiellement_payee'] },
+        ...avoirService.FACTURES_DUES,
         dateLimitePaiement: { [Op.lt]: new Date().toISOString().slice(0, 10) },
       },
       include: [{ model: User, attributes: ['id', 'email', 'prenom', 'notificationsEmail'] }],
@@ -450,10 +436,10 @@ class FactureService {
         raw: true,
       }),
       Facture.findAll({
-        where: { statut: { [Op.in]: ['en_attente', 'partiellement_payee'] } },
+        where: avoirService.FACTURES_DUES,
         attributes: [
           'devise',
-          [sequelize.fn('SUM', sequelize.literal('"montantTotal" - "montantPaye"')), 'solde'],
+          [sequelize.fn('SUM', sequelize.literal(avoirService.SQL_SOLDE_DU)), 'solde'],
         ],
         group: ['devise'],
         raw: true,

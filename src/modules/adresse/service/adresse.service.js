@@ -43,14 +43,26 @@ class AdresseService {
 
   static getMesAdresses = async (userId, filters = {}, pagination = {}) => {
     const where = { userId };
-    if (filters.type) where[Op.or] = [{ type: filters.type }, { type: 'les_deux' }];
+    // Chaque critère est un bloc distinct : type et recherche ne s'écrasent plus
+    const criteres = [];
+    if (filters.type) criteres.push({ [Op.or]: [{ type: filters.type }, { type: 'les_deux' }] });
     if (filters.pays) where.pays = filters.pays;
-    if (filters.search) {
-      where[Op.or] = [
-        { libelle: { [Op.iLike]: `%${filters.search}%` } },
-        { nom: { [Op.iLike]: `%${filters.search}%` } },
+    const search = typeof filters.search === 'string' ? filters.search.trim().slice(0, 100) : '';
+    if (search) {
+      // Caractères joker de LIKE neutralisés : « 50% » cherche littéralement « 50% »
+      const motif = `%${search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      const ou = [
+        { libelle: { [Op.iLike]: motif } },
+        { nom: { [Op.iLike]: motif } },
+        { entreprise: { [Op.iLike]: motif } },
       ];
+      // Numéro saisi avec ou sans espaces / indicatif : « 77 123 45 » trouve +2217712345…
+      // Le 0 national en tête (06…, 07…) est ignoré : les numéros sont enregistrés en +33 / +221
+      const chiffres = search.replace(/\D/g, '').replace(/^0+/, '');
+      if (chiffres.length >= 3) ou.push({ telephone: { [Op.like]: `%${chiffres}%` } });
+      criteres.push({ [Op.or]: ou });
     }
+    if (criteres.length) where[Op.and] = criteres;
 
     const { limit, offset } = paginate(pagination);
     const { rows, count } = await Adresse.findAndCountAll({

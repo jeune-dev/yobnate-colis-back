@@ -20,6 +20,8 @@ const recordPaiementSchema = Joi.object({
 const rembourserSchema = Joi.object({
   montant: Joi.number().positive().precision(2).allow(null),
   motif: Joi.string().min(3).max(255).required(),
+  /** Vrai : la somme rendue redevient due. Faux (défaut) : un avoir l'efface de la facture. */
+  rouvrirFacture: Joi.boolean().default(false),
 });
 
 const marquerEchoueSchema = Joi.object({
