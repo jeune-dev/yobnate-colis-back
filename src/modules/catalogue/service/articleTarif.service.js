@@ -2,6 +2,11 @@ const { ArticleTarif } = require('../../../models');
 const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
 const { uploadFile, deleteFile } = require('../../../infrastructure/r2.service');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
+const parametreService = require('../../parametre/service/parametre.service');
+const { convertir } = require('../../../utils/devise');
+
+/** Devise dans laquelle on affiche l'équivalent d'un prix (EUR <-> FCFA). */
+const DEVISE_EQUIVALENTE = { EUR: 'XOF', XOF: 'EUR' };
 
 /**
  * Grille forfaitaire (« Nature du colis ») : prix fixes par article, livraison
@@ -41,7 +46,33 @@ class ArticleTarifService {
       attributes: { exclude: ['photoPublicId', 'createdAt', 'updatedAt'] },
       order: ArticleTarifService.ORDRE,
     });
-    return { message: 'Nos tarifs', articles };
+    // Équivalent dans l'autre devise, au taux paramétré : l'application l'affiche
+    // sous chaque prix sans jamais faire la conversion elle-même.
+    const taux = (await parametreService.chargerTous()).taux_change_eur_xof;
+    return {
+      message: 'Nos tarifs',
+      articles: articles.map((a) => {
+        const article = a.toJSON();
+        const deviseEquivalente = DEVISE_EQUIVALENTE[article.devise];
+        if (!deviseEquivalente) return article;
+        return {
+          ...article,
+          deviseEquivalente,
+          prixDakarEquivalent: convertir(
+            article.prixDakar,
+            article.devise,
+            deviseEquivalente,
+            taux
+          ),
+          prixAutresRegionsEquivalent: convertir(
+            article.prixAutresRegions,
+            article.devise,
+            deviseEquivalente,
+            taux
+          ),
+        };
+      }),
+    };
   };
 
   static charger = async (id) => {

@@ -10,6 +10,7 @@ const emballageService = require('../../catalogue/service/emballage.service');
 const tourneeService = require('../../catalogue/service/tourneeCollecte.service');
 const annonceService = require('../../catalogue/service/annonce.service');
 const { REGLES_CATEGORIE } = require('../../../config/colis');
+const { convertir } = require('../../../utils/devise');
 const asyncHandler = require('../../../middlewares/asyncHandler');
 const { ok } = require('../../../utils/response');
 const { lireVisiteurId } = require('../../../utils/visiteur');
@@ -77,7 +78,14 @@ exports.configuration = asyncHandler(async (req, res) => {
           grilleFrance: p.grille_enlevement_domicile_fr || [],
           fraisSenegalXof: p.frais_enlevement_domicile_xof,
         },
-        colissimo: { active: p.option_colissimo_active, grille: p.grille_colissimo || [] },
+        colissimo: {
+          active: p.option_colissimo_active,
+          // prixHtXof : équivalent FCFA au taux paramétré, affiché sous le prix en euros
+          grille: (p.grille_colissimo || []).map((palier) => ({
+            ...palier,
+            prixHtXof: convertir(palier.prixHt, 'EUR', 'XOF', p.taux_change_eur_xof),
+          })),
+        },
         prixForfaitsTtc: p.prix_forfaits_ttc,
         delaiEtudeHeures: p.delai_etude_demande_heures,
         parrainage: {
