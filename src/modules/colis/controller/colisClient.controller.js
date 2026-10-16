@@ -1,5 +1,6 @@
 const service = require('../service/colisClient.service');
 const declarationService = require('../service/colisDeclaration.service');
+const remiseService = require('../service/remise.service');
 const asyncHandler = require('../../../middlewares/asyncHandler');
 const { ok, created } = require('../../../utils/response');
 const { lireVisiteurId } = require('../../../utils/visiteur');
@@ -108,4 +109,9 @@ exports.factureCommerciale = asyncHandler(async (req, res) => {
   const result = await service.getFactureCommerciale(req.user.id, req.params.id);
   res.setHeader('Content-Disposition', `inline; filename="${result.nomFichier}"`);
   return res.status(200).type('html').send(result.html);
+});
+
+exports.confirmerRemise = asyncHandler(async (req, res) => {
+  const result = await remiseService.confirmer(req.user.id, req.params.id, req.body.code);
+  return ok(res, { colis: result.colis }, result.message);
 });

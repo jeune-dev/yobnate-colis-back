@@ -395,7 +395,17 @@ const listeColisAdminQuery = listeQuery({
   sortOrder: filtres.sortOrder,
 });
 
+/** Code de remise affiché par l'agent, saisi par le destinataire. */
+const confirmerRemiseSchema = Joi.object({
+  code: Joi.string()
+    .trim()
+    .pattern(/^\d{6}$/)
+    .required()
+    .messages({ 'string.pattern.base': 'Le code de remise compte six chiffres' }),
+});
+
 module.exports = {
+  confirmerRemiseSchema,
   listeColisAdminQuery,
   listeColisClientQuery,
   listeColisRecusQuery,

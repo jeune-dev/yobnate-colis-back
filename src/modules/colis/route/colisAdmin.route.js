@@ -39,6 +39,29 @@ router.get('/statistiques', ctrl.statistiques);
 router.get('/export', admin, validate(listeColisAdminQuery, 'query'), ctrl.exporter);
 router.get('/codes-evenements', ctrl.codesEvenements);
 router.get('/recherche/:numero', ctrl.rechercher);
+/**
+ * @swagger
+ * /admin/colis/{id}:
+ *   get:
+ *     tags: [Admin — Colis]
+ *     summary: Détail d'une expédition (masqué pour le personnel de terrain)
+ *     description: >-
+ *       Outre le colis, la réponse indique `evenementsPossibles` pour l'utilisateur et,
+ *       quand le colis attend sa remise (disponible_retrait, en_livraison) :
+ *       `destinataireACompte` (la remise se confirme dans l'application du
+ *       destinataire, voir `code-remise`) et `reglementAvantRemise` (solde à
+ *       encaisser avant toute remise ; faux en paiement différé).
+ *     responses:
+ *       200:
+ *         description: Détail de l'expédition
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Détail de l'expédition
+ *               data:
+ *                 colis: { id: "3f0c…", statut: disponible_retrait, destinataireACompte: true, reglementAvantRemise: false }
+ */
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/etiquettes', validate(uuidParam, 'params'), ctrl.etiquettes);
 router.get('/:id/bordereau', validate(uuidParam, 'params'), ctrl.bordereau);
@@ -105,6 +128,32 @@ router.post(
   ctrl.ajouterNoteInterne
 );
 router.post('/:id/code-retrait', admin, validate(uuidParam, 'params'), ctrl.regenererCodeRetrait);
+/**
+ * @swagger
+ * /admin/colis/{id}/code-remise:
+ *   post:
+ *     tags: [Admin — Colis]
+ *     summary: Afficher un code de remise au destinataire titulaire d'un compte
+ *     description: >-
+ *       Code à six chiffres, valable dix minutes, à montrer au destinataire qui le
+ *       saisit dans son application (`POST /client/colis/recus/{id}/confirmer-remise`).
+ *       Un nouveau code remplace le précédent. `codeEvenement` vaut RETIRE au point
+ *       et LIVRE en livraison. Sans l'application, le personnel de terrain remet
+ *       avec le code de retrait (événement classique, tracé au journal).
+ *     responses:
+ *       200:
+ *         description: Code généré
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "Montrez ce code au destinataire : il le saisit dans son application."
+ *               data: { code: "482913", codeEvenement: RETIRE, expireLe: "2026-10-16T10:10:00.000Z" }
+ *       400: { description: "Colis pas en attente de remise, destinataire sans compte ou facture impayée" }
+ *       403: { description: Remise hors de la mission de l'utilisateur }
+ */
+// Code à usage unique que le destinataire saisit dans son application à la remise
+router.post('/:id/code-remise', validate(uuidParam, 'params'), ctrl.genererCodeRemise);
 
 router.put(
   '/:id',

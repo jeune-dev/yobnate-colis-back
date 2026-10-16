@@ -16,6 +16,7 @@ const {
   Emballage,
   TourneeCollecte,
   DemandeEnlevement,
+  Avis,
 } = require('../../../models');
 const {
   BadRequestError,
@@ -185,9 +186,23 @@ class ColisService {
       offset,
     });
 
+    // Avis déjà déposés par ce destinataire sur la page affichée
+    const evalues = new Set(
+      (
+        await Avis.findAll({
+          where: { userId, colisId: rows.map((c) => c.id) },
+          attributes: ['colisId'],
+        })
+      ).map((a) => a.colisId)
+    );
+
     return {
       message: 'Colis reçus',
-      colis: rows.map((c) => ({ ...c.toJSON(), enRetard: c.estEnRetard })),
+      colis: rows.map((c) => ({
+        ...c.toJSON(),
+        enRetard: c.estEnRetard,
+        avisDonne: evalues.has(c.id),
+      })),
       pagination: paginateResult(count, pagination.page, pagination.limit),
     };
   };

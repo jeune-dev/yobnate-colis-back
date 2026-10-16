@@ -121,3 +121,12 @@ exports.codesEvenements = asyncHandler((req, res) => {
   const result = service.getCodesEvenements(req.user);
   return ok(res, { evenements: result.evenements }, result.message);
 });
+
+exports.genererCodeRemise = asyncHandler(async (req, res) => {
+  const result = await service.genererCodeRemise(req.params.id, req.user);
+  return ok(
+    res,
+    { code: result.code, codeEvenement: result.codeEvenement, expireLe: result.expireLe },
+    result.message
+  );
+});

@@ -22,6 +22,7 @@ const { paginate, paginateResult, listerPagine } = require('../../../utils/pagin
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const { uploadFile } = require('../../../infrastructure/r2.service');
 const suiviService = require('./suivi.service');
+const remiseService = require('./remise.service');
 const tarificationService = require('../../tarification/service/tarification.service');
 const parametreService = require('../../parametre/service/parametre.service');
 const notificationService = require('../../notification/service/notification.service');
@@ -275,6 +276,14 @@ class ColisService {
       estInternational: colis.estInternational,
       transitionsPossibles: colis.transitionsPossibles,
       evenementsPossibles: ColisService.evenementsPossibles(colis, user),
+      // Remise à faire confirmer par le destinataire dans son application
+      destinataireACompte: remiseService.EVENEMENT_PAR_STATUT[colis.statut]
+        ? await remiseService.destinataireACompte(colis)
+        : false,
+      // Solde à encaisser avant toute remise (faux si le paiement différé est autorisé)
+      reglementAvantRemise: remiseService.EVENEMENT_PAR_STATUT[colis.statut]
+        ? (await ColisService.facturesBloquantRemise(colis)).length > 0
+        : false,
     };
     return {
       message: "Détail de l'expédition",
@@ -334,12 +343,25 @@ class ColisService {
     const remiseControlee =
       params.codeEvenement === 'RETIRE' ||
       (params.codeEvenement === 'LIVRE' && perimetre.restreint(auteur));
+    let sansApplication = false;
     if (remiseControlee) {
       // Un retrait en point exige toujours un code : un colis mis à disposition en
       // reçoit un (événement DISPO) ; sans code, le colis n'a pas été mis à disposition
       if (params.codeEvenement === 'RETIRE' && !colis.codeRetrait) {
         throw new BadRequestError(
           "Ce colis n'a pas de code de retrait : générez-en un et communiquez-le au destinataire"
+        );
+      }
+      // Destinataire titulaire d'un compte : il confirme normalement la remise dans
+      // son application (code affiché par l'agent). En secours (téléphone
+      // indisponible, remise à un proche), le personnel de terrain remet avec le code
+      // de retrait, contrôlé ci-dessous ; sans code de retrait, seul un
+      // administrateur peut passer outre.
+      sansApplication =
+        perimetre.restreint(auteur) && (await remiseService.destinataireACompte(colis));
+      if (sansApplication && !colis.codeRetrait) {
+        throw new BadRequestError(
+          'Le destinataire a un compte : faites-lui confirmer la remise dans son application, ou demandez à un administrateur'
         );
       }
       if (colis.codeRetrait) {
@@ -355,15 +377,22 @@ class ColisService {
       await ColisService.verifierReglementAvantRemise(colis, params, auteur);
     }
 
-    return suiviService.enregistrerEvenement(colis, params, { auteurId: adminId });
+    const result = await suiviService.enregistrerEvenement(colis, params, { auteurId: adminId });
+    // Tracé : la remise n'a pas été confirmée par le destinataire lui-même
+    if (sansApplication) {
+      await logActivity({
+        userId: auteur.id,
+        action: 'colis.remise.sans_application',
+        entite: 'Colis',
+        entiteId: colis.id,
+        details: { codeEvenement: params.codeEvenement },
+      });
+    }
+    return result;
   };
 
-  /**
-   * Un colis ne quitte nos mains qu'une fois sa facture réglée, sauf client autorisé
-   * au paiement différé. Un administrateur peut passer outre (`remiseSansReglement`),
-   * ce qui est tracé au journal ; le personnel de terrain, jamais.
-   */
-  static verifierReglementAvantRemise = async (colis, params, auteur) => {
+  /** Factures impayées qui empêchent la remise (aucune si le paiement différé est autorisé). */
+  static facturesBloquantRemise = async (colis) => {
     const factures = await Facture.findAll({
       where: {
         colisId: colis.id,
@@ -372,12 +401,22 @@ class ColisService {
       },
     });
     const impayees = factures.filter((f) => f.soldeDu > 0);
-    if (!impayees.length) return;
+    if (!impayees.length) return [];
 
     const client = colis.userId
       ? await User.findByPk(colis.userId, { attributes: ['id', 'paiementDiffereAutorise'] })
       : null;
-    if (client?.paiementDiffereAutorise) return;
+    return client?.paiementDiffereAutorise ? [] : impayees;
+  };
+
+  /**
+   * Un colis ne quitte nos mains qu'une fois sa facture réglée, sauf client autorisé
+   * au paiement différé. Un administrateur peut passer outre (`remiseSansReglement`),
+   * ce qui est tracé au journal ; le personnel de terrain, jamais.
+   */
+  static verifierReglementAvantRemise = async (colis, params, auteur) => {
+    const impayees = await ColisService.facturesBloquantRemise(colis);
+    if (!impayees.length) return;
 
     const detail = impayees.map((f) => `${f.reference} (${f.soldeDu} ${f.devise})`).join(', ');
     if (params.remiseSansReglement && auteur && !perimetre.restreint(auteur)) {
@@ -737,6 +776,9 @@ class ColisService {
 
     return { message: `Coursier affecté à la mission de ${mission}.`, colis };
   };
+
+  /** Code de remise à usage unique, affiché au destinataire titulaire d'un compte. */
+  static genererCodeRemise = (id, auteur) => remiseService.genererCode(id, auteur);
 
   /** Régénère le code de retrait, par exemple lorsque le destinataire l'a perdu. */
   static regenererCodeRetrait = async (id, adminId) => {

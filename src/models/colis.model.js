@@ -63,7 +63,22 @@ class Colis extends Model {
     if (this.estTermine || !this.dateLivraisonEstimee) return false;
     return new Date(this.dateLivraisonEstimee) < new Date();
   }
+
+  /** Le code de remise en cours n'est jamais renvoyé, même sous forme d'empreinte. */
+  toJSON() {
+    const json = super.toJSON();
+    for (const champ of Colis.CHAMPS_CODE_REMISE) delete json[champ];
+    return json;
+  }
 }
+
+Colis.CHAMPS_CODE_REMISE = [
+  'codeRemiseEmpreinte',
+  'codeRemiseEvenement',
+  'codeRemisePar',
+  'codeRemiseExpireLe',
+  'codeRemiseEchecs',
+];
 
 Colis.init(
   {
@@ -495,6 +510,16 @@ Colis.init(
       type: DataTypes.STRING(10),
       allowNull: true,
     },
+    /**
+     * Remise confirmée par le destinataire dans son application : code à usage
+     * unique affiché par l'agent ou le coursier au moment de la remise (empreinte
+     * seulement), événement visé (RETIRE ou LIVRE), auteur, expiration, échecs.
+     */
+    codeRemiseEmpreinte: { type: DataTypes.STRING(64), allowNull: true },
+    codeRemiseEvenement: { type: DataTypes.STRING(10), allowNull: true },
+    codeRemisePar: { type: DataTypes.UUID, allowNull: true },
+    codeRemiseExpireLe: { type: DataTypes.DATE, allowNull: true },
+    codeRemiseEchecs: { type: DataTypes.SMALLINT, allowNull: false, defaultValue: 0 },
 
     // ── Pièces jointes et annotations ──────────────────────────────────────
     photos: {
