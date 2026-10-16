@@ -9,7 +9,10 @@ const deposerAvisSchema = Joi.object({
   note: note.required(),
   titre: Joi.string().trim().max(120).allow('', null),
   commentaire: Joi.string().trim().max(1000).allow('', null),
-  colisId: Joi.string().uuid().allow(null),
+  // Un avis porte toujours sur une expédition envoyée ou reçue par le client
+  colisId: Joi.string().uuid().required().messages({
+    'any.required': 'Choisissez l’expédition que vous souhaitez évaluer',
+  }),
 });
 
 const modererAvisSchema = Joi.object({

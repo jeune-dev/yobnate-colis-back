@@ -14,6 +14,11 @@ exports.mesAvis = asyncHandler(async (req, res) => {
   return ok(res, { avis: result.avis }, result.message);
 });
 
+exports.aEvaluer = asyncHandler(async (req, res) => {
+  const result = await service.aEvaluer(req.user.id);
+  return ok(res, { colis: result.colis }, result.message);
+});
+
 exports.supprimerMonAvis = asyncHandler(async (req, res) => {
   const result = await service.supprimerMonAvis(req.user.id, req.params.id);
   return ok(res, null, result.message);

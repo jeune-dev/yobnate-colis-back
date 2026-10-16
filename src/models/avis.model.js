@@ -5,8 +5,9 @@ const sequelize = require('../config/db');
  * Avis client sur le service (cahier des charges : « Avis clients » du site
  * vitrine, « Nombre et qualité des évaluations » du tableau de bord).
  *
- * Un avis n'est publié qu'après modération par un administrateur. Il peut porter
- * sur une expédition précise (livrée ou retirée) : un seul avis par expédition.
+ * Un avis n'est publié qu'après modération par un administrateur. Il porte sur
+ * une expédition livrée ou retirée, envoyée ou reçue par son auteur : un seul avis
+ * par client et par expédition. Les anciens avis généraux gardent `colisId` nul.
  */
 class Avis extends Model {}
 
@@ -16,7 +17,7 @@ Avis.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     userId: { type: DataTypes.UUID, allowNull: false },
-    /** Expédition évaluée, facultative (avis général sur le service sinon). */
+    /** Expédition évaluée (obligatoire au dépôt ; nulle pour les anciens avis généraux). */
     colisId: { type: DataTypes.UUID, allowNull: true },
     note: { type: DataTypes.SMALLINT, allowNull: false, validate: { min: 1, max: 5 } },
     titre: { type: DataTypes.STRING(120), allowNull: true },
@@ -48,11 +49,11 @@ Avis.init(
           { name: 'id', order: 'DESC' },
         ],
       },
-      // Un seul avis par expédition
+      // Un seul avis par client et par expédition (expéditeur et destinataire notent chacun)
       {
-        name: 'avis_colis_id_unique',
+        name: 'avis_colis_id_user_id_unique',
         unique: true,
-        fields: ['colisId'],
+        fields: ['colisId', 'userId'],
         where: { colisId: { [Op.ne]: null } },
       },
     ],

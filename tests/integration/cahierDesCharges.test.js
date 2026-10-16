@@ -77,19 +77,50 @@ describeDb('Cahier des charges — avis, FAQ, mesure, marge, stock (base réelle
       expect(res.status).toBe(404);
     });
 
-    test('un seul avis général à la fois par client', async () => {
+    test('sans expédition, aucun avis : 400 et rien en base', async () => {
       const client = await f.creerUtilisateur();
-      const entete = await f.jeton(client);
+      const res = await request(app)
+        .post('/client/avis')
+        .set('Authorization', await f.jeton(client))
+        .send({ note: 5, commentaire: 'Super service' });
+      expect(res.status).toBe(400);
+      expect(await f.models.Avis.count({ where: { userId: client.id } })).toBe(0);
+    });
+
+    test('le destinataire évalue sa réception ; l’expéditeur garde son propre avis', async () => {
+      const expediteur = await f.creerUtilisateur();
+      const destinataire = await f.creerUtilisateur({ telephoneVerifie: true });
+      const colis = await f.creerColis(expediteur, {
+        statut: 'livre',
+        destinataireTelephone: destinataire.telephone,
+      });
+      const enteteDest = await f.jeton(destinataire);
+
+      const aEvaluer = await request(app)
+        .get('/client/avis/a-evaluer')
+        .set('Authorization', enteteDest);
+      expect(aEvaluer.status).toBe(200);
+      expect(aEvaluer.body.data.colis).toEqual([
+        expect.objectContaining({ id: colis.id, role: 'reception' }),
+      ]);
+
       await request(app)
         .post('/client/avis')
-        .set('Authorization', entete)
-        .send({ note: 4 })
+        .set('Authorization', enteteDest)
+        .send({ note: 5, colisId: colis.id })
         .expect(201);
-      const second = await request(app)
+      await request(app)
         .post('/client/avis')
-        .set('Authorization', entete)
-        .send({ note: 5 });
-      expect(second.status).toBe(409);
+        .set('Authorization', await f.jeton(expediteur))
+        .send({ note: 4, colisId: colis.id })
+        .expect(201);
+      expect(await f.models.Avis.count({ where: { colisId: colis.id } })).toBe(2);
+
+      // Déjà évaluée : elle sort de la liste
+      const apres = await request(app)
+        .get('/client/avis/a-evaluer')
+        .set('Authorization', enteteDest);
+      expect(apres.body.data.colis).toEqual([]);
     });
 
     test('note hors de 1 à 5 → 400', async () => {
@@ -97,7 +128,7 @@ describeDb('Cahier des charges — avis, FAQ, mesure, marge, stock (base réelle
       const res = await request(app)
         .post('/client/avis')
         .set('Authorization', await f.jeton(client))
-        .send({ note: 6 });
+        .send({ note: 6, colisId: randomUUID() });
       expect(res.status).toBe(400);
     });
 
@@ -134,10 +165,11 @@ describeDb('Cahier des charges — avis, FAQ, mesure, marge, stock (base réelle
 
     test('rejet : motif obligatoire, puis notification au client', async () => {
       const client = await f.creerUtilisateur();
+      const colis = await f.creerColis(client, { statut: 'livre' });
       const depot = await request(app)
         .post('/client/avis')
         .set('Authorization', await f.jeton(client))
-        .send({ note: 1, commentaire: 'Publicité hors sujet' });
+        .send({ note: 1, commentaire: 'Publicité hors sujet', colisId: colis.id });
       const id = depot.body.data.avis.id;
       await request(app)
         .patch(`/admin/avis/${id}/moderation`)

@@ -1,10 +1,16 @@
 const { Op } = require('sequelize');
 const { sequelize, Avis, Colis, User } = require('../../../models');
-const { BadRequestError, NotFoundError, ConflictError } = require('../../../errors/AppError');
+const {
+  BadRequestError,
+  NotFoundError,
+  ConflictError,
+  ForbiddenError,
+} = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
 const cache = require('../../../utils/cache');
 const { logActivity } = require('../../activityLog/service/activityLog.service');
 const notificationService = require('../../notification/service/notification.service');
+const parametreService = require('../../parametre/service/parametre.service');
 
 /**
  * Avis clients (cahier des charges : « Avis clients » du site vitrine et « Nombre
@@ -23,40 +29,62 @@ class AvisService {
   static nomPublic = (client) =>
     client ? `${client.prenom} ${String(client.nom || '').charAt(0)}.`.trim() : 'Client';
 
+  /**
+   * Conditions d'expédition visibles par le client : celles qu'il a envoyées et,
+   * si son numéro le permet (même règle que « Colis reçus »), celles qui lui sont
+   * adressées. `null` côté réception quand le numéro doit d'abord être vérifié.
+   */
+  static conditionsColisDuClient = async (userId) => {
+    const user = await User.findByPk(userId, {
+      attributes: ['id', 'telephone', 'telephoneVerifie'],
+    });
+    if (!user) throw new NotFoundError('Utilisateur introuvable');
+    const { verification_telephone_obligatoire: verificationExigee } =
+      await parametreService.chargerTous();
+    const reception =
+      user.telephone && (!verificationExigee || user.telephoneVerifie)
+        ? { destinataireTelephone: user.telephone }
+        : null;
+    return { envoi: { userId }, reception, telephone: user.telephone };
+  };
+
   static deposer = async (userId, { note, titre, commentaire, colisId }) => {
-    if (colisId) {
-      const colis = await Colis.findOne({
-        where: { id: colisId, userId },
-        attributes: ['id', 'statut'],
-      });
-      if (!colis) throw new NotFoundError('Expédition introuvable');
-      if (!AvisService.STATUTS_COLIS_EVALUABLES.includes(colis.statut)) {
-        throw new BadRequestError('Une expédition ne peut être évaluée qu’une fois livrée');
+    const { envoi, reception, telephone } = await AvisService.conditionsColisDuClient(userId);
+    const colis = await Colis.findOne({
+      where: { id: colisId, [Op.or]: reception ? [envoi, reception] : [envoi] },
+      attributes: ['id', 'statut', 'userId', 'destinataireTelephone'],
+    });
+    if (!colis) {
+      // Colis adressé au client, mais numéro pas encore vérifié : on l'explique
+      if (!reception && telephone) {
+        const adresse = await Colis.count({
+          where: { id: colisId, destinataireTelephone: telephone },
+        });
+        if (adresse) {
+          throw new ForbiddenError(
+            'Vérifiez votre numéro de téléphone pour évaluer les colis qui vous sont adressés'
+          );
+        }
       }
-    } else {
-      const enCours = await Avis.count({
-        where: { userId, colisId: null, statut: { [Op.in]: ['en_attente', 'publie'] } },
-      });
-      if (enCours) {
-        throw new ConflictError(
-          'Vous avez déjà donné un avis général : supprimez-le pour en déposer un nouveau'
-        );
-      }
+      throw new NotFoundError('Expédition introuvable');
+    }
+    if (!AvisService.STATUTS_COLIS_EVALUABLES.includes(colis.statut)) {
+      throw new BadRequestError('Une expédition ne peut être évaluée qu’une fois livrée');
     }
 
     let avis;
     try {
       avis = await Avis.create({
         userId,
-        colisId: colisId || null,
+        colisId,
         note,
         titre: titre || null,
         commentaire: commentaire || null,
       });
     } catch (err) {
-      // Unicité de l'avis par expédition, garantie par la base même en cas de double envoi
+      // Un avis par client et par expédition, garanti par la base même en cas de double envoi
       if (err.name === 'SequelizeUniqueConstraintError') {
-        throw new ConflictError('Cette expédition a déjà été évaluée');
+        throw new ConflictError('Vous avez déjà évalué cette expédition');
       }
       throw err;
     }
@@ -75,6 +103,49 @@ class AvisService {
       order: [['createdAt', 'DESC']],
     });
     return { message: 'Vos avis', avis };
+  };
+
+  /**
+   * Expéditions terminées, envoyées ou reçues par le client, qu'il n'a pas encore
+   * évaluées : ce sont les seules sur lesquelles il peut déposer un avis.
+   */
+  static aEvaluer = async (userId) => {
+    const { envoi, reception } = await AvisService.conditionsColisDuClient(userId);
+    const colis = await Colis.findAll({
+      where: {
+        statut: { [Op.in]: AvisService.STATUTS_COLIS_EVALUABLES },
+        [Op.or]: reception ? [envoi, reception] : [envoi],
+        id: {
+          [Op.notIn]: sequelize.literal(
+            `(SELECT "colisId" FROM avis WHERE "userId" = ${sequelize.escape(userId)}
+               AND "colisId" IS NOT NULL)`
+          ),
+        },
+      },
+      attributes: [
+        'id',
+        'reference',
+        'statut',
+        'userId',
+        'destinataireNom',
+        'expediteurNom',
+        'updatedAt',
+      ],
+      order: [['updatedAt', 'DESC']],
+      limit: 50,
+    });
+    return {
+      message: 'Expéditions à évaluer',
+      colis: colis.map((c) => ({
+        id: c.id,
+        reference: c.reference,
+        statut: c.statut,
+        // Le même client peut être expéditeur et destinataire : l'envoi prime
+        role: c.userId === userId ? 'envoi' : 'reception',
+        correspondant: c.userId === userId ? c.destinataireNom : c.expediteurNom,
+        date: c.updatedAt,
+      })),
+    };
   };
 
   static supprimerMonAvis = async (userId, id) => {

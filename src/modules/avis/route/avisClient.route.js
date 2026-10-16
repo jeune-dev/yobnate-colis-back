@@ -7,10 +7,14 @@ const { mutationRateLimit } = require('../../../middlewares/rateLimit.middleware
 const { deposerAvisSchema } = require('../validation/avis.validation');
 const { uuidParam } = require('../../../validations/common');
 
-/** Avis du client connecté : dépôt (modéré avant publication), consultation, retrait. */
+/**
+ * Avis du client connecté : expéditions à évaluer, dépôt (modéré avant
+ * publication, lié à une expédition envoyée ou reçue), consultation, retrait.
+ */
 router.use(auth, checkActiveUser);
 
 router.get('/', ctrl.mesAvis);
+router.get('/a-evaluer', ctrl.aEvaluer);
 router.post('/', mutationRateLimit, validate(deposerAvisSchema), ctrl.deposer);
 router.delete('/:id', validate(uuidParam, 'params'), ctrl.supprimerMonAvis);
 

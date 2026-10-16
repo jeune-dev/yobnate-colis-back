@@ -6703,14 +6703,61 @@
                     "maxLength": 1000
                   },
                   "colisId": {
-                    "nullable": true,
                     "type": "string",
                     "format": "uuid"
                   }
                 },
                 "required": [
-                  "note"
+                  "note",
+                  "colisId"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client/avis/a-evaluer": {
+      "get": {
+        "tags": [
+          "Client — Avis"
+        ],
+        "summary": "GET /client/avis/a-evaluer",
+        "description": "Authentification requise.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
               }
             }
           }
