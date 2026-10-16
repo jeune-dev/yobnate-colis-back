@@ -276,11 +276,15 @@
         "tags": [
           "Authentification"
         ],
-        "summary": "POST /auth/verify-email",
-        "description": "Route publique.",
+        "summary": "Confirmer l'adresse email avec le code reçu, et ouvrir la session",
+        "description": "Le compte créé par /auth/register reste fermé tant que ce code n'est pas confirmé (la connexion répond 403 avec `code: EMAIL_NON_CONFIRME`). Le code est invalidé après 5 essais erronés. En cas de succès, renvoie les jetons comme /auth/login.\n\n\nRoute publique.",
         "security": [],
         "parameters": [],
         "responses": {
+          "200": {
+            "description": "Adresse confirmée",
+            "session ouverte": null
+          },
           "201": {
             "description": "Succès",
             "content": {
@@ -292,14 +296,7 @@
             }
           },
           "400": {
-            "description": "Données invalides",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
+            "$ref": "#/components/responses/BadRequest"
           }
         },
         "requestBody": {
@@ -308,69 +305,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "properties": {
-                  "token": {
-                    "type": "string",
-                    "minLength": 64,
-                    "maxLength": 64
-                  }
-                },
                 "required": [
-                  "token"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    "/auth/verify-email/{token}": {
-      "get": {
-        "tags": [
-          "Authentification"
-        ],
-        "summary": "GET /auth/verify-email/:token",
-        "description": "Route publique.",
-        "security": [],
-        "parameters": [
-          {
-            "name": "token",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 64,
-              "maxLength": 64
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Succès",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccess"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Données invalides",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
+                  "email",
+                  "code"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{6}$"
+                  }
                 }
               }
             }
@@ -525,7 +472,8 @@
                 "type": "object",
                 "properties": {
                   "refreshToken": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 512
                   }
                 }
               }
@@ -714,7 +662,8 @@
                 "type": "object",
                 "properties": {
                   "oldPassword": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 128
                   },
                   "newPassword": {
                     "type": "string",
@@ -2326,7 +2275,110 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "en_attente_validation",
+                "devis_propose",
+                "refuse",
+                "en_attente",
+                "enlevement_planifie",
+                "enleve",
+                "receptionne",
+                "en_preparation",
+                "en_transit",
+                "en_douane",
+                "arrive",
+                "disponible_retrait",
+                "en_livraison",
+                "livre",
+                "recupere",
+                "retourne",
+                "incident",
+                "annule"
+              ]
+            }
+          },
+          {
+            "name": "categorie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documents",
+                "colis_moyen",
+                "colis_xxl"
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "enCours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -2334,6 +2386,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -2908,21 +2970,113 @@
         "tags": [
           "Client — Colis"
         ],
-        "summary": "GET /client/colis/recus",
-        "description": "Authentification requise.",
+        "summary": "Colis dont le client connecté est le destinataire",
+        "description": "Rapprochés par numéro de téléphone (vérifié si le paramètre l'exige). Chaque colis porte `enRetard` et `avisDonne` : le destinataire a déjà déposé son avis sur cette expédition (bouton « Donner mon avis » à masquer).\n\nAuthentification requise.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "en_attente_validation",
+                "devis_propose",
+                "refuse",
+                "en_attente",
+                "enlevement_planifie",
+                "enleve",
+                "receptionne",
+                "en_preparation",
+                "en_transit",
+                "en_douane",
+                "arrive",
+                "disponible_retrait",
+                "en_livraison",
+                "livre",
+                "recupere",
+                "retourne",
+                "incident",
+                "annule"
+              ]
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Succès",
+            "description": "Page de colis reçus",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Colis reçus",
+                  "data": {
+                    "colis": [
+                      {
+                        "id": "3f0c…",
+                        "reference": "PNCO0313102026AGU03",
+                        "statut": "recupere",
+                        "enRetard": false,
+                        "avisDonne": true
+                      }
+                    ],
+                    "pagination": {
+                      "page": 1,
+                      "limit": 20,
+                      "total": 1,
+                      "totalPages": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiSuccess"
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -2944,6 +3098,106 @@
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/client/colis/recus/{id}/confirmer-remise": {
+      "post": {
+        "tags": [
+          "Client — Colis"
+        ],
+        "summary": "Confirmer la réception avec le code affiché par l'agent ou le coursier",
+        "description": "Le code (six chiffres, valable dix minutes, usage unique) est généré par `POST /admin/colis/{id}/code-remise`. La remise est enregistrée (RETIRE ou LIVRE) au nom de l'agent qui l'a affiché. Cinq erreurs annulent le code ; un colis qui n'est plus en attente de remise, ou dont la facture reste impayée, est refusé (le code reste alors utilisable après règlement).\n\nAuthentification requise.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Réception confirmée",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Réception confirmée. Merci ! Vous pouvez maintenant donner votre avis.",
+                  "data": {
+                    "colis": {
+                      "id": "3f0c…",
+                      "reference": "PNCO0313102026AGU03",
+                      "statut": "recupere"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Code incorrect, expiré, déjà utilisé, trop d'essais, colis plus en attente de remise ou facture impayée"
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Accès refusé (rôle ou compte désactivé)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Colis inconnu ou adressé à un autre numéro"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^\\d{6}$"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
               }
             }
           }
@@ -3985,10 +4239,7 @@
                       "sms"
                     ]
                   },
-                  "destination": {
-                    "type": "string",
-                    "maxLength": 150
-                  },
+                  "destination": {},
                   "profil": {
                     "default": "destinataire",
                     "type": "string",
@@ -3998,10 +4249,7 @@
                       "tiers"
                     ]
                   }
-                },
-                "required": [
-                  "destination"
-                ]
+                }
               }
             }
           }
@@ -5035,7 +5283,50 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "en_attente",
+                "partiellement_payee",
+                "payee",
+                "annulee",
+                "remboursee"
+              ]
+            }
+          },
+          {
+            "name": "impayees",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -5043,6 +5334,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -5424,7 +5725,50 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "demande",
+                "planifie",
+                "en_cours",
+                "effectue",
+                "echoue",
+                "annule"
+              ]
+            }
+          },
+          {
+            "name": "enCours",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -5432,6 +5776,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -5530,8 +5884,7 @@
                     "maxLength": 120
                   },
                   "contactTelephone": {
-                    "type": "string",
-                    "maxLength": 20
+                    "type": "string"
                   },
                   "pays": {
                     "type": "string",
@@ -5802,8 +6155,7 @@
                     "maxLength": 120
                   },
                   "contactTelephone": {
-                    "type": "string",
-                    "maxLength": 20
+                    "type": "string"
                   },
                   "adresse": {
                     "type": "string",
@@ -8112,7 +8464,79 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "pays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "typeCompte",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "particulier",
+                "entreprise"
+              ]
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -8120,6 +8544,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -8513,7 +8947,79 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "client",
+                "coursier",
+                "agent_point",
+                "admin",
+                "super_admin"
+              ]
+            }
+          },
+          {
+            "name": "pays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "pointCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -8521,6 +9027,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9035,10 +9551,63 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "client",
+                "coursier",
+                "agent_point",
+                "admin",
+                "super_admin"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Liste des administrateurs"
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
@@ -9523,7 +10092,339 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "brouillon",
+                    "en_attente_validation",
+                    "devis_propose",
+                    "refuse",
+                    "en_attente",
+                    "enlevement_planifie",
+                    "enleve",
+                    "receptionne",
+                    "en_preparation",
+                    "en_transit",
+                    "en_douane",
+                    "arrive",
+                    "disponible_retrait",
+                    "en_livraison",
+                    "livre",
+                    "recupere",
+                    "retourne",
+                    "incident",
+                    "annule"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "brouillon",
+                      "en_attente_validation",
+                      "devis_propose",
+                      "refuse",
+                      "en_attente",
+                      "enlevement_planifie",
+                      "enleve",
+                      "receptionne",
+                      "en_preparation",
+                      "en_transit",
+                      "en_douane",
+                      "arrive",
+                      "disponible_retrait",
+                      "en_livraison",
+                      "livre",
+                      "recupere",
+                      "retourne",
+                      "incident",
+                      "annule"
+                    ]
+                  },
+                  "maxItems": 20
+                }
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "villeDepartId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "villeArriveeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointActuelId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rotationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "coursierId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tourneeCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "expediteur",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "destinataire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "produit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "typeContenu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "document",
+                "marchandise",
+                "cadeau",
+                "echantillon",
+                "effets_personnels",
+                "retour"
+              ]
+            }
+          },
+          {
+            "name": "categorie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documents",
+                "colis_moyen",
+                "colis_xxl"
+              ]
+            }
+          },
+          {
+            "name": "modeDepot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point_collecte",
+                "enlevement_domicile",
+                "envoi_postal",
+                "boite_aux_lettres"
+              ]
+            }
+          },
+          {
+            "name": "aEtudier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "etudeEnRetard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sansRotation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enRetard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enSouffrance",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -9531,6 +10432,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9617,7 +10528,339 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "brouillon",
+                    "en_attente_validation",
+                    "devis_propose",
+                    "refuse",
+                    "en_attente",
+                    "enlevement_planifie",
+                    "enleve",
+                    "receptionne",
+                    "en_preparation",
+                    "en_transit",
+                    "en_douane",
+                    "arrive",
+                    "disponible_retrait",
+                    "en_livraison",
+                    "livre",
+                    "recupere",
+                    "retourne",
+                    "incident",
+                    "annule"
+                  ]
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "brouillon",
+                      "en_attente_validation",
+                      "devis_propose",
+                      "refuse",
+                      "en_attente",
+                      "enlevement_planifie",
+                      "enleve",
+                      "receptionne",
+                      "en_preparation",
+                      "en_transit",
+                      "en_douane",
+                      "arrive",
+                      "disponible_retrait",
+                      "en_livraison",
+                      "livre",
+                      "recupere",
+                      "retourne",
+                      "incident",
+                      "annule"
+                    ]
+                  },
+                  "maxItems": 20
+                }
+              ]
+            }
+          },
+          {
+            "name": "serviceId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "villeDepartId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "villeArriveeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointActuelId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "rotationId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "coursierId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "tourneeCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "expediteur",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "destinataire",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "produit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "typeContenu",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "document",
+                "marchandise",
+                "cadeau",
+                "echantillon",
+                "effets_personnels",
+                "retour"
+              ]
+            }
+          },
+          {
+            "name": "categorie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documents",
+                "colis_moyen",
+                "colis_xxl"
+              ]
+            }
+          },
+          {
+            "name": "modeDepot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "point_collecte",
+                "enlevement_domicile",
+                "envoi_postal",
+                "boite_aux_lettres"
+              ]
+            }
+          },
+          {
+            "name": "aEtudier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "etudeEnRetard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sansRotation",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enRetard",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enSouffrance",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -9625,6 +10868,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -9770,8 +11023,8 @@
         "tags": [
           "Admin — Colis"
         ],
-        "summary": "GET /admin/colis/:id",
-        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
+        "summary": "Détail d'une expédition (masqué pour le personnel de terrain)",
+        "description": "Outre le colis, la réponse indique `evenementsPossibles` pour l'utilisateur et, quand le colis attend sa remise (disponible_retrait, en_livraison) : `destinataireACompte` (la remise se confirme dans l'application du destinataire, voir `code-remise`) et `reglementAvantRemise` (solde à encaisser avant toute remise ; faux en paiement différé).\n\nAuthentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -9790,11 +11043,20 @@
         ],
         "responses": {
           "200": {
-            "description": "Succès",
+            "description": "Détail de l'expédition",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccess"
+                "example": {
+                  "success": true,
+                  "message": "Détail de l'expédition",
+                  "data": {
+                    "colis": {
+                      "id": "3f0c…",
+                      "statut": "disponible_retrait",
+                      "destinataireACompte": true,
+                      "reglementAvantRemise": false
+                    }
+                  }
                 }
               }
             }
@@ -10415,6 +11677,10 @@
                   "visiblePublic": {
                     "default": true,
                     "type": "boolean"
+                  },
+                  "remiseSansReglement": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -10595,6 +11861,10 @@
                   },
                   "visiblePublic": {
                     "default": true,
+                    "type": "boolean"
+                  },
+                  "remiseSansReglement": {
+                    "default": false,
                     "type": "boolean"
                   }
                 },
@@ -11320,6 +12590,85 @@
         }
       }
     },
+    "/admin/colis/{id}/code-remise": {
+      "post": {
+        "tags": [
+          "Admin — Colis"
+        ],
+        "summary": "Afficher un code de remise au destinataire titulaire d'un compte",
+        "description": "Code à six chiffres, valable dix minutes, à montrer au destinataire qui le saisit dans son application (`POST /client/colis/recus/{id}/confirmer-remise`). Un nouveau code remplace le précédent. `codeEvenement` vaut RETIRE au point et LIVRE en livraison. Sans l'application, le personnel de terrain remet avec le code de retrait (événement classique, tracé au journal).\n\nAuthentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Code généré",
+            "content": {
+              "application/json": {
+                "example": {
+                  "success": true,
+                  "message": "Montrez ce code au destinataire : il le saisit dans son application.",
+                  "data": {
+                    "code": "482913",
+                    "codeEvenement": "RETIRE",
+                    "expireLe": "2026-10-16T10:10:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Succès",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Colis pas en attente de remise, destinataire sans compte ou facture impayée"
+          },
+          "401": {
+            "description": "Jeton absent, invalide ou expiré",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Remise hors de la mission de l'utilisateur"
+          },
+          "404": {
+            "description": "Ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/admin/colis/{id}/point-retrait": {
       "patch": {
         "tags": [
@@ -11531,7 +12880,7 @@
           "Admin — Villes"
         ],
         "summary": "GET /admin/villes",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -11754,7 +13103,7 @@
           "Admin — Villes"
         ],
         "summary": "GET /admin/villes/:id",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -12141,7 +13490,7 @@
           "Admin — Zones"
         ],
         "summary": "GET /admin/zones",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -12298,7 +13647,7 @@
           "Admin — Zones"
         ],
         "summary": "GET /admin/zones/:id",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -12769,7 +14118,119 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "pays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "agence",
+                "point_relais",
+                "casier",
+                "hub",
+                "entrepot"
+              ]
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "depot",
+                "retrait",
+                "paiement",
+                "emballage",
+                "pesee",
+                "declaration_douane"
+              ]
+            }
+          },
+          {
+            "name": "villeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "visiblePublic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enMaintenance",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "enSouffrance",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -12777,6 +14238,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -14250,7 +15721,7 @@
           "Admin — Services"
         ],
         "summary": "GET /admin/services",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -14523,7 +15994,7 @@
           "Admin — Services"
         ],
         "summary": "GET /admin/services/:id",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -14945,7 +16416,7 @@
           "Admin — Tarifs"
         ],
         "summary": "GET /admin/tarifs",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -15190,7 +16661,7 @@
           "Admin — Tarifs"
         ],
         "summary": "GET /admin/tarifs/:id",
-        "description": "Authentification requise.",
+        "description": "Authentification requise — rôles : Coursier, Agent de point de collecte, Administrateur, Super administrateur.",
         "security": [
           {
             "bearerAuth": []
@@ -16792,7 +18263,105 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "planifiee",
+                "ouverte",
+                "cloturee",
+                "en_transit",
+                "arrivee",
+                "en_douane",
+                "dechargee",
+                "annulee"
+              ]
+            }
+          },
+          {
+            "name": "modeTransport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aerien",
+                "maritime",
+                "routier"
+              ]
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "ouvertes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -16800,6 +18369,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -16991,7 +18570,50 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -16999,6 +18621,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -17748,7 +19380,105 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "planifiee",
+                "ouverte",
+                "cloturee",
+                "en_transit",
+                "arrivee",
+                "en_douane",
+                "dechargee",
+                "annulee"
+              ]
+            }
+          },
+          {
+            "name": "modeTransport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aerien",
+                "maritime",
+                "routier"
+              ]
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "ouvertes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -17756,6 +19486,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -17947,7 +19687,50 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -17955,6 +19738,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -18704,7 +20497,115 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "demande",
+                "planifie",
+                "en_cours",
+                "effectue",
+                "echoue",
+                "annule"
+              ]
+            }
+          },
+          {
+            "name": "pays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "villeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "coursierId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "sansCoursier",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "aTraiter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -18712,6 +20613,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -19387,7 +21298,99 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "soumise",
+                "en_cours",
+                "bloquee",
+                "dedouanee",
+                "refusee"
+              ]
+            }
+          },
+          {
+            "name": "paysImport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "motifExport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "document",
+                "marchandise",
+                "cadeau",
+                "echantillon",
+                "effets_personnels",
+                "retour"
+              ]
+            }
+          },
+          {
+            "name": "incoterm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DAP",
+                "DDP"
+              ]
+            }
+          },
+          {
+            "name": "numeroDeclaration",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "aTraiter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -19395,6 +21398,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -19657,7 +21670,15 @@
                 "type": "object",
                 "properties": {
                   "motifExport": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                      "document",
+                      "marchandise",
+                      "cadeau",
+                      "echantillon",
+                      "effets_personnels",
+                      "retour"
+                    ]
                   },
                   "incoterm": {
                     "type": "string",
@@ -20658,6 +22679,7 @@
                 "type": "object",
                 "properties": {
                   "agentId": {
+                    "nullable": true,
                     "type": "string",
                     "format": "uuid"
                   }
@@ -21047,7 +23069,132 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "en_attente",
+                "partiellement_payee",
+                "payee",
+                "annulee",
+                "remboursee"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "expedition",
+                "enlevement",
+                "stockage",
+                "douane",
+                "avoir",
+                "divers"
+              ]
+            }
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EUR",
+                "XOF"
+              ]
+            }
+          },
+          {
+            "name": "payeur",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "expediteur",
+                "destinataire"
+              ]
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "impayees",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "echues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -21055,6 +23202,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -21094,7 +23251,132 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "en_attente",
+                "partiellement_payee",
+                "payee",
+                "annulee",
+                "remboursee"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "expedition",
+                "enlevement",
+                "stockage",
+                "douane",
+                "avoir",
+                "divers"
+              ]
+            }
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EUR",
+                "XOF"
+              ]
+            }
+          },
+          {
+            "name": "payeur",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "expediteur",
+                "destinataire"
+              ]
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "impayees",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "echues",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -21102,6 +23384,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -21858,7 +24150,131 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en_attente",
+                "succes",
+                "echoue",
+                "rembourse",
+                "partiel"
+              ]
+            }
+          },
+          {
+            "name": "methode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "wave",
+                "orange_money",
+                "free_money",
+                "carte",
+                "virement",
+                "especes",
+                "paypal"
+              ]
+            }
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EUR",
+                "XOF"
+              ]
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "factureId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "referenceTransaction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -21866,6 +24282,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -21971,7 +24397,131 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "en_attente",
+                "succes",
+                "echoue",
+                "rembourse",
+                "partiel"
+              ]
+            }
+          },
+          {
+            "name": "methode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "wave",
+                "orange_money",
+                "free_money",
+                "carte",
+                "virement",
+                "especes",
+                "paypal"
+              ]
+            }
+          },
+          {
+            "name": "devise",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EUR",
+                "XOF"
+              ]
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "factureId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "pointCollecteId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "reference",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "referenceTransaction",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -21979,6 +24529,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -22296,6 +24856,10 @@
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 255
+                  },
+                  "rouvrirFacture": {
+                    "default": false,
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -22596,7 +25160,8 @@
                   "valeur": {
                     "oneOf": [
                       {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 10000
                       },
                       {
                         "type": "number"
@@ -22751,7 +25316,69 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "entite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "dateDebut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Journal d'activité paginé",
@@ -22779,6 +25406,16 @@
               }
             }
           },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
           },
@@ -22800,7 +25437,84 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "categorie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documents",
+                "colis_moyen",
+                "colis_xxl"
+              ]
+            }
+          },
+          {
+            "name": "modeTransport",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "aerien",
+                "maritime",
+                "routier"
+              ]
+            }
+          },
+          {
+            "name": "paysDepart",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "paysArrivee",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -22808,6 +25522,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -23349,7 +26073,59 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "contenant",
+                "prestation"
+              ]
+            }
+          },
+          {
+            "name": "categorie",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "documents",
+                "colis_moyen",
+                "colis_xxl"
+              ]
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -23357,6 +26133,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -23959,7 +26745,62 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "statut",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brouillon",
+                "ouverte",
+                "complete",
+                "en_cours",
+                "terminee",
+                "annulee"
+              ]
+            }
+          },
+          {
+            "name": "pays",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FR",
+                "SN"
+              ]
+            }
+          },
+          {
+            "name": "aVenir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -23967,6 +26808,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -24574,7 +27425,47 @@
             "bearerAuth": []
           }
         ],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "emplacement",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "accueil",
+                "banniere",
+                "popup"
+              ]
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Succès",
@@ -24582,6 +27473,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiSuccess"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Données invalides",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }

@@ -66,7 +66,14 @@ const listeRotationsQuery = listeQuery({
   dateFin: filtres.date,
 });
 
+/** Colis à charger : le trajet (deux pays) est indispensable au filtrage. */
+const embarquablesQuery = listeQuery({
+  paysDepart: pays.required(),
+  paysArrivee: pays.required(),
+});
+
 module.exports = {
+  embarquablesQuery,
   listeRotationsQuery,
   repartirCoutSchema,
   createRotationSchema,

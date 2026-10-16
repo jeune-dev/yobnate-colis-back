@@ -11,6 +11,7 @@ const {
   chargerColisSchema,
   changerStatutSchema,
   listeRotationsQuery,
+  embarquablesQuery,
 } = require('../validation/rotation.validation');
 const { uuidParam } = require('../../../validations/common');
 const verrou = require('../../../middlewares/verrouOptimiste.middleware');
@@ -20,7 +21,7 @@ const { Rotation } = require('../../../models');
 router.use(auth, checkActiveUser, admin);
 
 router.get('/', validate(listeRotationsQuery, 'query'), ctrl.getAll);
-router.get('/embarquables', ctrl.embarquables);
+router.get('/embarquables', validate(embarquablesQuery, 'query'), ctrl.embarquables);
 router.get('/:id', validate(uuidParam, 'params'), ctrl.getOne);
 router.get('/:id/manifeste', validate(uuidParam, 'params'), ctrl.manifeste);
 router.post('/', validate(createRotationSchema), ctrl.create);

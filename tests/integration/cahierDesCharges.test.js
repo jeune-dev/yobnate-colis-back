@@ -448,6 +448,22 @@ describeDb('Cahier des charges — avis, FAQ, mesure, marge, stock (base réelle
         .expect(400);
     });
 
+    test('colis embarquables : trajet exigé (400 sans pays), sinon liste filtrée', async () => {
+      await request(app)
+        .get('/admin/rotations/embarquables')
+        .set('Authorization', jetonAdmin)
+        .expect(400);
+      await request(app)
+        .get('/admin/rotations/embarquables?paysDepart=FR&paysArrivee=XX')
+        .set('Authorization', jetonAdmin)
+        .expect(400);
+      const res = await request(app)
+        .get('/admin/rotations/embarquables?paysDepart=FR&paysArrivee=SN&limit=100')
+        .set('Authorization', jetonAdmin)
+        .expect(200);
+      expect(Array.isArray(res.body.data.colis)).toBe(true);
+    });
+
     test('le personnel (coursier) ne saisit pas de coût : 403', async () => {
       const coursier = await f.creerUtilisateur({ role: 'coursier' });
       const client = await f.creerUtilisateur();
