@@ -1,3 +1,4 @@
+const { Op } = require('sequelize');
 const { Notification } = require('../../../models');
 const { NotFoundError } = require('../../../errors/AppError');
 const { paginate, paginateResult } = require('../../../utils/paginate');
@@ -23,11 +24,32 @@ class NotificationService {
     return { message: 'Nombre de notifications non lues', total };
   };
 
+  /**
+   * Ouvrir une notification la marque comme lue, ainsi que les autres
+   * notifications non lues du même objet (même colis, même facture…) : elles
+   * mènent au même écran. Renvoie les identifiants marqués et le nouveau total.
+   */
   static marquerLue = async (userId, notificationId) => {
     const notification = await Notification.findOne({ where: { id: notificationId, userId } });
     if (!notification) throw new NotFoundError('Notification introuvable');
-    await notification.update({ isRead: true, luAt: new Date() });
-    return { message: 'Notification marquée comme lue.', notification };
+    const memeObjet =
+      notification.entite && notification.entiteId
+        ? { entite: notification.entite, entiteId: notification.entiteId }
+        : { id: notification.id };
+    const aMarquer = await Notification.findAll({
+      where: { userId, isRead: false, [Op.or]: [{ id: notification.id }, memeObjet] },
+      attributes: ['id'],
+    });
+    const lues = aMarquer.map((n) => n.id);
+    if (lues.length) {
+      await Notification.update(
+        { isRead: true, luAt: new Date() },
+        { where: { id: lues, userId } }
+      );
+    }
+    await notification.reload();
+    const { total: nonLues } = await NotificationService.getNbNonLues(userId);
+    return { message: 'Notification marquée comme lue.', notification, lues, nonLues };
   };
 
   static marquerToutesLues = async (userId) => {

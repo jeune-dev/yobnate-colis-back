@@ -19,7 +19,11 @@ exports.getNbNonLues = asyncHandler(async (req, res) => {
 
 exports.marquerLue = asyncHandler(async (req, res) => {
   const result = await notificationService.marquerLue(req.user.id, req.params.id);
-  return ok(res, { notification: result.notification }, result.message);
+  return ok(
+    res,
+    { notification: result.notification, lues: result.lues, nonLues: result.nonLues },
+    result.message
+  );
 });
 
 exports.marquerToutesLues = asyncHandler(async (req, res) => {
